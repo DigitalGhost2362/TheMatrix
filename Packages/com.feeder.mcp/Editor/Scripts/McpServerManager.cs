@@ -3,6 +3,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -45,10 +46,8 @@ namespace Feeder.MCP.Editor
     [InitializeOnLoad]
     public static class McpServerManager
     {
-        const string ProcessIdKey = "Feeder_MCP_ServerManager_ProcessId";
-        // Compatibility process/file name retained so existing AI-client configs keep working.
-        // The executable contents and metadata are the Feeder MCP Server.
-        const string McpServerProcessName = "gamedev-mcp-server";
+        // pre-0.88 plugins stored the pid here; EditorPrefs are shared by every project, so it is only ever deleted
+        const string LegacyProcessIdKey = "Feeder_MCP_ServerManager_ProcessId";
 
         static readonly ILogger _logger = UnityLoggerFactory.LoggerFactory.CreateLogger(typeof(McpServerManager));
         static readonly ReactiveProperty<McpServerStatus> _serverStatus = new(McpServerStatus.Stopped);
@@ -59,6 +58,13 @@ namespace Feeder.MCP.Editor
         static readonly object _processMutex = new();
 
         static Process? _serverProcess;
+        static bool _stopRequested;
+        static DateTime _serverStartedUtc;
+        static bool _restartScheduled;
+        static readonly ServerRestartPolicy _restartPolicy = new();
+        static readonly ReactiveProperty<string?> _pendingNote = new(null);
+        static readonly ReactiveProperty<string?> _serverFault = new(null);
+        static readonly ReactiveProperty<string?> _portMoveNote = new(null);
 
         // Single-flight guard for the server-binary install (0 = idle, 1 = an InstallServerBinary is in
         // flight). Claimed atomically via Interlocked.CompareExchange in TryBeginInstall, released in
@@ -74,6 +80,19 @@ namespace Feeder.MCP.Editor
         /// subscribes to surface the failure + a retry button instead of silently dead-ending.
         /// </summary>
         public static ReadOnlyReactiveProperty<string?> LastInstallError => _lastInstallError;
+
+        /// <summary>Non-null while a server restart or a bridge reconnect is scheduled; the text explains what is pending.</summary>
+        public static ReadOnlyReactiveProperty<string?> PendingNote => _pendingNote;
+
+        /// <summary>Non-null when the server could not be kept alive (crash loop, unresolvable port conflict).</summary>
+        public static ReadOnlyReactiveProperty<string?> ServerFault => _serverFault;
+
+        /// <summary>Set once when the configured port was taken by someone else and the project moved to a free port.</summary>
+        public static ReadOnlyReactiveProperty<string?> PortMoveNote => _portMoveNote;
+
+        internal static void SetPendingNote(string? note) => MainThread.Instance.Run(() => _pendingNote.Value = note);
+
+        internal static void SetServerFault(string? fault) => MainThread.Instance.Run(() => _serverFault.Value = fault);
 
         public static bool IsRunning => _serverStatus.CurrentValue == McpServerStatus.Running;
         public static bool IsStarting => _serverStatus.CurrentValue == McpServerStatus.Starting;
@@ -94,12 +113,57 @@ namespace Feeder.MCP.Editor
             // Register for editor quit to clean up the server process
             EditorApplication.quitting += OnEditorQuitting;
 
+            RemoveLegacyLeftovers();
+
             if (MatrixActivation.IsEnabled)
                 Activate();
         }
 
+        /// <summary>
+        /// Packages up to 0.87 installed the server as <c>gamedev-mcp-server</c>, and an interrupted install leaves a
+        /// <c>mcp-server-staging-*</c> folder behind. Staging folders are always removed. The old exe is removed here
+        /// only while Matrix is off; when Matrix is on, the install triggered by the missing <c>matrix-server</c> exe
+        /// stops the old process (it runs from this project's Library) and replaces the whole folder.
+        /// </summary>
+        static void RemoveLegacyLeftovers()
+        {
+            try
+            {
+                var root = ExecutableFolderRootPath;
+                var parent = Path.GetDirectoryName(root);
+                if (string.IsNullOrEmpty(parent) || !Directory.Exists(parent))
+                    return;
+
+                foreach (var staging in Directory.GetDirectories(parent, Path.GetFileName(root) + "-staging-*"))
+                {
+                    try
+                    {
+                        Directory.Delete(staging, recursive: true);
+                        _logger.LogInformation("Removed leftover MCP server staging folder: {path}", staging);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug("Could not remove staging folder {path}: {message}", staging, ex.Message);
+                    }
+                }
+
+                var legacyExe = Path.Combine(ExecutableFolderPath, ServerOwnership.LegacyProcessName + Path.GetExtension(ExecutableFullName));
+                if (MatrixActivation.IsEnabled || !File.Exists(legacyExe))
+                    return;
+
+                Directory.Delete(root, recursive: true);
+                UnityEngine.Debug.Log($"Removed the old MCP server binary (gamedev-mcp-server) from {root}; matrix-server is installed when Matrix is turned on.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug("Could not remove legacy MCP server files: {message}", ex.Message);
+            }
+        }
+
         internal static void Activate()
         {
+            EditorPrefs.DeleteKey(LegacyProcessIdKey);
+
             // Check if server process is still running (e.g., after domain reload)
             EditorApplication.update += CheckExistingProcess;
 
@@ -126,7 +190,7 @@ namespace Feeder.MCP.Editor
         /// </summary>
         public const string ServerVersion = "0.2.1";
 
-        public const string ExecutableName = "gamedev-mcp-server";
+        public const string ExecutableName = ServerOwnership.ProcessName;
         public const string BundledServerArchiveName = "server-payload.zip";
 
         public static string McpServerName
@@ -152,8 +216,8 @@ namespace Feeder.MCP.Editor
         public static string PlatformName => $"{OperationSystem}-{CpuArch}";
 
         // Server executable file name
-        // Sample (mac linux): gamedev-mcp-server
-        // Sample   (windows): gamedev-mcp-server.exe
+        // Sample (mac linux): matrix-server
+        // Sample   (windows): matrix-server.exe
         public static string ExecutableFullName
             => ExecutableName.ToLowerInvariant() + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
                 ? ".exe"
@@ -183,8 +247,8 @@ namespace Feeder.MCP.Editor
             );
 
         // Full path to the server executable
-        // Sample (mac linux): ../Library/mcp-server/osx-x64/gamedev-mcp-server
-        // Sample   (windows): ../Library/mcp-server/win-x64/gamedev-mcp-server.exe
+        // Sample (mac linux): ../Library/mcp-server/osx-x64/matrix-server
+        // Sample   (windows): ../Library/mcp-server/win-x64/matrix-server.exe
         public static string ExecutableFullPath
             => Path.GetFullPath(
                 Path.Combine(
@@ -369,15 +433,14 @@ namespace Feeder.MCP.Editor
         /// </summary>
         static int KillProcessesLockingBinaryFolder()
         {
-            // Trailing separator so the sibling staging folder ("<root>-staging-<guid>") can never match.
-            var rootPath = ExecutableFolderRootPath.TrimEnd(
-                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            var rootPath = ExecutableFolderRootPath;
             var killed = 0;
+            _stopRequested = true;
 
             Process[] candidates;
             try
             {
-                candidates = Process.GetProcessesByName(McpServerProcessName);
+                candidates = ServerOwnership.AllProcessNames.SelectMany(Process.GetProcessesByName).ToArray();
             }
             catch (Exception ex)
             {
@@ -393,12 +456,8 @@ namespace Feeder.MCP.Editor
                         continue;
 
                     // MainModule throws for processes owned by another user or already gone — those are
-                    // not ours to kill anyway, so skipping on failure is the correct behaviour.
-                    var executablePath = process.MainModule?.FileName;
-                    if (string.IsNullOrEmpty(executablePath))
-                        continue;
-
-                    if (!Path.GetFullPath(executablePath).StartsWith(rootPath, StringComparison.OrdinalIgnoreCase))
+                    // not ours to kill anyway, so only a confirmed Ours is killed.
+                    if (ServerOwnership.ClassifyProcess(process, rootPath) != ServerOwner.Ours)
                         continue;
 
                     _logger.LogInformation("Killing MCP server process holding the binary (PID: {pid})", process.Id);
@@ -458,6 +517,8 @@ namespace Feeder.MCP.Editor
                 return Task.FromResult(true);
             }
 
+            UnityEngine.Debug.Log($"MCP server install needed: force={force}, exists={IsBinaryExists()}, " +
+                $"versionRead='{GetBinaryVersion()}', expected='{ServerVersion}', path={ExecutableFullPath}");
             return Task.FromResult(InstallServerBinary(unattended));
         }
 
@@ -850,40 +911,68 @@ namespace Feeder.MCP.Editor
         static void CheckExistingProcess()
         {
             EditorApplication.update -= CheckExistingProcess;
-            // Try to find an existing server process by checking if our tracked PID is still running
-            // This helps maintain state across domain reloads
-            var savedPid = EditorPrefs.GetInt(ProcessIdKey, -1);
-            if (savedPid > 0)
+            if (_serverProcess != null)
+                return;
+
+            // The owner file lives in this project's Temp folder, so it can only ever name this project's server.
+            // Start time guards against Windows reusing the pid; the path and port guard against everything else.
+            var record = ServerOwnership.ReadRecord();
+            if (record == null)
+                return;
+
+            Process? process = null;
+            try
             {
-                try
+                process = Process.GetProcessById(record.pid);
+                var owner = ServerOwnership.ClassifyProcess(process, ExecutableFolderRootPath);
+                if (ServerOwnership.CanAdopt(record, ServerOwnership.ReadStartTimeUtc(process), owner, UnityMcpPluginEditor.Port))
                 {
-                    var process = Process.GetProcessById(savedPid);
-                    if (process != null && !process.HasExited)
-                    {
-                        var processName = process.ProcessName.ToLowerInvariant();
-                        if (processName.Contains(McpServerProcessName))
-                        {
-                            _serverProcess = process;
-                            _serverStatus.Value = McpServerStatus.Running;
-                            _logger.LogInformation("Reconnected to existing MCP server process (PID: {pid})", savedPid);
-
-                            // Re-attach exit handler
-                            process.EnableRaisingEvents = true;
-                            process.Exited += OnProcessExited;
-
-                            // Schedule verification check to detect if process crashes shortly after reconnection
-                            ScheduleStartupVerification(savedPid);
-                            return;
-                        }
-                    }
+                    Adopt(process);
+                    _logger.LogInformation("Reconnected to existing MCP server process (PID: {pid})", record.pid);
+                    return;
                 }
-                catch (Exception ex)
+                _logger.LogDebug("Owner file names PID {pid} but it is not this project's server ({owner}); ignoring it", record.pid, owner);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug("Could not reconnect to previous process: {message}", ex.Message);
+            }
+
+            process?.Dispose();
+            ServerOwnership.DeleteRecord();
+        }
+
+        /// <summary>Takes over a live server process that is confirmed to be this project's own.</summary>
+        static void Adopt(Process process)
+        {
+            lock (_processMutex)
+            {
+                _serverProcess = process;
+                _stopRequested = false;
+                _serverStartedUtc = ServerOwnership.ReadStartTimeUtc(process) ?? DateTime.UtcNow;
+                process.EnableRaisingEvents = true;
+                process.Exited += OnProcessExited;
+                WriteOwnerRecord(process);
+                _serverStatus.Value = McpServerStatus.Running;
+            }
+            ScheduleStartupVerification(process.Id);
+        }
+
+        static void WriteOwnerRecord(Process process)
+        {
+            try
+            {
+                ServerOwnership.WriteRecord(new ServerOwnerRecord
                 {
-                    _logger.LogDebug("Could not reconnect to previous process: {message}", ex.Message);
-                }
-
-                // Clear stale PID
-                EditorPrefs.DeleteKey(ProcessIdKey);
+                    pid = process.Id,
+                    startTimeUtcTicks = ServerOwnership.ReadStartTimeUtc(process)?.Ticks ?? 0,
+                    port = UnityMcpPluginEditor.Port,
+                    exePath = ServerOwnership.ReadExePath(process) ?? ExecutableFullPath,
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Could not write the MCP server owner file: {message}", ex.Message);
             }
         }
 
@@ -911,9 +1000,14 @@ namespace Feeder.MCP.Editor
                 }
 
                 _serverStatus.Value = McpServerStatus.Starting;
+                _stopRequested = false;
 
-                // Kill any orphaned server processes to free the port
-                KillOrphanedServerProcesses();
+                // Kill this project's own orphan on the port, or move to a free port when someone else holds it
+                if (!ResolvePortOwner())
+                {
+                    _serverStatus.Value = McpServerStatus.Stopped;
+                    return false;
+                }
 
                 try
                 {
@@ -959,8 +1053,9 @@ namespace Feeder.MCP.Editor
                     _serverProcess.BeginOutputReadLine();
                     _serverProcess.BeginErrorReadLine();
 
-                    // Save PID for reconnection after domain reload
-                    EditorPrefs.SetInt(ProcessIdKey, _serverProcess.Id);
+                    // Save ownership for reconnection after domain reload
+                    _serverStartedUtc = DateTime.UtcNow;
+                    WriteOwnerRecord(_serverProcess);
 
                     // Keep status as Starting - it will be set to Running after verification
                     _logger.LogInformation("MCP server process started (PID: {pid}), awaiting verification...", _serverProcess.Id);
@@ -998,10 +1093,24 @@ namespace Feeder.MCP.Editor
                     return true;
                 }
 
+                _stopRequested = true;
+                CancelPendingRestart();
+
                 if (_serverProcess == null)
                 {
                     _serverStatus.Value = McpServerStatus.Stopped;
-                    EditorPrefs.DeleteKey(ProcessIdKey);
+                    ServerOwnership.DeleteRecord();
+                    return true;
+                }
+
+                // Never signal a process that is not confirmed to run from this project's Library.
+                var owner = ServerOwnership.ClassifyProcess(_serverProcess, ExecutableFolderRootPath);
+                if (owner != ServerOwner.Ours)
+                {
+                    if (!HasExitedSafe(_serverProcess))
+                        _logger.LogWarning("Not stopping PID {pid}: it is not this project's MCP server ({owner}). Releasing the handle only.",
+                            SafeId(_serverProcess), owner);
+                    CleanupProcess();
                     return true;
                 }
 
@@ -1143,75 +1252,112 @@ namespace Feeder.MCP.Editor
         }
 
         /// <summary>
-        /// Kills an orphaned gamedev-mcp-server process that is occupying this project's port.
-        /// Only targets the specific process listening on <see cref="UnityMcpPluginEditor.Port"/>.
-        /// If the port owner cannot be determined, does nothing (fails safe).
+        /// Makes sure the configured port is free for this project's server. A leftover server of THIS project
+        /// (exe under our Library) is killed. Anything else on the port - another project's server, a foreign
+        /// process, or a process we cannot inspect - is never touched: the project moves to a free port instead.
+        /// Returns false only when no free port could be found.
         /// </summary>
-        static void KillOrphanedServerProcesses()
+        static bool ResolvePortOwner()
         {
+            var port = UnityMcpPluginEditor.Port;
+            if (!ServerOwnership.IsPortListening(port))
+                return true;
+
+            var listeningPid = GetPidListeningOnPort(port);
+            var currentPid = _serverProcess != null ? SafeId(_serverProcess) : -1;
+            if (listeningPid > 0 && listeningPid == currentPid)
+                return true;
+
+            Process? process = null;
             try
             {
-                var port = UnityMcpPluginEditor.Port;
-                var currentPid = _serverProcess?.Id ?? -1;
+                if (listeningPid > 0)
+                    process = Process.GetProcessById(listeningPid);
+            }
+            catch (Exception)
+            {
+                process = null;
+            }
 
-                var listeningPid = GetPidListeningOnPort(port);
-
-                if (listeningPid <= 0)
+            using (process)
+            {
+                var owner = process != null ? ServerOwnership.ClassifyProcess(process, ExecutableFolderRootPath) : ServerOwner.Unknown;
+                if (owner == ServerOwner.Ours)
                 {
-                    _logger.LogDebug("No process found listening on port {port}, port is available", port);
-                    return;
-                }
-
-                if (listeningPid == currentPid)
-                {
-                    _logger.LogDebug("Our own server process (PID: {pid}) is listening on port {port}", listeningPid, port);
-                    return;
-                }
-
-                try
-                {
-                    using var process = Process.GetProcessById(listeningPid);
-                    if (process == null || process.HasExited)
+                    try
                     {
-                        _logger.LogDebug("Process (PID: {pid}) on port {port} has already exited", listeningPid, port);
-                        return;
+                        _logger.LogWarning("Killing orphaned MCP server of this project (PID: {pid}) occupying port {port}", listeningPid, port);
+                        process!.Kill();
+                        if (!process.WaitForExit(3000))
+                            _logger.LogWarning("Orphaned MCP server process (PID: {pid}) did not exit within 3 seconds after kill", listeningPid);
+                        return true;
                     }
-
-                    var processName = process.ProcessName.ToLowerInvariant();
-                    if (!processName.Contains(McpServerProcessName))
+                    catch (Exception ex)
                     {
-                        _logger.LogWarning(
-                            "Port {port} is occupied by a non-MCP process '{processName}' (PID: {pid}). " +
-                            "The MCP server may fail to start. Please free the port or change the port in settings.",
-                            port, process.ProcessName, listeningPid);
-                        return;
+                        _logger.LogDebug("Orphaned MCP server (PID: {pid}) could not be killed: {message}", listeningPid, ex.Message);
+                        return true;
                     }
+                }
 
-                    _logger.LogWarning("Killing orphaned MCP server process (PID: {pid}) occupying port {port}", listeningPid, port);
-                    process.Kill();
+                if (!ServerOwnership.IsPortListening(port))
+                    return true;
 
-                    if (!process.WaitForExit(3000))
-                        _logger.LogWarning("Orphaned MCP server process (PID: {pid}) did not exit within 3 seconds after kill", listeningPid);
-                    else
-                        _logger.LogDebug("Orphaned MCP server process (PID: {pid}) exited successfully", listeningPid);
-                }
-                catch (ArgumentException)
-                {
-                    _logger.LogDebug("Process (PID: {pid}) on port {port} no longer exists", listeningPid, port);
-                }
-                catch (InvalidOperationException)
-                {
-                    _logger.LogDebug("Process (PID: {pid}) on port {port} exited before it could be terminated", listeningPid, port);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug("Failed to kill orphaned process (PID: {pid}) on port {port}: {message}", listeningPid, port, ex.Message);
-                }
+                var holder = owner == ServerOwner.OtherProject
+                    ? $"the MCP server of project '{ServerOwnership.DescribeOwner(process != null ? ServerOwnership.ReadExePath(process) : null)}'"
+                    : owner == ServerOwner.NotMcp && process != null
+                        ? $"process '{SafeName(process)}' (PID {listeningPid})"
+                        : listeningPid > 0 ? $"PID {listeningPid}" : "another process";
+                return MoveToFreePort(port, holder);
+            }
+        }
+
+        static bool MoveToFreePort(int port, string holder)
+        {
+            var reserved = new System.Collections.Generic.HashSet<int>();
+            try
+            {
+                foreach (var clone in Feeder.MCP.Editor.HyperTesting.HyperPoolState.Load().clones)
+                    reserved.Add(clone.port);
             }
             catch (Exception ex)
             {
-                _logger.LogDebug("Error in orphaned server process cleanup: {message}", ex.Message);
+                _logger.LogDebug("Could not read the hyper testing pool: {message}", ex.Message);
             }
+
+            var newPort = ServerOwnership.PickFreePort(port, ServerOwnership.ListeningPorts(), reserved);
+            if (newPort < 0)
+            {
+                var fault = $"Port {port} is used by {holder} and no free port was found in {ServerOwnership.MinAutoPort}-{ServerOwnership.MaxAutoPort}.";
+                _logger.LogError(fault);
+                _serverFault.Value = fault;
+                return false;
+            }
+
+            UnityMcpPluginEditor.LocalHost = $"http://localhost:{newPort}";
+            UnityMcpPluginEditor.Instance.Save();
+            Startup.ConfigureAgents();
+            var note = $"port {port} is used by {holder}, moved to {newPort} - restart your agent session";
+            UnityEngine.Debug.LogWarning($"[Matrix Bridge] {note}");
+            _portMoveNote.Value = note;
+            return true;
+        }
+
+        static int SafeId(Process process)
+        {
+            try { return process.Id; }
+            catch (Exception) { return -1; }
+        }
+
+        static string SafeName(Process process)
+        {
+            try { return process.ProcessName; }
+            catch (Exception) { return "unknown"; }
+        }
+
+        static bool HasExitedSafe(Process process)
+        {
+            try { return process.HasExited; }
+            catch (Exception) { return true; }
         }
 
         /// <summary>
@@ -1348,7 +1494,10 @@ namespace Feeder.MCP.Editor
 
                     EditorApplication.update -= CheckProcess;
                     if (_serverStatus.CurrentValue == McpServerStatus.Starting)
+                    {
                         CleanupProcess();
+                        HandleUnexpectedExit();
+                    }
                     return;
                 }
 
@@ -1379,7 +1528,7 @@ namespace Feeder.MCP.Editor
                     return false;
 
                 var processName = process.ProcessName.ToLowerInvariant();
-                return processName.Contains(McpServerProcessName);
+                return ServerOwnership.AllProcessNames.Any(processName.Contains);
             }
             catch (ArgumentException)
             {
@@ -1403,7 +1552,78 @@ namespace Feeder.MCP.Editor
             _logger.LogInformation("MCP server process exited");
             // Marshal to main thread since this event is raised from a thread pool thread
             // and CleanupProcess modifies reactive properties that may be observed on the main thread
-            MainThread.Instance.Run(CleanupProcess);
+            MainThread.Instance.Run(() =>
+            {
+                // a stale handle (already replaced or released) must not tear down the current server's state
+                if (_serverProcess != null && !ReferenceEquals(sender, _serverProcess))
+                    return;
+                var current = _serverProcess != null;
+                CleanupProcess();
+                if (current)
+                    HandleUnexpectedExit();
+            });
+        }
+
+        /// <summary>
+        /// Brings the server back after it died on its own (Keep Server Running on), backing off 1/2/5/10/30 s.
+        /// Gives up after <see cref="ServerRestartPolicy.MaxAttempts"/> crashes inside five minutes and raises
+        /// <see cref="ServerFault"/> instead of looping forever.
+        /// </summary>
+        static void HandleUnexpectedExit()
+        {
+            if (_stopRequested || _restartScheduled)
+                return;
+            if (!UnityMcpPluginEditor.KeepServerRunning || !MatrixActivation.IsEnabled || EnvironmentUtils.IsCi())
+                return;
+
+            var lifetime = DateTime.UtcNow - _serverStartedUtc;
+            var delay = _restartPolicy.NextDelay(DateTime.UtcNow, lifetime);
+            if (delay == null)
+            {
+                var fault = $"MCP server keeps crashing ({ServerRestartPolicy.MaxAttempts} restarts in 5 min) - see logs, then Retry.";
+                _logger.LogError(fault);
+                _pendingNote.Value = null;
+                _serverFault.Value = fault;
+                return;
+            }
+
+            _restartScheduled = true;
+            var attempt = _restartPolicy.Attempts;
+            _logger.LogWarning("MCP server exited unexpectedly; restart {attempt}/{max} in {delay}s",
+                attempt, ServerRestartPolicy.MaxAttempts, delay.Value.TotalSeconds);
+            _pendingNote.Value = $"server exited - restart {attempt}/{ServerRestartPolicy.MaxAttempts} in {delay.Value.TotalSeconds:0}s";
+            var generation = ++_restartGeneration;
+            Task.Delay(delay.Value).ContinueWith(_ => MainThread.Instance.Run(() =>
+            {
+                if (generation != _restartGeneration)
+                    return;
+                _restartScheduled = false;
+                _pendingNote.Value = null;
+                if (_stopRequested || IsInstallInProgress || _serverStatus.CurrentValue != McpServerStatus.Stopped)
+                    return;
+                StartOwnServerAsync().ContinueWith(task =>
+                {
+                    if (task.Status == TaskStatus.RanToCompletion && task.Result)
+                        _ = UnityMcpPluginEditor.ConnectIfNeeded();
+                }, TaskScheduler.FromCurrentSynchronizationContext());
+            }));
+        }
+
+        static int _restartGeneration;
+
+        static void CancelPendingRestart()
+        {
+            _restartGeneration++;
+            _restartScheduled = false;
+            _pendingNote.Value = null;
+        }
+
+        /// <summary>Clears a crash-loop / unreachable / port fault so the next connect starts over (the Bridge Retry action).</summary>
+        public static void ResetFault()
+        {
+            _serverFault.Value = null;
+            _restartPolicy.Reset();
+            CancelPendingRestart();
         }
 
         static void OnOutputDataReceived(object sender, DataReceivedEventArgs e)
@@ -1454,15 +1674,15 @@ namespace Feeder.MCP.Editor
                     });
                 }
 
-                EditorPrefs.DeleteKey(ProcessIdKey);
+                ServerOwnership.DeleteRecord();
                 _serverStatus.Value = McpServerStatus.Stopped;
             }
         }
 
         /// <summary>
-        /// Starts the MCP server if KeepServerRunning is enabled and no external server is detected.
+        /// Starts the MCP server if KeepServerRunning is enabled.
         /// This method is called during Unity Editor startup to auto-start the server based on user preference.
-        /// The external server check is performed asynchronously to avoid blocking the main thread.
+        /// A server already listening on the port is adopted only when it runs from this project's Library.
         /// </summary>
         public static void StartServerIfNeeded()
         {
@@ -1475,58 +1695,69 @@ namespace Feeder.MCP.Editor
                 return;
             }
 
-            // Check if server is already running (either local or detected from previous session)
-            if (_serverStatus.CurrentValue == McpServerStatus.Running ||
-                _serverStatus.CurrentValue == McpServerStatus.Starting)
-            {
-                _logger.LogDebug("StartServerIfNeeded: Server is already running or starting");
-                return;
-            }
-
-            // Check if an external server is available on the port (non-blocking)
-            var port = UnityMcpPluginEditor.Port;
-            CheckExternalServerAsync(port, externalAvailable =>
-            {
-                if (externalAvailable)
-                {
-                    _logger.LogInformation("StartServerIfNeeded: External MCP server detected on port {port}, skipping local server start", port);
-                    return;
-                }
-
-                // Start the local server
-                _logger.LogInformation("StartServerIfNeeded: Starting local MCP server (KeepServerRunning=true)");
-                StartServer();
-            });
+            _ = StartOwnServerAsync();
         }
 
         /// <summary>
-        /// Checks if an external server is listening on the given port on a background thread,
-        /// then invokes the callback on the main thread with the result.
+        /// Guarantees that the server on <see cref="UnityMcpPluginEditor.Port"/> is THIS project's server:
+        /// keeps a live tracked one, adopts an untracked one running from our Library, otherwise starts a new
+        /// one (moving to a free port when another project or process holds ours). Must be called on the main
+        /// thread; the netstat lookup runs on a worker thread. Returns false when no server could be started.
         /// </summary>
-        static void CheckExternalServerAsync(int port, Action<bool> onResult)
+        public static async Task<bool> StartOwnServerAsync()
         {
-            Task.Run(() =>
+            // a raised fault (crash loop, no free port, unreachable) holds every automatic start until Retry
+            if (_serverFault.Value != null)
+                return false;
+
+            var status = _serverStatus.CurrentValue;
+            if (status == McpServerStatus.Starting || status == McpServerStatus.Installing || status == McpServerStatus.Stopping)
+                return true;
+
+            var tracked = _serverProcess;
+            if (status == McpServerStatus.Running && tracked != null)
             {
-                var result = false;
+                if (!HasExitedSafe(tracked) && ServerOwnership.ClassifyProcess(tracked, ExecutableFolderRootPath) == ServerOwner.Ours)
+                    return true;
+                _logger.LogWarning("Tracked MCP server handle is stale or not this project's; releasing it");
+                CleanupProcess();
+            }
+            else if (status == McpServerStatus.Running)
+            {
+                CleanupProcess();
+            }
+
+            var port = UnityMcpPluginEditor.Port;
+            var root = ExecutableFolderRootPath;
+            var found = await Task.Run(() =>
+            {
+                if (!ServerOwnership.IsPortListening(port))
+                    return (pid: -1, owner: ServerOwner.Unknown);
+                var pid = GetPidListeningOnPort(port);
+                return (pid, owner: ServerOwnership.ClassifyProcess(pid, root));
+            });
+
+            if (_serverProcess != null || _serverStatus.CurrentValue != McpServerStatus.Stopped)
+                return true;
+
+            if (found.owner == ServerOwner.Ours)
+            {
                 try
                 {
-                    using var client = new System.Net.Sockets.TcpClient();
-                    var connectTask = client.ConnectAsync("localhost", port);
-                    var completed = connectTask.Wait(500); // 500ms timeout
-
-                    if (completed && client.Connected)
-                    {
-                        _logger.LogDebug("CheckExternalServerAsync: Port {port} is in use by another process", port);
-                        result = true;
-                    }
+                    Adopt(Process.GetProcessById(found.pid));
+                    _logger.LogInformation("Adopted this project's MCP server already listening on port {port} (PID: {pid})", port, found.pid);
+                    return true;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug("CheckExternalServerAsync: No server detected on port {port} ({message})", port, ex.Message);
+                    _logger.LogDebug("Could not adopt PID {pid}: {message}", found.pid, ex.Message);
                 }
-                return result;
-            })
-            .ContinueWith(task => onResult(task.Result), TaskScheduler.FromCurrentSynchronizationContext());
+            }
+
+            if (!IsBinaryExists())
+                return false;
+            _logger.LogInformation("Starting this project's MCP server on port {port}", port);
+            return StartServer();
         }
 
         #endregion // Process Lifecycle

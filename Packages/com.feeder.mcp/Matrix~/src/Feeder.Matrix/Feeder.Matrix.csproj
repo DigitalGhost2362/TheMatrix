@@ -21,6 +21,9 @@
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Feeder.Matrix.UnitTests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Feeder.Matrix.Protocol\Feeder.Matrix.Protocol.csproj" />
   </ItemGroup>
   <ItemGroup>

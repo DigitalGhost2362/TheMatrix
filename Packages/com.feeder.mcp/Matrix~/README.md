@@ -2,8 +2,8 @@
 
 Feeder-owned persistent MCP server for Matrix Bridge: MCP (Streamable HTTP or unified stdio
 mode) on the AI side and SignalR/JSON (FMP/1) on the Unity side. Runs entirely on loopback. The
-distributed file keeps the historical `gamedev-mcp-server.exe` filename only for client-config
-compatibility; its implementation and metadata are Feeder MCP Server.
+published `feeder-mcp-server.exe` ships in the package payload renamed to `matrix-server.exe`; the
+Unity package looks for that name.
 
 Docs: [ADRs](Docs/adr/) · [FMP/1 protocol](Docs/protocol/feeder-matrix-protocol-v1.md) · [Compatibility matrix](Docs/mcp-compatibility-matrix.md)
 

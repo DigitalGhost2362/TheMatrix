@@ -11,7 +11,8 @@ namespace Feeder.MCP.Editor
 {
     public static partial class Startup
     {
-        const string AutoConfigureSessionKey = "Feeder.MCP.AutoConfigured";
+        // keyed by exe name so a package update that renames the exe rewrites stdio agent configs in the same session
+        static string AutoConfigureSessionKey => $"Feeder.MCP.AutoConfigured.{McpServerManager.ExecutableName}";
 
         /// <summary>
         /// Writes the MCP config file for every agent with the auto-configure flag enabled
@@ -31,7 +32,19 @@ namespace Feeder.MCP.Editor
                 if (SessionState.GetBool(AutoConfigureSessionKey, false))
                     return;
                 SessionState.SetBool(AutoConfigureSessionKey, true);
+                ConfigureAgents();
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "MCP agent auto-configure failed; editor load is unaffected. Wire the agent manually in Tools/Feeder/Bridge.");
+            }
+        }
 
+        /// <summary>Rewrites the MCP config of every auto-configured agent with the current host/port.</summary>
+        internal static void ConfigureAgents()
+        {
+            try
+            {
                 var settings = AgentConfiguratorSettingsFactory.Create();
                 var transport = UnityMcpPluginEditor.TransportMethod;
 

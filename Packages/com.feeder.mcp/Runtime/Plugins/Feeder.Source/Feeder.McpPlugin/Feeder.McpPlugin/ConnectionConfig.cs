@@ -9,7 +9,7 @@ public class ConnectionConfig
 {
 	public virtual string Host { get; set; } = "http://localhost:8080";
 
-	public virtual int TimeoutMs { get; set; } = 10000;
+	public virtual int TimeoutMs { get; set; } = 60000;
 
 	public virtual bool KeepConnected { get; set; } = true;
 
@@ -29,7 +29,7 @@ public class ConnectionConfig
 	public static ConnectionConfig Default => new ConnectionConfig
 	{
 		Host = "http://localhost:8080",
-		TimeoutMs = 10000
+		TimeoutMs = 60000
 	};
 
 	public static string GetSkillsFolderFromArgsOrEnv(string[]? args = null)

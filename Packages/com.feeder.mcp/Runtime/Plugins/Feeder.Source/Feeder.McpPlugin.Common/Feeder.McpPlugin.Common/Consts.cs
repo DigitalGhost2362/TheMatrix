@@ -286,7 +286,7 @@ public static class Consts
 
 		public const string RemoteApp = "/hub/mcp-server";
 
-		public const int DefaultTimeoutMs = 10000;
+		public const int DefaultTimeoutMs = 60000;
 	}
 
 	public const string ApiVersion = "2.0.0";

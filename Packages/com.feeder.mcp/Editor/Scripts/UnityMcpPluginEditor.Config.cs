@@ -14,6 +14,8 @@ namespace Feeder.MCP
     {
         public static string ResourcesFileName => "Feeder-MCP-Config";
 
+        const int LegacyDefaultTimeoutMs = 10000;
+
         /// <summary>
         /// Project-relative path used by Unity's AssetDatabase API.
         /// Do NOT use this with System.IO File/Directory operations — use <see cref="AssetsFileAbsolutePath"/> instead.
@@ -100,6 +102,12 @@ namespace Feeder.MCP
                 if (string.IsNullOrEmpty(config.LocalToken))
                 {
                     config.LocalToken = GenerateToken();
+                    wasCreated = true;
+                }
+                // 10 s was the stored default before 0.88 and cut heavy editor tools (builds, bakes) off mid-run
+                if (config.TimeoutMs == LegacyDefaultTimeoutMs)
+                {
+                    config.TimeoutMs = Feeder.McpPlugin.Common.Consts.Hub.DefaultTimeoutMs;
                     wasCreated = true;
                 }
                 if (!EnvironmentUtils.IsLoopbackUrl(config.LocalHost))

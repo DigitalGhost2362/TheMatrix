@@ -66,8 +66,33 @@ All notable changes to this package are documented here.
 - Matrix Space agents are told to call `unity-tool-list` and `tool-set-enabled-state` when a Unity tool
   is missing from their list.
 - Matrix Setup also gitignores `.codex/config.toml`, which holds this machine's port.
+- The local server executable is now `matrix-server.exe` (was `gamedev-mcp-server.exe`). On update, the
+  project's old server is stopped and its folder in `Library/mcp-server` replaced, leftover
+  `mcp-server-staging-*` folders are removed, and wired agents get their config rewritten in the same
+  editor session. Restart the agent session afterwards. Projects with Matrix off just have the old
+  binary deleted.
+- The default tool timeout is now 60 s (was 10 s), so heavy editor work such as builds and NavMesh bakes
+  is no longer cut off mid-run. Projects still on the old stored default of 10 s move to 60 s on the next
+  editor load; any other value is kept.
+- When another project's server, or any other process, already listens on this project's port, the
+  bridge moves to a free port in 20000-29999, rewrites the config of every wired agent, and says so on the
+  Bridge window. Restart the agent session to pick up the new port.
 
 ### Fixed
+
+- Several editors open at once no longer stop, kill or take over each other's MCP server. A server now
+  belongs to the project whose `Library/mcp-server` it runs from. Its process id is kept in
+  `Temp/mcp-server-owner.json` instead of the machine-wide editor preferences, and nothing is stopped
+  unless it is confirmed to be this project's own server. This also covers hyper testing clones and
+  projects still on an older version of the package.
+- Unity registers only with its own project's server, never with whatever answers on the port.
+- If the server dies during a session it is started again, after 1, 2, 5, 10 and 30 s. After five crashes
+  within five minutes the Bridge shows FAULT with the reason; click it to retry.
+- The Bridge no longer shows LINKING forever after the connection drops. It reconnects with the same
+  back-off, shows what it is waiting for, and turns to FAULT when it gives up.
+- Hyper testing `down` and `purge` no longer fail when run from an agent tool call.
+- The MCP server now counts only agents active in the last 10 minutes, so sessions left behind by closed
+  clients or one-off scripts no longer pile up in the Bridge count. Requires the next server release.
 
 - Matrix Bridge: clicking `claude` or `deepseek` no longer switches both on and off. DeepSeek used to
   share Claude Code's `.mcp.json` entry, which DeepSeek Harness does not read. Its click now only keeps

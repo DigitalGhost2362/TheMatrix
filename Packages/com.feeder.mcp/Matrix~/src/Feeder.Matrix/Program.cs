@@ -46,7 +46,9 @@ try
     });
 
     builder.Services.AddSingleton<UnityLinkRegistry>();
+    builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddSingleton<McpClientTracker>();
+    builder.Services.AddHostedService<McpClientActivityMonitor>();
     builder.Services.AddSingleton<MockUnityBackend>();
     builder.Services.AddSingleton<UnityLinkBackend>();
     builder.Services.AddSingleton<IUnityBackend, BackendRouter>();
@@ -88,6 +90,7 @@ try
             ValueTask.FromResult<ReadResourceResult>(throwResourceNotFound(context.Params?.Uri)));
 
     var app = builder.Build();
+    var mcpClientTracker = app.Services.GetRequiredService<McpClientTracker>();
 
     // DNS-rebinding defense: loopback callers must present a loopback Host header (ADR-0005).
     app.Use(async (context, next) =>
@@ -108,6 +111,12 @@ try
             await context.Response.WriteAsync("Unauthorized.");
             return;
         }
+
+        if (context.Request.Path.StartsWithSegments(FmpConstants.McpPath) &&
+            context.Request.Headers.TryGetValue("Mcp-Session-Id", out var mcpSessionId) &&
+            mcpClientTracker.Touch(mcpSessionId.ToString()))
+            _ = mcpClientTracker.BroadcastAsync();
+
         await next();
     });
 
@@ -119,7 +128,14 @@ try
     {
         status = "ok",
         version = MatrixVersion.Value,
-        mcpClients = mcpClients.Snapshot().Select(c => new { c.SessionId, c.ClientName, c.ClientVersion }),
+        mcpClients = mcpClients.Describe().Select(c => new
+        {
+            c.Info.SessionId,
+            c.Info.ClientName,
+            c.Info.ClientVersion,
+            lastActivity = c.LastActivity.UtcDateTime,
+            isActive = c.Info.IsConnected,
+        }),
         unityLinks = registry.Links.Select(l => new
         {
             l.ProjectId,

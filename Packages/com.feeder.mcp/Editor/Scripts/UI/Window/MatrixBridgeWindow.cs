@@ -196,6 +196,10 @@ namespace Feeder.MCP.Editor.UI
                 .ObserveOnCurrentSynchronizationContext()
                 .Subscribe(OnServerStatus)
                 .AddTo(_subscriptions);
+            Observable.Merge(McpServerManager.PendingNote, McpServerManager.ServerFault, McpServerManager.PortMoveNote)
+                .ObserveOnCurrentSynchronizationContext()
+                .Subscribe(OnServerNote)
+                .AddTo(_subscriptions);
             McpServerManager.LastInstallError
                 .ObserveOnCurrentSynchronizationContext()
                 .Subscribe(OnInstallError)
@@ -230,6 +234,8 @@ namespace Feeder.MCP.Editor.UI
 
         private void OnInstallError(string? error) => Refresh();
 
+        private void OnServerNote(string? note) => Refresh();
+
         private void OnConfigChanged(UnityMcpPlugin.UnityConnectionConfig config) => Refresh();
 
         private void OnAgentActivity(Unit _) => Refresh();
@@ -258,11 +264,11 @@ namespace Feeder.MCP.Editor.UI
         {
             var connection = UnityMcpPluginEditor.ConnectionState.CurrentValue;
             return BridgeStatus.Resolve(
-                UnityMcpPluginEditor.KeepConnected && MatrixActivation.IsEnabled,
+                MatrixActivation.IsEnabled && McpServerManager.PendingNote.CurrentValue != null,
                 connection == HubConnectionState.Connected,
                 connection == HubConnectionState.Connecting || connection == HubConnectionState.Reconnecting,
                 McpServerManager.ServerStatus.CurrentValue,
-                McpServerManager.LastInstallError.CurrentValue,
+                CurrentFault,
                 AgentActivity.IsAgentPlay,
                 AgentActivity.IsWorking);
         }
@@ -274,7 +280,7 @@ namespace Feeder.MCP.Editor.UI
 
             var phase = _previewActive ? _previewPhase : ResolvePhase();
             var clients = _previewActive ? _previewClients : _clientNames.Count;
-            var fault = _previewActive ? _previewFault : McpServerManager.LastInstallError.CurrentValue;
+            var fault = _previewActive ? _previewFault : CurrentFault;
             _phase = phase;
 
             _state.text = BridgeStatus.Word(phase);
@@ -307,8 +313,25 @@ namespace Feeder.MCP.Editor.UI
             BridgePhase.Fault => FirstLine(fault),
             BridgePhase.Working => FirstLine("> " + (_previewActive ? "preview" :AgentActivity.LastWriteTool)),
             BridgePhase.PlayTesting => "agent is play testing the game",
-            _ => string.Empty,
+            BridgePhase.Linking => _previewActive ? string.Empty : FirstLine(LinkingNote()),
+            _ => _previewActive ? string.Empty : FirstLine(McpServerManager.PortMoveNote.CurrentValue),
         };
+
+        private static string? CurrentFault
+            => McpServerManager.LastInstallError.CurrentValue ?? McpServerManager.ServerFault.CurrentValue;
+
+        private static string LinkingNote()
+        {
+            var pending = McpServerManager.PendingNote.CurrentValue;
+            if (!string.IsNullOrEmpty(pending))
+                return pending!;
+            return McpServerManager.ServerStatus.CurrentValue switch
+            {
+                McpServerStatus.Installing => "installing server",
+                McpServerStatus.Starting => "starting server",
+                _ => $"waiting for server on :{UnityMcpPluginEditor.Port}",
+            };
+        }
 
         private void ScheduleWorkingExpiry()
         {
@@ -353,6 +376,7 @@ namespace Feeder.MCP.Editor.UI
         {
             try
             {
+                McpServerManager.ResetFault();
                 if (await McpServerManager.InstallServerBinaryIfNeeded())
                     MatrixActivation.Enable();
             }

@@ -126,11 +126,11 @@ The package currently includes the local server binary for Windows x64. The Unit
 can be imported on other platforms, but starting the bundled server requires a matching payload
 under `Server~/<platform>-<architecture>`.
 
-The Windows payload is the Feeder MCP Server. Its on-disk filename remains
-`gamedev-mcp-server.exe` solely so existing AI-client configurations continue to work without
-being regenerated; the executable metadata, implementation, dependencies, and MCP server identity
-are Feeder-owned. The Git package stores this payload as `server-payload.zip` to remain below
-GitHub's per-file limit; installation and updates are handled automatically by the editor package.
+The Windows payload is the Feeder MCP Server, installed as `Library/mcp-server/win-x64/matrix-server.exe`
+and reachable only on `127.0.0.1`. The Git package stores this payload as `server-payload.zip` to
+remain below GitHub's per-file limit; installation and updates are handled automatically by the
+editor package. Updating from 0.87 or earlier stops the old `gamedev-mcp-server.exe` of the project,
+replaces it, and rewrites the config of every wired agent; restart the agent session afterwards.
 
 ## License
 

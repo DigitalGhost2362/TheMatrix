@@ -4,7 +4,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -77,9 +76,13 @@ namespace Feeder.MCP.Editor.Matrix
                     return false;
                 }
 
-                if (!await IsMatrixHealthyAsync() &&
-                    McpServerManager.ServerStatus.CurrentValue == McpServerStatus.Stopped)
-                    McpServerManager.StartServer();
+                // only ever register with this project's own server, never whatever happens to answer on the port
+                if (!await McpServerManager.StartOwnServerAsync())
+                {
+                    _owner.SetMatrixConnectionState(HubConnectionState.Disconnected);
+                    ScheduleReconnect();
+                    return false;
+                }
 
                 await DisposeConnectionAsync();
                 _connection = BuildConnection();
@@ -92,6 +95,7 @@ namespace Feeder.MCP.Editor.Matrix
                         await _connection.StartAsync(_lifetime.Token);
                         await RegisterAsync(_lifetime.Token);
                         SubscribeToRegistryChanges();
+                        CancelReconnect();
                         _owner.SetMatrixConnectionState(HubConnectionState.Connected);
                         _logger.LogInformation("Connected Unity editor to Feeder Local Matrix at {url}", MatrixHubUrl);
                         return true;
@@ -111,6 +115,7 @@ namespace Feeder.MCP.Editor.Matrix
 
                 _logger.LogError(lastError, "Unable to connect Unity editor to Feeder Local Matrix at {url}", MatrixHubUrl);
                 _owner.SetMatrixConnectionState(HubConnectionState.Disconnected);
+                ScheduleReconnect();
                 return false;
             }
             catch (OperationCanceledException)
@@ -124,8 +129,66 @@ namespace Feeder.MCP.Editor.Matrix
             }
         }
 
+        static readonly TimeSpan[] ReconnectBackoff =
+        {
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(2),
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(10),
+            TimeSpan.FromSeconds(30),
+        };
+
+        int _reconnectAttempt;
+        int _reconnectGeneration;
+
+        // the SignalR client gives up after its own short retry list; without this the bridge sat in a dead
+        // "linking" state until the next domain reload
+        void ScheduleReconnect()
+        {
+            if (_disposed || _lifetime.IsCancellationRequested)
+                return;
+            if (!UnityMcpPluginEditor.KeepConnected || !MatrixActivation.IsEnabled)
+                return;
+            if (McpServerManager.ServerFault.CurrentValue != null)
+                return;
+
+            if (_reconnectAttempt >= ReconnectBackoff.Length)
+            {
+                McpServerManager.SetPendingNote(null);
+                McpServerManager.SetServerFault($"Cannot reach this project's MCP server on :{UnityMcpPluginEditor.Port} after {ReconnectBackoff.Length} retries - see logs, then Retry.");
+                _reconnectAttempt = 0;
+                return;
+            }
+
+            var delay = ReconnectBackoff[_reconnectAttempt++];
+            var generation = Interlocked.Increment(ref _reconnectGeneration);
+            McpServerManager.SetPendingNote($"retry {_reconnectAttempt}/{ReconnectBackoff.Length} in {delay.TotalSeconds:0}s");
+            _ = Task.Delay(delay, _lifetime.Token).ContinueWith(task =>
+            {
+                if (task.IsCanceled || generation != Volatile.Read(ref _reconnectGeneration))
+                    return;
+                Feeder.ReflectorNet.Utils.MainThread.Instance.Run(() =>
+                {
+                    if (_disposed || !UnityMcpPluginEditor.KeepConnected || !MatrixActivation.IsEnabled)
+                    {
+                        McpServerManager.SetPendingNote(null);
+                        return;
+                    }
+                    _ = ConnectAsync();
+                });
+            });
+        }
+
+        void CancelReconnect()
+        {
+            Interlocked.Increment(ref _reconnectGeneration);
+            _reconnectAttempt = 0;
+            McpServerManager.SetPendingNote(null);
+        }
+
         public async Task DisconnectAsync()
         {
+            CancelReconnect();
             await _connectionGate.WaitAsync();
             try
             {
@@ -198,6 +261,8 @@ namespace Feeder.MCP.Editor.Matrix
             {
                 _owner.SetMatrixConnectionState(HubConnectionState.Disconnected);
                 PublishMcpClients(Array.Empty<McpClientInfo>());
+                if (ReferenceEquals(connection, _connection))
+                    ScheduleReconnect();
                 return Task.CompletedTask;
             };
             return connection;
@@ -510,28 +575,14 @@ namespace Feeder.MCP.Editor.Matrix
 
         static string MatrixHubUrl => $"http://127.0.0.1:{UnityMcpPluginEditor.Port}/fmp";
 
-        static async Task<bool> IsMatrixHealthyAsync()
-        {
-            try
-            {
-                using var client = new HttpClient { Timeout = TimeSpan.FromMilliseconds(500) };
-                using var response = await client.GetAsync(
-                    $"http://127.0.0.1:{UnityMcpPluginEditor.Port}/healthz");
-                return response.IsSuccessStatusCode;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
         async Task DisposeConnectionAsync()
         {
-            if (_connection == null)
+            var connection = _connection;
+            if (connection == null)
                 return;
-            try { await _connection.DisposeAsync(); }
-            catch { }
             _connection = null;
+            try { await connection.DisposeAsync(); }
+            catch { }
         }
 
         public void Dispose()
@@ -539,6 +590,7 @@ namespace Feeder.MCP.Editor.Matrix
             if (_disposed)
                 return;
             _disposed = true;
+            Interlocked.Increment(ref _reconnectGeneration);
             EditorApplication.update -= UpdateEditorState;
             _lifetime.Cancel();
             _toolsUpdatedSubscription?.Dispose();

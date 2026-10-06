@@ -149,4 +149,16 @@ public class McpEndpointTests : IClassFixture<MatrixFactory>
         Assert.Equal("ok", doc.RootElement.GetProperty("status").GetString());
         Assert.Empty(doc.RootElement.GetProperty("unityLinks").EnumerateArray());
     }
+
+    [Fact]
+    public async Task Healthz_keys_mcp_clients_by_session_header()
+    {
+        var (client, sessionId) = await InitializeAsync();
+        var json = await client.GetStringAsync("/healthz");
+        using var doc = JsonDocument.Parse(json);
+        var session = doc.RootElement.GetProperty("mcpClients").EnumerateArray()
+            .Single(c => c.GetProperty("sessionId").GetString() == sessionId);
+        Assert.True(session.GetProperty("isActive").GetBoolean());
+        Assert.True(session.TryGetProperty("lastActivity", out _));
+    }
 }

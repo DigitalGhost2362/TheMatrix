@@ -30,7 +30,7 @@ public sealed class AgentConfiguratorSettings
 
 	public bool IsWindows => OperatingSystem == OperatingSystemKind.Windows;
 
-	public AgentConfiguratorSettings(OperatingSystemKind operatingSystem, string projectRootPath, string executableFullPath, int port, int timeoutMs, string host, string? token = null, Consts.MCP.Server.AuthOption authOption = Consts.MCP.Server.AuthOption.none, string serverExecutableName = "gamedev-mcp-server", string serverVersion = "")
+	public AgentConfiguratorSettings(OperatingSystemKind operatingSystem, string projectRootPath, string executableFullPath, int port, int timeoutMs, string host, string? token = null, Consts.MCP.Server.AuthOption authOption = Consts.MCP.Server.AuthOption.none, string serverExecutableName = "matrix-server", string serverVersion = "")
 	{
 		OperatingSystem = operatingSystem;
 		ProjectRootPath = projectRootPath;
@@ -44,7 +44,7 @@ public sealed class AgentConfiguratorSettings
 		ServerVersion = serverVersion;
 	}
 
-	public static AgentConfiguratorSettings CreateForHost(string projectRootPath, string executableFullPath, int port, int timeoutMs, string host, string? token = null, Consts.MCP.Server.AuthOption authOption = Consts.MCP.Server.AuthOption.none, string serverExecutableName = "gamedev-mcp-server", string serverVersion = "")
+	public static AgentConfiguratorSettings CreateForHost(string projectRootPath, string executableFullPath, int port, int timeoutMs, string host, string? token = null, Consts.MCP.Server.AuthOption authOption = Consts.MCP.Server.AuthOption.none, string serverExecutableName = "matrix-server", string serverVersion = "")
 	{
 		return new AgentConfiguratorSettings(HostOperatingSystem.Detect(), projectRootPath, executableFullPath, port, timeoutMs, host, token, authOption, serverExecutableName, serverVersion);
 	}

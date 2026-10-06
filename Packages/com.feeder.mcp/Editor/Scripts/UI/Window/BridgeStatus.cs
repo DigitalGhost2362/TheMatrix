@@ -15,11 +15,11 @@ namespace Feeder.MCP.Editor.UI
 
     public static class BridgeStatus
     {
-        public static BridgePhase Resolve(bool keepConnected, bool connected, bool connecting, McpServerStatus server, string? installError, bool agentPlay = false, bool working = false)
+        public static BridgePhase Resolve(bool reconnectPending, bool connected, bool connecting, McpServerStatus server, string? fault, bool agentPlay = false, bool working = false)
         {
-            if (!string.IsNullOrEmpty(installError))
+            if (!string.IsNullOrEmpty(fault))
                 return BridgePhase.Fault;
-            var linking = keepConnected || connecting || server == McpServerStatus.Installing || server == McpServerStatus.Starting;
+            var linking = reconnectPending || connecting || server == McpServerStatus.Installing || server == McpServerStatus.Starting;
             if (agentPlay && (connected || linking))
                 return BridgePhase.PlayTesting;
             if (connected)

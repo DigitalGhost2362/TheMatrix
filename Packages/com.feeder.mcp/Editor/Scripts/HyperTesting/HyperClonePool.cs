@@ -455,7 +455,7 @@ namespace Feeder.MCP.Editor.HyperTesting
                 else
                     state.clones.ForEach(c => { c.pid = 0; c.state = "stopped"; });
                 state.Save();
-                HyperTestingWorkspace.WriteAgentFiles(state);
+                await WriteAgentFilesAsync();
                 return string.Join("\n", lines);
             }
             finally

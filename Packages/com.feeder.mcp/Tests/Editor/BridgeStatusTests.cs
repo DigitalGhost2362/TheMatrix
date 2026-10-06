@@ -18,9 +18,21 @@ namespace Feeder.MCP.Editor.Tests
         [TestCase(false, true, false, McpServerStatus.External, null, BridgePhase.Online)]
         [TestCase(true, true, true, McpServerStatus.Running, "install failed", BridgePhase.Fault)]
         [TestCase(false, false, false, McpServerStatus.Stopped, "install failed", BridgePhase.Fault)]
-        public void Resolve_ReturnsExpectedPhase(bool keep, bool connected, bool connecting, McpServerStatus server, string? error, BridgePhase expected)
+        public void Resolve_ReturnsExpectedPhase(bool reconnectPending, bool connected, bool connecting, McpServerStatus server, string? error, BridgePhase expected)
         {
-            Assert.AreEqual(expected, BridgeStatus.Resolve(keep, connected, connecting, server, error));
+            Assert.AreEqual(expected, BridgeStatus.Resolve(reconnectPending, connected, connecting, server, error));
+        }
+
+        [Test]
+        public void Resolve_NothingInFlight_IsOfflineEvenWhenServerIsRunning()
+        {
+            Assert.AreEqual(BridgePhase.Offline, BridgeStatus.Resolve(false, false, false, McpServerStatus.Running, null));
+        }
+
+        [Test]
+        public void Resolve_CrashLoopFault_WinsOverPendingRestart()
+        {
+            Assert.AreEqual(BridgePhase.Fault, BridgeStatus.Resolve(true, false, false, McpServerStatus.Stopped, "MCP server keeps crashing"));
         }
 
         [TestCase(true, true, false, null, false, true, BridgePhase.Working)]
