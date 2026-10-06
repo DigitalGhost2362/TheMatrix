@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -17,7 +18,16 @@ namespace Feeder.MCP.Editor.HyperTesting
         const string LastResultKey = "Feeder.HyperRunner.LastResult";
         const string BlockedWritesKey = "Feeder.HyperRunner.BlockedWrites";
         const string SetupDoneKey = "Feeder.HyperRunner.SetupDone";
+        const string ToolSetDoneKey = "Feeder.HyperRunner.ToolSetDone";
+        const string SettledKey = "Feeder.HyperRunner.Settled";
+        const string CreatedKey = "Feeder.HyperRunner.CreatedAssets";
+        const string CreatedCountKey = "Feeder.HyperRunner.CreatedAssetCount";
+        const string LastRefreshKey = "Feeder.HyperRunner.LastRefreshUtc";
         const double TickSeconds = 2;
+        const int SettleTicks = 10;
+        const int MaxCreatedPaths = 50;
+        const double MemoryRefreshSeconds = 10;
+        const double QuitPlayWaitSeconds = 30;
 
         static readonly string[] PlaytestTools =
         {
@@ -40,9 +50,19 @@ namespace Feeder.MCP.Editor.HyperTesting
         static string _problem = string.Empty;
         static double _nextTick;
         static int _savedQualityLevel = -1;
+        static bool _setupPending;
+        static bool _toolSetPending;
+        static bool _refreshing;
+        static int _idleTicks;
+        static double _quitRequestedAt;
+        static double _memoryAt = double.MinValue;
+        static EditorMemory _memory;
 
         static HyperRunner()
         {
+            // an import worker of a clone loads every editor assembly too; the runner must stay out of it
+            if (AssetDatabase.IsAssetImportWorkerProcess())
+                return;
             Marker = ReadMarker();
             if (Marker == null)
                 return;
@@ -91,18 +111,31 @@ namespace Feeder.MCP.Editor.HyperTesting
         {
             AssetDatabase.DisallowAutoRefresh();
             AssemblyReloadEvents.beforeAssemblyReload += AssetDatabase.AllowAutoRefresh;
-            if (EditorSettings.refreshImportMode != AssetDatabase.RefreshImportMode.InProcess)
-                EditorSettings.refreshImportMode = AssetDatabase.RefreshImportMode.InProcess;
+            ApplyImportLimits(marker, forceWorkerCount: true);
 
             if (marker.isolatePlayerPrefs && !PlayerSettings.productName.EndsWith($"_hc{marker.index}"))
                 PlayerSettings.productName += $"_hc{marker.index}";
 
             EditorApplication.playModeStateChanged += OnPlayModeChanged;
 
-            if (SessionState.GetBool(SetupDoneKey, false))
-                return;
-            SessionState.SetBool(SetupDoneKey, true);
-            EditorApplication.delayCall += () => FirstSetup(marker);
+            _setupPending = !SessionState.GetBool(SetupDoneKey, false);
+            _toolSetPending = !SessionState.GetBool(ToolSetDoneKey, false);
+        }
+
+        // refresh import mode lives in the clone's ProjectSettings, which every refresh copies over from the original,
+        // and the worker count is an in-memory value: both are applied again before each import
+        static void ApplyImportLimits(HyperCloneMarker marker, bool forceWorkerCount)
+        {
+            if (EditorSettings.refreshImportMode != AssetDatabase.RefreshImportMode.InProcess)
+                EditorSettings.refreshImportMode = AssetDatabase.RefreshImportMode.InProcess;
+
+            var workers = Math.Max(0, marker.importWorkers);
+            var changed = AssetDatabase.DesiredWorkerCount != workers;
+            if (changed)
+                AssetDatabase.DesiredWorkerCount = workers;
+            // forcing a non-zero count starts the workers at once, so that is left to the first import
+            if (changed || (forceWorkerCount && workers == 0))
+                AssetDatabase.ForceToDesiredWorkerCount();
         }
 
         static void FirstSetup(HyperCloneMarker marker)
@@ -111,7 +144,6 @@ namespace Feeder.MCP.Editor.HyperTesting
             {
                 if (!MatrixActivation.IsEnabled)
                     MatrixActivation.Enable();
-                ApplyToolSet();
 
                 if (marker.closeSceneViews)
                 {
@@ -133,10 +165,7 @@ namespace Feeder.MCP.Editor.HyperTesting
         {
             var manager = UnityMcpPluginEditor.Instance.Tools;
             if (manager == null)
-            {
-                EditorApplication.delayCall += ApplyToolSet;
                 return;
-            }
             foreach (var tool in manager.GetAllTools().Where(t => t.Name != null))
             {
                 if (PlaytestTools.Contains(tool.Name!))
@@ -145,6 +174,8 @@ namespace Feeder.MCP.Editor.HyperTesting
                     manager.SetToolEnabled(tool.Name!, false);
             }
             UnityMcpPluginEditor.Instance.Save();
+            _toolSetPending = false;
+            SessionState.SetBool(ToolSetDoneKey, true);
         }
 
         static void OnPlayModeChanged(PlayModeStateChange change)
@@ -188,10 +219,50 @@ namespace Feeder.MCP.Editor.HyperTesting
 
             if (IsActive)
             {
+                // update fires in an unfocused editor, delayCall does not
+                RunDeferredSetup();
+                ApplyImportLimits(Marker!, forceWorkerCount: false);
                 ReadCommand();
                 CompletePendingIfSettled();
+                MarkSettled();
+                if (ExitWhenRequested())
+                    return;
             }
             WriteStatus(true);
+        }
+
+        static void RunDeferredSetup()
+        {
+            if (_setupPending)
+            {
+                _setupPending = false;
+                FirstSetup(Marker!);
+                SessionState.SetBool(SetupDoneKey, true);
+            }
+            if (_toolSetPending && SessionState.GetBool(SetupDoneKey, false))
+                ApplyToolSet();
+        }
+
+        // imports before the editor has been idle for a while are the startup refresh of the original's own changes
+        static void MarkSettled()
+        {
+            if (SessionState.GetBool(SettledKey, false))
+                return;
+            var idle = !EditorApplication.isUpdating && !EditorApplication.isCompiling && !EditorApplication.isPlayingOrWillChangePlaymode;
+            _idleTicks = idle ? _idleTicks + 1 : 0;
+            if (_idleTicks >= SettleTicks)
+                SessionState.SetBool(SettledKey, true);
+        }
+
+        static bool ExitWhenRequested()
+        {
+            if (_quitRequestedAt <= 0)
+                return false;
+            if (EditorApplication.isPlaying && EditorApplication.timeSinceStartup - _quitRequestedAt < QuitPlayWaitSeconds)
+                return false;
+            WriteStatus(false);
+            EditorApplication.Exit(0);
+            return true;
         }
 
         static void ReadCommand()
@@ -225,8 +296,7 @@ namespace Feeder.MCP.Editor.HyperTesting
                     if (EditorApplication.isPlaying)
                         EditorApplication.isPlaying = false;
                     Finish(command.id, "quitting");
-                    WriteStatus(false);
-                    EditorApplication.delayCall += () => EditorApplication.Exit(0);
+                    _quitRequestedAt = Math.Max(1, EditorApplication.timeSinceStartup);
                     break;
                 case "gc":
                     EditorUtility.UnloadUnusedAssetsImmediate();
@@ -242,13 +312,17 @@ namespace Feeder.MCP.Editor.HyperTesting
 
         static void RunPendingRefresh()
         {
+            SessionState.SetString(LastRefreshKey, DateTime.UtcNow.ToString("o"));
+            ApplyImportLimits(Marker!, forceWorkerCount: true);
             AssetDatabase.AllowAutoRefresh();
+            _refreshing = true;
             try
             {
                 AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             }
             finally
             {
+                _refreshing = false;
                 AssetDatabase.DisallowAutoRefresh();
             }
             _nextTick = EditorApplication.timeSinceStartup + TickSeconds;
@@ -269,10 +343,51 @@ namespace Feeder.MCP.Editor.HyperTesting
             SessionState.SetString(LastResultKey, result);
         }
 
+        // a file the original made is older than the refresh that imports it, so an import outside our own refresh
+        // of a file newer than both this editor and the last refresh was created by the clone
+        internal static void CheckImported(IEnumerable<string> paths)
+        {
+            if (_refreshing || !SessionState.GetBool(SettledKey, false) || SessionState.GetString(PendingCommandKey, string.Empty).Length > 0)
+                return;
+            var since = DateTime.UtcNow.AddSeconds(-EditorApplication.timeSinceStartup);
+            if (DateTime.TryParse(SessionState.GetString(LastRefreshKey, string.Empty), null, System.Globalization.DateTimeStyles.RoundtripKind, out var refreshed) && refreshed.ToUniversalTime() > since)
+                since = refreshed.ToUniversalTime();
+            foreach (var path in paths)
+            {
+                if (!path.StartsWith("Assets/", StringComparison.Ordinal) && !path.StartsWith("Packages/", StringComparison.Ordinal))
+                    continue;
+                var full = Path.Combine(HyperTestingPaths.ProjectRoot, path);
+                if ((File.Exists(full) || Directory.Exists(full)) && File.GetCreationTimeUtc(full) > since)
+                    RecordCreated(path);
+            }
+        }
+
+        static void RecordCreated(string path)
+        {
+            var known = SessionState.GetString(CreatedKey, string.Empty).Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+            if (known.Contains(path))
+                return;
+            SessionState.SetInt(CreatedCountKey, SessionState.GetInt(CreatedCountKey, 0) + 1);
+            if (known.Count < MaxCreatedPaths)
+            {
+                known.Add(path);
+                SessionState.SetString(CreatedKey, string.Join("\n", known));
+            }
+            Debug.LogError($"[Hyper Testing] CRITICAL: clone hc{Marker?.index} created '{path}'. Its Assets folder is the original project's, so the file now exists in the ORIGINAL project.");
+        }
+
         internal static void CountBlockedWrite(string what)
         {
             SessionState.SetInt(BlockedWritesKey, SessionState.GetInt(BlockedWritesKey, 0) + 1);
             Debug.LogError($"[Hyper Testing] blocked a write from clone hc{Marker?.index}: {what}. Clones are read-only; their Assets folder is the original project's.");
+        }
+
+        static void RefreshMemory()
+        {
+            if (EditorApplication.timeSinceStartup - _memoryAt < MemoryRefreshSeconds)
+                return;
+            _memoryAt = EditorApplication.timeSinceStartup;
+            _memory = HyperSystemMemory.ReadEditor(HyperProcess.CurrentPid, HyperProcess.Snapshot());
         }
 
         static void WriteStatus(bool alive)
@@ -282,11 +397,11 @@ namespace Feeder.MCP.Editor.HyperTesting
                 return;
             try
             {
-                using var process = System.Diagnostics.Process.GetCurrentProcess();
+                RefreshMemory();
                 var status = new HyperCloneStatus
                 {
                     index = marker.index,
-                    pid = alive ? process.Id : 0,
+                    pid = alive ? HyperProcess.CurrentPid : 0,
                     writtenUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                     runnerActive = IsActive && alive,
                     runnerProblem = _problem,
@@ -294,9 +409,14 @@ namespace Feeder.MCP.Editor.HyperTesting
                     isCompiling = EditorApplication.isCompiling,
                     isUpdating = EditorApplication.isUpdating,
                     compileFailed = EditorUtility.scriptCompilationFailed,
-                    workingSetMb = process.WorkingSet64 / 1048576,
-                    peakWorkingSetMb = process.PeakWorkingSet64 / 1048576,
+                    workingSetMb = _memory.Editor.WorkingSetMb,
+                    peakWorkingSetMb = _memory.Editor.PeakWorkingSetMb,
+                    commitMb = _memory.Editor.CommitMb,
+                    workers = _memory.Workers,
+                    workersCommitMb = _memory.WorkersCommitMb,
                     blockedWrites = SessionState.GetInt(BlockedWritesKey, 0),
+                    createdAssetCount = SessionState.GetInt(CreatedCountKey, 0),
+                    createdAssets = SessionState.GetString(CreatedKey, string.Empty).Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries),
                     lastCommandId = SessionState.GetString(LastCommandKey, string.Empty),
                     lastCommandResult = SessionState.GetString(LastResultKey, string.Empty),
                 };
@@ -333,6 +453,16 @@ namespace Feeder.MCP.Editor.HyperTesting
                 return AssetMoveResult.DidNotMove;
             HyperRunner.CountBlockedWrite($"move {source} -> {destination}");
             return AssetMoveResult.FailedMove;
+        }
+    }
+
+    // creation cannot be cancelled from AssetModificationProcessor, so it is detected after the import
+    public class HyperCloneAssetWatch : AssetPostprocessor
+    {
+        static void OnPostprocessAllAssets(string[] imported, string[] deleted, string[] moved, string[] movedFrom)
+        {
+            if (HyperRunner.IsActive)
+                HyperRunner.CheckImported(imported.Concat(moved));
         }
     }
 }

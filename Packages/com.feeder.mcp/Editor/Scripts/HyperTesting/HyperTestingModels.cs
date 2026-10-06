@@ -23,6 +23,8 @@ namespace Feeder.MCP.Editor.HyperTesting
         public bool isolatePlayerPrefs = true;
         public bool closeSceneViews = true;
         public int ramSampleIntervalSec = 30;
+        public int cloneImportWorkers = 0;
+        public int vramOneCloneMaxMb = 4096;
 
         public static HyperTestingConfig Load()
         {
@@ -60,6 +62,7 @@ namespace Feeder.MCP.Editor.HyperTesting
         public bool playLowestQuality = true;
         public bool isolatePlayerPrefs = true;
         public bool closeSceneViews = true;
+        public int importWorkers = 0;
     }
 
     [Serializable]
@@ -76,7 +79,12 @@ namespace Feeder.MCP.Editor.HyperTesting
         public bool compileFailed;
         public long workingSetMb;
         public long peakWorkingSetMb;
+        public long commitMb;
+        public int workers;
+        public long workersCommitMb;
         public int blockedWrites;
+        public int createdAssetCount;
+        public string[] createdAssets = Array.Empty<string>();
         public string lastCommandId = string.Empty;
         public string lastCommandResult = string.Empty;
     }
@@ -102,19 +110,27 @@ namespace Feeder.MCP.Editor.HyperTesting
     [Serializable]
     public class HyperPoolState
     {
+        static readonly object _fileLock = new object();
+
         public List<HyperPoolEntry> clones = new List<HyperPoolEntry>();
 
         public static HyperPoolState Load()
         {
-            var path = HyperTestingPaths.PoolFile;
-            var state = File.Exists(path) ? JsonUtility.FromJson<HyperPoolState>(File.ReadAllText(path)) : null;
-            return state ?? new HyperPoolState();
+            lock (_fileLock)
+            {
+                var path = HyperTestingPaths.PoolFile;
+                var state = File.Exists(path) ? JsonUtility.FromJson<HyperPoolState>(File.ReadAllText(path)) : null;
+                return state ?? new HyperPoolState();
+            }
         }
 
         public void Save()
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(HyperTestingPaths.PoolFile)!);
-            File.WriteAllText(HyperTestingPaths.PoolFile, JsonUtility.ToJson(this, true));
+            lock (_fileLock)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(HyperTestingPaths.PoolFile)!);
+                File.WriteAllText(HyperTestingPaths.PoolFile, JsonUtility.ToJson(this, true));
+            }
         }
 
         public HyperPoolEntry? Find(int index) => clones.Find(c => c.index == index);
@@ -138,6 +154,7 @@ namespace Feeder.MCP.Editor.HyperTesting
         public static string RamNotes => Path.Combine(Journal, "ram-observations.md");
         public static string CloneIssues => Path.Combine(Journal, "clone-issues.md");
         public static string PoolFile => Path.Combine(ProjectRoot, "Library", "MatrixHyperTesting", "pool.json");
+        public static string GitBaselineFile => Path.Combine(ProjectRoot, "Library", "MatrixHyperTesting", "origin-git-baseline.txt");
         public static string AgentsFolder => Path.Combine(ProjectRoot, ".claude", "agents");
         public static string SkillFolder => Path.Combine(UnityMcpPluginEditor.SkillsRootFolderAbsolutePath, SkillId);
 

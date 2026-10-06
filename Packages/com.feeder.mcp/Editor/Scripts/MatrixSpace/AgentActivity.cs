@@ -36,6 +36,9 @@ namespace Feeder.MCP.Editor.MatrixSpace
 
         static AgentActivity()
         {
+            if (AssetDatabase.IsAssetImportWorkerProcess())
+                return;
+
             UnityMcpPluginEditor.PluginProperty.Subscribe(OnPlugin);
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
         }

@@ -25,6 +25,9 @@ namespace Feeder.MCP.Editor.MatrixSpace
 
         static PlayTestFrame()
         {
+            if (AssetDatabase.IsAssetImportWorkerProcess())
+                return;
+
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             if (AgentActivity.IsAgentPlay)
                 EditorApplication.delayCall += ShowIfAgentPlay;

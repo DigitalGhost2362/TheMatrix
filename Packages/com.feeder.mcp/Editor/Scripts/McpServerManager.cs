@@ -87,6 +87,10 @@ namespace Feeder.MCP.Editor
 
         static McpServerManager()
         {
+            // an import worker that quits would otherwise stop the server it adopted from this project
+            if (AssetDatabase.IsAssetImportWorkerProcess())
+                return;
+
             // Register for editor quit to clean up the server process
             EditorApplication.quitting += OnEditorQuitting;
 

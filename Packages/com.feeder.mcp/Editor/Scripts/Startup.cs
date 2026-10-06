@@ -17,6 +17,10 @@ namespace Feeder.MCP.Editor
 
         static Startup()
         {
+            // an asset import worker loads every editor assembly; the bridge must never start inside one
+            if (AssetDatabase.IsAssetImportWorkerProcess())
+                return;
+
             if (MatrixActivation.IsEnabled)
                 Activate();
         }

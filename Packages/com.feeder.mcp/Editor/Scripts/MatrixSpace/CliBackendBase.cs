@@ -25,6 +25,9 @@ namespace Feeder.MCP.Editor.MatrixSpace
         [InitializeOnLoadMethod]
         private static void RegisterDomainReloadKill()
         {
+            if (AssetDatabase.IsAssetImportWorkerProcess())
+                return;
+
             AssemblyReloadEvents.beforeAssemblyReload += KillAllLiveProcesses;
             EditorApplication.quitting += KillAllLiveProcesses;
         }

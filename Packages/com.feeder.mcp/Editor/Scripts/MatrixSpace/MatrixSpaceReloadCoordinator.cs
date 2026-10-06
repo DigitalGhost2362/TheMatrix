@@ -35,6 +35,9 @@ namespace Feeder.MCP.Editor.MatrixSpace
 
         static MatrixSpaceReloadCoordinator()
         {
+            if (AssetDatabase.IsAssetImportWorkerProcess())
+                return;
+
             CompilationPipeline.compilationStarted += OnCompilationStarted;
             CompilationPipeline.assemblyCompilationFinished += OnAssemblyCompilationFinished;
             CompilationPipeline.compilationFinished += OnCompilationFinished;

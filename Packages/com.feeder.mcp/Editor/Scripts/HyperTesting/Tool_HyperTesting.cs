@@ -21,10 +21,10 @@ namespace Feeder.MCP.Editor.API
         [AiSkillBody("Manages the clone editors used by Hyper Testing Mode (experimental).\n\n" +
             "## Inputs\n\n" +
             "- `action` - `status` (default), `up`, `refresh`, `down`, `purge`, `ram`.\n" +
-            "- `count` - number of clones for `up` (capped by HyperTesting/config.json maxClones and by the free-RAM gate).\n\n" +
+            "- `count` - number of clones for `up` (capped by HyperTesting/config.json maxClones, the VRAM gate and the commit gate).\n\n" +
             "## Behavior\n\n" +
             "`up`, `refresh`, `down` and `purge` start a background job and return at once; poll `status` until the job finishes. " +
-            "`purge` stops the clones and deletes their folders (junctions are unlinked first). `ram` takes one RAM sample into " +
+            "`purge` stops the clones and deletes their folders (junctions are unlinked first). `ram` takes one memory sample (RAM, commit, import workers) into " +
             "HyperTesting/Journal/ram-samples.csv. When the mode is off every action returns a refusal: stop and ask the user, " +
             "never try to enable the mode yourself.")]
         [Description("EXPERIMENTAL Hyper Testing clone pool: action = status | up | refresh | down | purge | ram. " +

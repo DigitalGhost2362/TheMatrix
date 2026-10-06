@@ -12,7 +12,7 @@ namespace Feeder.MCP.Editor.HyperTesting
             "Hyper Testing Mode is EXPERIMENTAL and may break.\n\n" +
             "It creates clone projects next to this one (Assets and embedded packages are directory junctions to THIS project, " +
             "Library is copied per clone), launches one extra Unity Editor per clone and lets AI subagents play test in parallel.\n\n" +
-            "- Each clone costs 2-4 GB RAM and a full Library copy on disk.\n" +
+            "- Each clone costs about 5 GB of memory (commit) and a Library copy on disk. They share one GPU with this editor: on a 4 GB card only one clone starts.\n" +
             "- Clones are read-only by design, but a bug could still write through a junction into this project. Commit first.\n" +
             "- The mode is per machine and per project, never shared through git, and turns itself off on every package update.\n" +
             "- Agents cannot enable it. Only this button can.";

@@ -23,6 +23,8 @@ other clones at the same time.
    `{{ORIGIN_ROOT}}/HyperTesting/Journal/*.md`. Never edit `TestCases/*.md`.
 4. Never try to enable, disable or reconfigure Hyper Testing Mode.
 5. Stay inside the time budget. If the clone stops answering, stop and report `blocked`.
+6. Never create an asset, even by playing a scene that writes one: the clone's `Assets/` is the original's, so
+   the file appears in the original. The runner reports every such file as CRITICAL; report it too.
 
 ## Start
 
@@ -31,8 +33,8 @@ other clones at the same time.
 2. Confirm you are on the clone: run `script-execute` with
    `public class Script { public static string Main() => UnityEngine.Application.dataPath; }`
    - it must start with `{{CLONE_ROOT}}`. If not, stop and report `blocked`.
-3. Record RAM with `script-execute`:
-   `public class Script { public static string Main() { var p = System.Diagnostics.Process.GetCurrentProcess(); return $"ws={p.WorkingSet64/1048576}MB peak={p.PeakWorkingSet64/1048576}MB mono={UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong()/1048576}MB"; } }`
+3. Record memory with `script-execute` (`System.Diagnostics.Process` reads 0 MB inside Unity, so use this):
+   `public class Script { public static string Main() { var m = Feeder.MCP.Editor.HyperTesting.HyperSystemMemory.ReadEditor(Feeder.MCP.Editor.HyperTesting.HyperProcess.CurrentPid, Feeder.MCP.Editor.HyperTesting.HyperProcess.Snapshot()); return $"ws={m.Editor.WorkingSetMb}MB commit={m.Editor.CommitMb}MB workers={m.Workers} workersCommit={m.WorkersCommitMb}MB mono={UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong()/1048576}MB"; } }`
 4. Note the time; filter `console-get-logs` by it later. Do not clear the console.
 
 ## Per case
@@ -45,7 +47,7 @@ other clones at the same time.
    (`screenshot-game-view`; if it fails because the window is hidden, use `screenshot-camera`). To keep a
    screenshot file, call `UnityEngine.ScreenCapture.CaptureScreenshot("<run folder>/<case>-TC<n>.png")`
    in play mode via `script-execute`.
-4. Record RAM again after each case (snippet above). If the working set grew more than 1 GB during one
+4. Record memory again after each case (snippet above). If the commit grew more than 1 GB during one
    case, note it.
 5. Exit play mode. Restore what you changed.
 6. Write `{{ORIGIN_ROOT}}/HyperTesting/Runs/<run id>/<case-file-name>.hc{{INDEX}}.md`:

@@ -22,6 +22,26 @@ All notable changes to this package are documented here.
   - **`HyperTesting/` folder:** a config file and a journal (clone issues, play-test issues, RAM
     observations with a 30 s sampler, playbook, Matrix improvements) where agents record what went wrong
     and what worked.
+  - **Memory gate:** `up` counts commit, the limit Windows actually runs out of. It refuses when the commit
+    limit minus the commit charge cannot hold one more editor plus `ramReserveMb`, budgeting a clone at the
+    larger of the measured clone peak x 1.2 and the original editor's commit, and names the fix (a larger
+    fixed pagefile, a lighter scene, a restart of the original). It warns when Gradle or another Unity is
+    running, and starts only one clone on a GPU with 4096 MB of video memory or less (`vramOneCloneMaxMb`).
+  - **Import workers:** a clone imports in its own editor process. `cloneImportWorkers` in `config.json`
+    (default 0) sets how many asset import workers it may run. The count is set in memory only; the
+    machine-wide import preferences are never written.
+  - **Smaller clones:** a new clone does not copy `Library/Search`, its search index keeps no types,
+    properties or dependencies (and on Unity 6 it does not index at editor start), and it opens no scene on start.
+  - **Sampler:** `ram-samples.csv` has the system commit charge and limit, and the RAM, commit and import
+    workers of the original and of each clone. A file with the old columns is kept as
+    `ram-samples-<time>.old.csv`. `status` shows the same numbers and warns when the original is in play mode
+    while a clone imports or plays.
+  - **Writes into the project:** a clone reports every asset it creates as CRITICAL, with its path. `up`
+    also takes a git baseline of the project, and `down` and `status` warn about new untracked paths that no
+    clone reported.
+  - **Fallback tools:** `HyperTesting/tools/` holds `hc.py`, `hx.sh`, `hxf.sh` and `shot.py` to drive a
+    clone over HTTP. `up` warns when the play tester files are newer than the Claude Code session.
+  - The `matrix-hyper-testing` skill and the playbook start with a memory pre-flight.
 - Skill `matrix-shared-editor`: the protocol for several agents and people on one Editor - an
   `agent-editor-lock` claim before compiling or playing, and a written test-case handoff when the
   Editor is busy. It is a convention between sessions; Matrix does not enforce it yet.
@@ -53,6 +73,14 @@ All notable changes to this package are documented here.
   share Claude Code's `.mcp.json` entry, which DeepSeek Harness does not read. Its click now only keeps
   the skills in `.agents/skills` current, and its on/off state is its own. Add the bridge to DeepSeek
   Harness through its own MCP configuration.
+- Asset import workers no longer run the bridge, the server manager, the Hyper Testing runner or any other
+  editor startup code of this package. Every worker used to run all of it, including connecting to the server
+  and adopting the project's server process.
+- Hyper testing no longer reads 0 MB for every editor: the memory properties of the process API return 0
+  inside Unity, so memory, liveness, child processes and command lines now come from Windows directly.
+- `up` no longer reports "process exited" for a clone that is still starting, and `down` no longer has to
+  kill a clone that was asked to quit: the quit runs from the update loop, which keeps running while the
+  editor is in the background.
 
 ## [0.87.1] - 2026-09-30
 

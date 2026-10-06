@@ -24,6 +24,9 @@ namespace Feeder.MCP.Editor.Utils
 
         static ScriptUtils()
         {
+            if (AssetDatabase.IsAssetImportWorkerProcess())
+                return;
+
             // Process any pending notifications after domain reload (successful compilation)
             ScheduleProcessPendingNotifications();
 

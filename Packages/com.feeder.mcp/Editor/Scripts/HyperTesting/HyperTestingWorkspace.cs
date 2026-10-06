@@ -1,8 +1,10 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace Feeder.MCP.Editor.HyperTesting
@@ -15,7 +17,7 @@ namespace Feeder.MCP.Editor.HyperTesting
         static readonly string[] IgnoredPaths =
         {
             "/HyperTesting/Runs/",
-            "/HyperTesting/Journal/ram-samples.csv",
+            "/HyperTesting/Journal/ram-samples*.csv",
             "/.claude/agents/hyper-playtester-*.md",
             "/.claude/skills/matrix-hyper-testing/",
         };
@@ -52,6 +54,7 @@ namespace Feeder.MCP.Editor.HyperTesting
             new HyperTestingConfig().SaveIfMissing();
             Directory.CreateDirectory(HyperTestingPaths.AgentsFolder);
             WriteSkill();
+            WriteTools();
             AppendGitIgnore();
         }
 
@@ -67,6 +70,25 @@ namespace Feeder.MCP.Editor.HyperTesting
             File.WriteAllText(Path.Combine(HyperTestingPaths.SkillFolder, "SKILL.md"), File.ReadAllText(template));
         }
 
+        // the scripts that drive a clone over HTTP when a subagent has no MCP tools for it; rewritten on every up so fixes arrive with the package
+        static void WriteTools()
+        {
+            var source = Path.Combine(TemplatesRoot, "tools");
+            if (!Directory.Exists(source))
+            {
+                Debug.LogError($"{HyperTestingActivation.LogPrefix} tools template folder missing: {source}");
+                return;
+            }
+            var destination = Path.Combine(HyperTestingPaths.Workspace, "tools");
+            Directory.CreateDirectory(destination);
+            foreach (var file in Directory.GetFiles(source))
+            {
+                var text = File.ReadAllText(file);
+                // bash refuses a script with CRLF line ends
+                WriteIfChanged(Path.Combine(destination, Path.GetFileName(file)), file.EndsWith(".sh", StringComparison.OrdinalIgnoreCase) ? text.Replace("\r\n", "\n") : text);
+            }
+        }
+
         public static void WriteAgentFiles(HyperPoolState state)
         {
             if (!HyperTestingActivation.IsEnabled)
@@ -75,6 +97,8 @@ namespace Feeder.MCP.Editor.HyperTesting
                 return;
             }
             WriteSkill();
+            WriteTools();
+            AppendGitIgnore();
             var template = Path.Combine(TemplatesRoot, "agent", "hyper-playtester.md");
             if (!File.Exists(template))
             {
@@ -83,8 +107,8 @@ namespace Feeder.MCP.Editor.HyperTesting
             }
 
             Directory.CreateDirectory(HyperTestingPaths.AgentsFolder);
-            DeleteAgentFiles();
             var text = File.ReadAllText(template);
+            var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var entry in state.clones)
             {
                 var content = text
@@ -92,7 +116,53 @@ namespace Feeder.MCP.Editor.HyperTesting
                     .Replace("{{PORT}}", entry.port.ToString())
                     .Replace("{{CLONE_ROOT}}", entry.root.Replace('\\', '/'))
                     .Replace("{{ORIGIN_ROOT}}", HyperTestingPaths.ProjectRoot.Replace('\\', '/'));
-                File.WriteAllText(Path.Combine(HyperTestingPaths.AgentsFolder, $"{HyperTestingPaths.AgentPrefix}{entry.index}.md"), content);
+                var path = Path.Combine(HyperTestingPaths.AgentsFolder, $"{HyperTestingPaths.AgentPrefix}{entry.index}.md");
+                wanted.Add(path);
+                // an unchanged file keeps its timestamps, which is how AgentFileWarning tells new files from old ones
+                WriteIfChanged(path, content);
+            }
+            foreach (var stale in Directory.GetFiles(HyperTestingPaths.AgentsFolder, HyperTestingPaths.AgentPrefix + "*.md").Where(f => !wanted.Contains(f)))
+                File.Delete(stale);
+        }
+
+        static void WriteIfChanged(string path, string text)
+        {
+            if (File.Exists(path) && File.ReadAllText(path) == text)
+                return;
+            File.WriteAllText(path, text);
+        }
+
+        // Claude Code reads .claude/agents once, at start: a file created or changed after that cannot be spawned with its MCP tools
+        public static string AgentFileWarning()
+        {
+            var folder = HyperTestingPaths.AgentsFolder;
+            var started = SessionStartUtc(HyperTestingPaths.ProjectRoot);
+            if (started == null || !Directory.Exists(folder))
+                return string.Empty;
+            var late = Directory.GetFiles(folder, HyperTestingPaths.AgentPrefix + "*.md")
+                .Where(f => File.GetCreationTimeUtc(f) > started || File.GetLastWriteTimeUtc(f) > started)
+                .Select(Path.GetFileNameWithoutExtension)
+                .ToList();
+            return late.Count == 0
+                ? string.Empty
+                : $"{string.Join(", ", late)} look newer than the Claude Code session that began at {started.Value.ToLocalTime():HH:mm} (the newest transcript of this project; a resumed session starts later). " +
+                  "A session cannot spawn agents that appeared after it started: if the MCP tools of a clone are missing, restart Claude Code or drive the clone over HTTP with HyperTesting/tools/hc.py.";
+        }
+
+        // the newest transcript of this project is the live session, and its creation time is when the session began
+        static DateTime? SessionStartUtc(string projectRoot)
+        {
+            try
+            {
+                var key = Regex.Replace(Path.GetFullPath(projectRoot), "[^A-Za-z0-9]", "-");
+                var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", "projects", key);
+                if (!Directory.Exists(folder))
+                    return null;
+                return new DirectoryInfo(folder).GetFiles("*.jsonl").OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault()?.CreationTimeUtc;
+            }
+            catch (Exception)
+            {
+                return null;
             }
         }
 

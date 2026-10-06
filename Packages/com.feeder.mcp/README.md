@@ -99,8 +99,17 @@ subagent. It is off by default, Windows only, and only a person can turn it on, 
 again on every package update.
 
 - **Clones:** `up` creates the clones in `<project>.HyperClones/hc<N>`. `Assets` and the embedded packages
-  are junctions to the project, and each clone has its own `Library` and server port. The clones start
-  one after another behind a free-RAM gate.
+  are junctions to the project, and each clone has its own `Library` (without the Search index) and server
+  port. The clones start one after another behind a commit gate and a VRAM gate, and open no scene on start.
+- **Memory:** Windows runs out of commit, not of free RAM, so `up` refuses when the commit limit cannot hold
+  one more editor plus `ramReserveMb`, and the 30 s sampler writes commit and import workers to
+  `HyperTesting/Journal/ram-samples.csv`. Clones import in their own process (`cloneImportWorkers` 0 in
+  `HyperTesting/config.json`) and a GPU with 4096 MB or less starts one clone.
+- **Writes into the project:** a clone that creates an asset creates it in the project. The clone reports
+  every asset it creates as CRITICAL, and `up` takes a git baseline so `down` and `status` can warn about new
+  untracked paths. Packages that write assets under `Assets/` when play starts do not work with clones.
+- **Driving a clone by hand:** `HyperTesting/tools/` holds `hc.py`, `hx.sh`, `hxf.sh` and `shot.py`, which
+  call a clone over HTTP when a play tester has no MCP tools for it.
 - **Refreshing:** after a code change, `refresh` recompiles the clones one at a time.
 - **Running cases:** the agent following the `matrix-hyper-testing` skill splits test cases over the
   clones and spawns the play testers in parallel.
