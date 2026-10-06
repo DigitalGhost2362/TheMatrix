@@ -26,6 +26,9 @@ namespace Feeder.MCP.Editor.UI
         [MenuItem("Tools/Feeder/Hyper Testing (Experimental)", priority = -16)]
         public static void ShowHyperTesting() => HyperTesting.HyperTestingWindow.ShowWindow();
 
+        [MenuItem("Tools/Feeder/VFX Studio", priority = -15)]
+        public static void ShowVfxStudio() => Vfx.VfxStudioWindow.ShowWindow();
+
         [MenuItem("Tools/Feeder/Skills", true)]
         [MenuItem("Tools/Feeder/Bridge", true)]
         [MenuItem("Tools/Feeder/Space (experimental)", true)]

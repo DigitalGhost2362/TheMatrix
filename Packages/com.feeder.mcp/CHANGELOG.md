@@ -6,6 +6,47 @@ All notable changes to this package are documented here.
 
 ### Added
 
+- **Matrix VFX** - ParticleSystem effects built and tuned by an agent, still fully editable by people.
+  - **Tools** (off by default, turn them on with `tool-set-enabled-state`):
+    - `vfx-apply` creates or patches an effect prefab from a compact JSON spec. Emitters are addressed by
+      name and only changed fields are sent. Module and property names are the Unity scripting API names.
+      `root.scale` sets the scale of the prefab root.
+    - `vfx-read` returns the prefab as the same spec, listing only values that differ from the baseline
+      emitter, plus `root.scale` when the prefab root is scaled.
+    - `vfx-preview` simulates with a fixed seed and renders one contact sheet of time samples, each
+      labelled, from a fixed camera. It also returns text stats: alive counts, per-emitter windows, fill
+      and warnings. `context=<model prefab>` renders the effect on the model it decorates.
+      `camera=<scene camera>` renders the instance placed in the open scene through that camera, including
+      bloom and tonemapping.
+    - `vfx-texture` generates procedural particle textures: glow, circle, ring, spark, star, sparkle (pointed
+      4-point twinkle), flare, crescent, smoke flipbook, tiling noise, trail, shockwave, polygon and
+      lightning.
+    - `vfx-history` lists, scores and restores versions. Every apply stores one, and manual Inspector edits
+      are captured before the next apply.
+  - **Materials:** a `"texture/blend"` shorthand (`add`, `alpha`, `premul`, `mul`) creates one shared
+    material per pair. It uses URP Particles/Unlit when URP is active and Particles/Standard Unlit
+    otherwise. A shared material whose shader no longer matches the active pipeline is switched on its next
+    use. Flipbook textures switch on the Texture Sheet Animation module automatically.
+  - **VFX Studio window** (**Tools > Feeder > VFX Studio**), Effect tab:
+    - **Library:** every prefab under `Assets/` with a ParticleSystem on the root or on a child, in a folder
+      tree that lists only folders holding effects (with counts) and a grid of thumbnails with the emitter
+      count. Search by name; double-click a folder to enter it, double-click an effect or press **Open** to
+      edit it. It scans when the window opens and on **Refresh**, reloading only the prefabs that changed.
+    - **Editor:** the prefab's real hierarchy, with a checkbox per emitter that hides it in the previews
+      only. Right-click a child > **Copy Path** copies `Assets/VFX/Hit.prefab > Debris/Pop`, the exact
+      object to name when asking for a change. A live preview of the whole effect (play, pause, restart,
+      scrub, 0.25x, 0.5x, 1x) loops over the longer of the root Duration and the effect's own length. The
+      root shows Duration, Simulation Speed and Scale (saved as `root.scale`); an emitter shows its own
+      preview and its main, emission, shape, over-lifetime and renderer values.
+    - Edits stay on an in-memory copy, and changed values get a blue bar. **Save** writes only those values
+      through the `vfx-apply` path and stores a version, **Undo** drops them, and leaving with unsaved
+      edits asks first. Ranges get a two-handle slider; curves and gradients are shown but edited in the
+      Inspector or with `vfx-apply`. A row that does not apply (module off, emitter driven by rate) is
+      greyed with the reason. Save is blocked while two emitters share a name. Unsaved edits are lost when
+      scripts recompile.
+    - **Textures** tab: the texture generator.
+  - **Skill:** `matrix-vfx` covers the iteration loop, the spec reference, layering recipes per effect
+    type, a symptom-to-cause table and mobile budgets.
 - **Hyper Testing Mode (Experimental)** (**Tools > Feeder > Hyper Testing (Experimental)**, Windows only):
   several clone editors play test one project in parallel, each driven by its own `hyper-playtester-N`
   subagent.
