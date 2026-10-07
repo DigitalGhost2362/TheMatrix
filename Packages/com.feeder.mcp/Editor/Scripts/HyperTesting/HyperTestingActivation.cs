@@ -71,7 +71,7 @@ namespace Feeder.MCP.Editor.HyperTesting
             Debug.Log($"{LogPrefix} disabled. Running clones keep running until you stop them; their bridges refuse runner work from now on.");
         }
 
-        internal static string ExpectedConfirmation => new DirectoryInfo(UnityMcpPluginEditor.ProjectRootPath).Name;
+        internal static string ExpectedConfirmation => new DirectoryInfo(MatrixPluginEditor.ProjectRootPath).Name;
 
         // a HyperTestingWindow GUI event on the stack and no dynamically compiled (script-execute) frame
         static bool IsHumanGuiCall()

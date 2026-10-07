@@ -1,9 +1,9 @@
 #nullable enable
 using System;
 using System.ComponentModel;
-using Feeder.McpPlugin;
-using Feeder.McpPlugin.Common.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.ToolHost.Common.Model;
+using Feeder.Reflect.Utils;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -142,7 +142,7 @@ namespace Feeder.MCP.Editor.API
                     root.UnregisterCallback(onKey!, TrickleDown.TrickleDown);
                     overlay.RemoveFromHierarchy();
                     window.Repaint();
-                    _ = UnityMcpPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
+                    _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
                     {
                         RequestId = requestId!,
                         Result = result.SetRequestID(requestId!)

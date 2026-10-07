@@ -2,14 +2,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using AgentConfig = Feeder.McpPlugin.AgentConfig;
+using AgentConfig = Feeder.ToolHost.AgentConfig;
 
 namespace Feeder.MCP.Editor.UI
 {
     /// <summary>
     /// Package-side extension of the shared <see cref="AgentConfig.AiAgentConfiguratorRegistry"/>.
     ///
-    /// The shared registry (compiled into Feeder.McpPlugin.dll) is a static, closed list with no
+    /// The shared registry (compiled into Feeder.ToolHost.dll) is a static, closed list with no
     /// registration API, so agents that are not part of the shared library — currently
     /// <see cref="DeepSeekAiAgentConfigurator"/> — are injected by this assembly. DeepSeek is
     /// inserted immediately after Claude Code in the list order.

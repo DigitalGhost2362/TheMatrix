@@ -7,7 +7,7 @@ using Feeder.MCP.Editor.MatrixSpace.Setup;
 using Feeder.MCP.Editor.UI.MatrixSpace;
 using Feeder.MCP.Editor.UI.Controls;
 using Feeder.MCP.Editor.Utils;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;

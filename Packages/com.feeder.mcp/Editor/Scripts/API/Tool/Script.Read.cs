@@ -3,7 +3,7 @@ using System;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using Feeder.McpPlugin;
+using Feeder.ToolHost;
 
 namespace Feeder.MCP.Editor.API
 {

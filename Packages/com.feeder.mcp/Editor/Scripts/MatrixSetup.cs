@@ -4,10 +4,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Feeder.Json.Nodes;
 using Feeder.MCP.Editor.MatrixSpace;
 using Feeder.MCP.Editor.MatrixSpace.Setup;
 using Feeder.MCP.Editor.UI;
-using Feeder.McpPlugin;
+using Feeder.ToolHost;
+using Feeder.ToolHost.AgentConfig;
 using UnityEditor;
 using UnityEngine;
 
@@ -106,7 +108,7 @@ namespace Feeder.MCP.Editor
 
         static string IgnoreMachineSpecificFiles()
         {
-            var root = UnityMcpPluginEditor.ProjectRootPath;
+            var root = MatrixPluginEditor.ProjectRootPath;
             var path = Path.Combine(root, ".gitignore");
             var existing = File.Exists(path) ? File.ReadAllText(path) : string.Empty;
             var tail = BuildIgnoreAppend(existing, MachineSpecificFiles, out var added);
@@ -121,8 +123,27 @@ namespace Feeder.MCP.Editor
             };
             lines.AddRange(MachineSpecificFiles
                 .Where(file => IsTracked(root, file))
-                .Select(file => $"Git: {file} is still tracked - run: git rm --cached {file}"));
+                .Select(file => TrackedAdvice(root, file)));
             return string.Join("\n", lines);
+        }
+
+        // removing a shared file from the index would delete it from every teammate's checkout on their next pull
+        static string TrackedAdvice(string root, string file)
+            => file.EndsWith(".json", StringComparison.OrdinalIgnoreCase) && HoldsOnlyOurServer(Path.Combine(root, file))
+                ? $"Git: {file} is still tracked - run: git rm --cached {file}"
+                : $"Git: {file} is tracked and may hold other tools' entries - keep it tracked and run: git update-index --skip-worktree {file}";
+
+        static bool HoldsOnlyOurServer(string path)
+        {
+            try
+            {
+                var servers = JsonNode.Parse(File.ReadAllText(path))?["mcpServers"]?.AsObject();
+                return servers != null && servers.All(entry => entry.Key == AiAgentConfig.DefaultMcpServerName);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         static bool IsTracked(string root, string file)
@@ -134,7 +155,7 @@ namespace Feeder.MCP.Editor
 
         internal static string ApplyToolSet(bool all)
         {
-            var manager = UnityMcpPluginEditor.Instance.Tools;
+            var manager = MatrixPluginEditor.Instance.Tools;
             if (manager == null)
                 return "Tools: the MCP plugin is not running - open Tools > Feeder > Bridge, then run Setup again";
 
@@ -156,7 +177,7 @@ namespace Feeder.MCP.Editor
             }
 
             if (changed > 0)
-                UnityMcpPluginEditor.Instance.Save();
+                MatrixPluginEditor.Instance.Save();
 
             var label = all ? $"all {tools.Count} tools" : $"{CoreTools.Length} core tools";
             return $"Tools: {label} enabled, {changed} changed, about {tokensBefore} -> {EnabledTokens(manager, tools)} tokens per request";

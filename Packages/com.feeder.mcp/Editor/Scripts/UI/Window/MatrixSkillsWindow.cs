@@ -2,11 +2,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Feeder.McpPlugin;
+using Feeder.ToolHost;
 using Feeder.MCP.Editor.UI.Controls;
 using Feeder.MCP.Editor.Utils;
-using Microsoft.Extensions.Logging;
-using R3;
+using Feeder.Logging;
+using Feeder.Rx;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -213,7 +213,7 @@ namespace Feeder.MCP.Editor.UI
 
         private void Bind()
         {
-            UnityMcpPluginEditor.PluginProperty
+            MatrixPluginEditor.PluginProperty
                 .WhereNotNull()
                 .ObserveOnCurrentSynchronizationContext()
                 .Subscribe(OnPlugin)
@@ -230,7 +230,7 @@ namespace Feeder.MCP.Editor.UI
             _built = false;
         }
 
-        private void OnPlugin(IMcpPlugin plugin)
+        private void OnPlugin(IToolHost plugin)
         {
             _toolsSubscription?.Dispose();
             _toolsSubscription = null;
@@ -263,7 +263,7 @@ namespace Feeder.MCP.Editor.UI
             if (!_built)
                 return;
 
-            _manager = UnityMcpPluginEditor.Instance.Tools;
+            _manager = MatrixPluginEditor.Instance.Tools;
             _selected = null;
             _builtTotal = _manager?.TotalToolsCount ?? 0;
             _groups.Clear();
@@ -643,7 +643,7 @@ namespace Feeder.MCP.Editor.UI
             _syncPending = false;
             try
             {
-                UnityMcpPluginEditor.Instance.Save();
+                MatrixPluginEditor.Instance.Save();
                 var clients = BridgeAgents.RegenerateSkills();
                 SetSync(false, clients == 0 ? "No wired agent writes skill files" : "Skill files up to date");
             }

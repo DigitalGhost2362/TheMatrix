@@ -3,28 +3,27 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text.Json.Nodes;
+using Feeder.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using Feeder.ReflectorNet.Utils;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Editor.UI;
 using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Runtime.Utils;
 using Feeder.MCP.Utils;
-using Microsoft.Extensions.Logging;
-using R3;
+using Feeder.Logging;
+using Feeder.Rx;
 using UnityEditor;
 using UnityEngine;
-using McpConsts = Feeder.McpPlugin.Common.Consts;
+using McpConsts = Feeder.ToolHost.Common.Consts;
 
 namespace Feeder.MCP.Editor
 {
-    using static Feeder.McpPlugin.Common.Consts.MCP.Server;
-    using Consts = Feeder.McpPlugin.Common.Consts;
-    using ILogger = Microsoft.Extensions.Logging.ILogger;
-    using AiAgentConfig = Feeder.McpPlugin.AgentConfig.AiAgentConfig;
+    using static Feeder.ToolHost.Common.Consts.MCP.Server;
+    using Consts = Feeder.ToolHost.Common.Consts;
+    using ILogger = Feeder.Logging.ILogger;
+    using AiAgentConfig = Feeder.ToolHost.AgentConfig.AiAgentConfig;
 
     public enum McpServerStatus
     {
@@ -113,28 +112,27 @@ namespace Feeder.MCP.Editor
             // Register for editor quit to clean up the server process
             EditorApplication.quitting += OnEditorQuitting;
 
-            RemoveLegacyLeftovers();
-
             if (MatrixActivation.IsEnabled)
                 Activate();
         }
 
+        const string LegacyCleanupKey = "Feeder.MCP.LegacyServerCleanupDone";
+
         /// <summary>
-        /// Packages up to 0.87 installed the server as <c>gamedev-mcp-server</c>, and an interrupted install leaves a
-        /// <c>mcp-server-staging-*</c> folder behind. Staging folders are always removed. The old exe is removed here
-        /// only while Matrix is off; when Matrix is on, the install triggered by the missing <c>matrix-server</c> exe
-        /// stops the old process (it runs from this project's Library) and replaces the whole folder.
+        /// Once per editor session, after Matrix is turned on, removes what this package left behind: staging folders of
+        /// an interrupted install and the server an older package installed under <c>Library</c> (only when every file in
+        /// it proves it is ours, see <see cref="ServerOwnership.RemoveLegacyInstall"/>). Nothing else there is touched.
         /// </summary>
         static void RemoveLegacyLeftovers()
         {
+            if (SessionState.GetBool(LegacyCleanupKey, false))
+                return;
+            SessionState.SetBool(LegacyCleanupKey, true);
+
             try
             {
-                var root = ExecutableFolderRootPath;
-                var parent = Path.GetDirectoryName(root);
-                if (string.IsNullOrEmpty(parent) || !Directory.Exists(parent))
-                    return;
-
-                foreach (var staging in Directory.GetDirectories(parent, Path.GetFileName(root) + "-staging-*"))
+                var library = Path.GetDirectoryName(ExecutableFolderRootPath)!;
+                foreach (var staging in Directory.GetDirectories(library, ServerOwnership.StagingPrefix + "*"))
                 {
                     try
                     {
@@ -147,12 +145,8 @@ namespace Feeder.MCP.Editor
                     }
                 }
 
-                var legacyExe = Path.Combine(ExecutableFolderPath, ServerOwnership.LegacyProcessName + Path.GetExtension(ExecutableFullName));
-                if (MatrixActivation.IsEnabled || !File.Exists(legacyExe))
-                    return;
-
-                Directory.Delete(root, recursive: true);
-                UnityEngine.Debug.Log($"Removed the old MCP server binary (gamedev-mcp-server) from {root}; matrix-server is installed when Matrix is turned on.");
+                foreach (var action in ServerOwnership.RemoveLegacyInstall(Path.Combine(library, ServerOwnership.LegacyFolderName, PlatformName)))
+                    UnityEngine.Debug.Log($"[Matrix Bridge] old server cleanup: {action}");
             }
             catch (Exception ex)
             {
@@ -163,6 +157,7 @@ namespace Feeder.MCP.Editor
         internal static void Activate()
         {
             EditorPrefs.DeleteKey(LegacyProcessIdKey);
+            RemoveLegacyLeftovers();
 
             // Check if server process is still running (e.g., after domain reload)
             EditorApplication.update += CheckExistingProcess;
@@ -185,12 +180,12 @@ namespace Feeder.MCP.Editor
         /// <summary>
         /// The PINNED version of the bundled server release. MUST always equal the content of the
         /// <c>version</c> file inside <c>Server~/&lt;rid&gt;/</c> in this package — the installer compares
-        /// the two to decide whether the cached binary in <c>Library/mcp-server</c> is current. Bumping
+        /// the two to decide whether the cached binary in <c>Library/feeder-matrix</c> is current. Bumping
         /// the server means replacing the whole <c>Server~/&lt;rid&gt;</c> payload AND this constant together.
         /// </summary>
-        public const string ServerVersion = "0.2.1";
+        public const string ServerVersion = "0.3.0";
 
-        public const string ExecutableName = ServerOwnership.ProcessName;
+        public const string ExecutableName = ServerOwnership.ExeName;
         public const string BundledServerArchiveName = "server-payload.zip";
 
         public static string McpServerName
@@ -224,20 +219,20 @@ namespace Feeder.MCP.Editor
                 : string.Empty);
 
         // Full path to the server executable
-        // Sample (mac linux): ../Library/mcp-server
-        // Sample   (windows): ../Library/mcp-server
+        // Sample (mac linux): ../Library/feeder-matrix
+        // Sample   (windows): ../Library/feeder-matrix
         public static string ExecutableFolderRootPath
             => Path.GetFullPath(
                 Path.Combine(
                     Application.dataPath,
                     "../Library",
-                    "mcp-server"
+                    ServerOwnership.FolderName
                 )
             );
 
         // Full path to the server executable
-        // Sample (mac linux): ../Library/mcp-server/osx-x64
-        // Sample   (windows): ../Library/mcp-server/win-x64
+        // Sample (mac linux): ../Library/feeder-matrix/osx-x64
+        // Sample   (windows): ../Library/feeder-matrix/win-x64
         public static string ExecutableFolderPath
             => Path.GetFullPath(
                 Path.Combine(
@@ -247,8 +242,8 @@ namespace Feeder.MCP.Editor
             );
 
         // Full path to the server executable
-        // Sample (mac linux): ../Library/mcp-server/osx-x64/matrix-server
-        // Sample   (windows): ../Library/mcp-server/win-x64/matrix-server.exe
+        // Sample (mac linux): ../Library/feeder-matrix/osx-x64/matrix-server
+        // Sample   (windows): ../Library/feeder-matrix/win-x64/matrix-server.exe
         public static string ExecutableFullPath
             => Path.GetFullPath(
                 Path.Combine(
@@ -429,7 +424,7 @@ namespace Feeder.MCP.Editor
         /// tracked or not, and returns how many were killed.
         ///
         /// Matching is by executable path under <see cref="ExecutableFolderRootPath"/>, so a server
-        /// belonging to another Unity project (its own Library/mcp-server) is never touched.
+        /// belonging to another Unity project (its own Library/feeder-matrix) is never touched.
         /// </summary>
         static int KillProcessesLockingBinaryFolder()
         {
@@ -440,7 +435,7 @@ namespace Feeder.MCP.Editor
             Process[] candidates;
             try
             {
-                candidates = ServerOwnership.AllProcessNames.SelectMany(Process.GetProcessesByName).ToArray();
+                candidates = Process.GetProcessesByName(ExecutableName);
             }
             catch (Exception ex)
             {
@@ -545,7 +540,7 @@ namespace Feeder.MCP.Editor
                 _lastInstallError.Value = null;
                 SetInstallingStatus();
 
-                var previousKeepServerRunning = UnityMcpPluginEditor.KeepServerRunning;
+                var previousKeepServerRunning = MatrixPluginEditor.KeepServerRunning;
 
                 var bundledBinary = Path.Combine(BundledServerFolderPath, ExecutableFullName);
                 var hasArchive = File.Exists(BundledServerArchivePath);
@@ -563,7 +558,7 @@ namespace Feeder.MCP.Editor
 
                 // Stage the fully-prepared payload as a SIBLING of the cache root (same volume) so the
                 // final publish is an atomic rename, never a cross-volume copy interrupted mid-write.
-                stagingRoot = Path.GetFullPath($"{ExecutableFolderRootPath}-staging-{Guid.NewGuid():N}");
+                stagingRoot = Path.Combine(Path.GetDirectoryName(ExecutableFolderRootPath)!, ServerOwnership.StagingPrefix + Guid.NewGuid().ToString("N"));
                 if (hasArchive)
                     ExtractServerArchive(BundledServerArchivePath, stagingRoot);
                 else
@@ -825,12 +820,12 @@ namespace Feeder.MCP.Editor
                 $"{Args.Port}={port}",
                 $"{Args.PluginTimeout}={timeoutMs}",
                 $"{Args.ClientTransportMethod}={TransportMethod.stdio}",
-                $"{Args.Authorization}={UnityMcpPluginEditor.AuthOption}"
+                $"{Args.Authorization}={MatrixPluginEditor.AuthOption}"
             };
 
-            var authRequired = UnityMcpPluginEditor.AuthOption == AuthOption.required;
-            if (authRequired && !string.IsNullOrEmpty(UnityMcpPluginEditor.Token))
-                args.Add($"{Args.Token}={UnityMcpPluginEditor.Token}");
+            var authRequired = MatrixPluginEditor.AuthOption == AuthOption.required;
+            if (authRequired && !string.IsNullOrEmpty(MatrixPluginEditor.Token))
+                args.Add($"{Args.Token}={MatrixPluginEditor.Token}");
 
             serverConfig["args"] = args;
 
@@ -880,12 +875,12 @@ namespace Feeder.MCP.Editor
 
             serverConfig["url"] = GetMcpEndpointUrl(url);
 
-            var authRequired = UnityMcpPluginEditor.AuthOption == AuthOption.required;
-            if (authRequired && !string.IsNullOrEmpty(UnityMcpPluginEditor.Token))
+            var authRequired = MatrixPluginEditor.AuthOption == AuthOption.required;
+            if (authRequired && !string.IsNullOrEmpty(MatrixPluginEditor.Token))
             {
                 serverConfig["headers"] = new JsonObject
                 {
-                    ["Authorization"] = $"Bearer {UnityMcpPluginEditor.Token}"
+                    ["Authorization"] = $"Bearer {MatrixPluginEditor.Token}"
                 };
             }
 
@@ -925,7 +920,7 @@ namespace Feeder.MCP.Editor
             {
                 process = Process.GetProcessById(record.pid);
                 var owner = ServerOwnership.ClassifyProcess(process, ExecutableFolderRootPath);
-                if (ServerOwnership.CanAdopt(record, ServerOwnership.ReadStartTimeUtc(process), owner, UnityMcpPluginEditor.Port))
+                if (ServerOwnership.CanAdopt(record, ServerOwnership.ReadStartTimeUtc(process), owner, MatrixPluginEditor.Port))
                 {
                     Adopt(process);
                     _logger.LogInformation("Reconnected to existing MCP server process (PID: {pid})", record.pid);
@@ -966,7 +961,7 @@ namespace Feeder.MCP.Editor
                 {
                     pid = process.Id,
                     startTimeUtcTicks = ServerOwnership.ReadStartTimeUtc(process)?.Ticks ?? 0,
-                    port = UnityMcpPluginEditor.Port,
+                    port = MatrixPluginEditor.Port,
                     exePath = ServerOwnership.ReadExePath(process) ?? ExecutableFullPath,
                 });
             }
@@ -1259,7 +1254,7 @@ namespace Feeder.MCP.Editor
         /// </summary>
         static bool ResolvePortOwner()
         {
-            var port = UnityMcpPluginEditor.Port;
+            var port = MatrixPluginEditor.Port;
             if (!ServerOwnership.IsPortListening(port))
                 return true;
 
@@ -1304,7 +1299,7 @@ namespace Feeder.MCP.Editor
 
                 var holder = owner == ServerOwner.OtherProject
                     ? $"the MCP server of project '{ServerOwnership.DescribeOwner(process != null ? ServerOwnership.ReadExePath(process) : null)}'"
-                    : owner == ServerOwner.NotMcp && process != null
+                    : owner == ServerOwner.Foreign && process != null
                         ? $"process '{SafeName(process)}' (PID {listeningPid})"
                         : listeningPid > 0 ? $"PID {listeningPid}" : "another process";
                 return MoveToFreePort(port, holder);
@@ -1333,8 +1328,8 @@ namespace Feeder.MCP.Editor
                 return false;
             }
 
-            UnityMcpPluginEditor.LocalHost = $"http://localhost:{newPort}";
-            UnityMcpPluginEditor.Instance.Save();
+            MatrixPluginEditor.LocalHost = $"http://localhost:{newPort}";
+            MatrixPluginEditor.Instance.Save();
             Startup.ConfigureAgents();
             var note = $"port {port} is used by {holder}, moved to {newPort} - restart your agent session";
             UnityEngine.Debug.LogWarning($"[Matrix Bridge] {note}");
@@ -1432,10 +1427,10 @@ namespace Feeder.MCP.Editor
 
         static string BuildArguments()
         {
-            var port = UnityMcpPluginEditor.Port;
-            var timeout = UnityMcpPluginEditor.TimeoutMs;
-            var token = UnityMcpPluginEditor.Token;
-            var authOption = UnityMcpPluginEditor.AuthOption;
+            var port = MatrixPluginEditor.Port;
+            var timeout = MatrixPluginEditor.TimeoutMs;
+            var token = MatrixPluginEditor.Token;
+            var authOption = MatrixPluginEditor.AuthOption;
 
             var args =
                 $"--FeederMatrix:Port={port} " +
@@ -1527,8 +1522,7 @@ namespace Feeder.MCP.Editor
                 if (process == null || process.HasExited)
                     return false;
 
-                var processName = process.ProcessName.ToLowerInvariant();
-                return ServerOwnership.AllProcessNames.Any(processName.Contains);
+                return ServerOwnership.ClassifyProcess(process, ExecutableFolderRootPath) == ServerOwner.Ours;
             }
             catch (ArgumentException)
             {
@@ -1573,7 +1567,7 @@ namespace Feeder.MCP.Editor
         {
             if (_stopRequested || _restartScheduled)
                 return;
-            if (!UnityMcpPluginEditor.KeepServerRunning || !MatrixActivation.IsEnabled || EnvironmentUtils.IsCi())
+            if (!MatrixPluginEditor.KeepServerRunning || !MatrixActivation.IsEnabled || EnvironmentUtils.IsCi())
                 return;
 
             var lifetime = DateTime.UtcNow - _serverStartedUtc;
@@ -1604,7 +1598,7 @@ namespace Feeder.MCP.Editor
                 StartOwnServerAsync().ContinueWith(task =>
                 {
                     if (task.Status == TaskStatus.RanToCompletion && task.Result)
-                        _ = UnityMcpPluginEditor.ConnectIfNeeded();
+                        _ = MatrixPluginEditor.ConnectIfNeeded();
                 }, TaskScheduler.FromCurrentSynchronizationContext());
             }));
         }
@@ -1689,7 +1683,7 @@ namespace Feeder.MCP.Editor
             EditorApplication.update -= StartServerIfNeeded;
 
             // Check if user wants the server to keep running
-            if (!UnityMcpPluginEditor.KeepServerRunning)
+            if (!MatrixPluginEditor.KeepServerRunning)
             {
                 _logger.LogDebug("StartServerIfNeeded: KeepServerRunning is false, skipping auto-start");
                 return;
@@ -1699,7 +1693,7 @@ namespace Feeder.MCP.Editor
         }
 
         /// <summary>
-        /// Guarantees that the server on <see cref="UnityMcpPluginEditor.Port"/> is THIS project's server:
+        /// Guarantees that the server on <see cref="MatrixPluginEditor.Port"/> is THIS project's server:
         /// keeps a live tracked one, adopts an untracked one running from our Library, otherwise starts a new
         /// one (moving to a free port when another project or process holds ours). Must be called on the main
         /// thread; the netstat lookup runs on a worker thread. Returns false when no server could be started.
@@ -1727,7 +1721,7 @@ namespace Feeder.MCP.Editor
                 CleanupProcess();
             }
 
-            var port = UnityMcpPluginEditor.Port;
+            var port = MatrixPluginEditor.Port;
             var root = ExecutableFolderRootPath;
             var found = await Task.Run(() =>
             {

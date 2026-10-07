@@ -3,7 +3,7 @@
 using System;
 using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Utils;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -15,7 +15,7 @@ namespace Feeder.MCP.Editor.UI
     /// </summary>
     public abstract class McpWindowBase : EditorWindow
     {
-        protected Microsoft.Extensions.Logging.ILogger Logger { get; private set; } = null!;
+        protected Feeder.Logging.ILogger Logger { get; private set; } = null!;
 
         protected abstract string[] WindowUxmlPaths { get; }
         protected abstract string[] WindowUssPaths { get; }

@@ -1,3 +1,4 @@
+using Feeder.Matrix.Compile;
 using Feeder.Matrix.Protocol;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
@@ -16,6 +17,7 @@ public interface IFmpUnityClient
 public sealed class FmpHub(
     UnityLinkRegistry registry,
     McpClientTracker mcpClients,
+    ScriptCompiler compiler,
     IOptions<MatrixOptions> options,
     ILogger<FmpHub> logger) : Hub<IFmpUnityClient>
 {
@@ -66,8 +68,14 @@ public sealed class FmpHub(
             ChosenProtocolVersion = FmpConstants.ProtocolVersion,
             RegistryUpToDate = link.Registry?.RegistryHash == request.ToolRegistryHash,
             AwaitedOperations = registry.AwaitedOperationIds,
+            Capabilities = [FmpCapabilities.Compile],
         };
     }
+
+    public Task<CompileResponse> Compile(CompileRequest request)
+        => registry.IsRegistered(Context.ConnectionId)
+            ? compiler.CompileAsync(request, Context.ConnectionAborted)
+            : Task.FromResult(new CompileResponse { Error = "Compile is only served to a registered Unity link; call Register first." });
 
     public void Unregister(string projectId, string unityInstanceId)
     {

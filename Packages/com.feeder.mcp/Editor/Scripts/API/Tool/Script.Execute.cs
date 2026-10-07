@@ -5,13 +5,13 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet.Model;
-using Feeder.ReflectorNet.Utils;
+using System.Threading;
+using Feeder.ToolHost;
+using Feeder.Reflect.Model;
+using Feeder.Reflect.Utils;
+using Feeder.MCP.Editor.Matrix;
 using Feeder.MCP.Utils;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -34,9 +34,9 @@ namespace Feeder.MCP.Editor.API
             "Unity objects (`GameObject`, `Component`, etc.) can be passed as parameters using their `Ref` types (`GameObjectRef`, `ComponentRef`, etc.) or directly by type:\n\n" +
             "- `UnityEngine.GameObject` — resolves an actual GameObject from value `{\"instanceID\": N}`, `{\"name\": \"...\"}`, or `{\"path\": \"...\"}`.\n" +
             "- `UnityEngine.Component` (or any component subtype) — resolves from `{\"instanceID\": N}`.\n" +
-            "- `AIGD.GameObjectRef` — passes a `GameObjectRef` POCO directly; the method body calls `goRef.FindGameObject()` to resolve it.\n" +
-            "- `AIGD.ComponentRef` — passes a `ComponentRef` POCO.\n" +
-            "- `AIGD.ObjectRef` — passes a base `ObjectRef` POCO.")]
+            "- `Feeder.MCP.Data.GameObjectRef` — passes a `GameObjectRef` POCO directly; the method body calls `goRef.FindGameObject()` to resolve it.\n" +
+            "- `Feeder.MCP.Data.ComponentRef` — passes a `ComponentRef` POCO.\n" +
+            "- `Feeder.MCP.Data.ObjectRef` — passes a base `ObjectRef` POCO.")]
         [Description("Compiles and executes C# code dynamically using Roslyn. " +
             "Supports two modes: full code mode (default) requires a complete class definition, " +
             "while body-only mode (isMethodBody=true) auto-generates the boilerplate so you only " +
@@ -64,15 +64,15 @@ namespace Feeder.MCP.Editor.API
                 "Supported parameter types include primitives, strings, and Unity object references: " +
                 "- 'UnityEngine.GameObject': resolves an actual GameObject from value '{\"instanceID\": N}', '{\"name\": \"...\"}', or '{\"path\": \"...\"}'. " +
                 "- 'UnityEngine.Component' (or any component subtype): resolves from '{\"instanceID\": N}'. " +
-                "- 'AIGD.GameObjectRef': passes a GameObjectRef POCO directly; " +
+                "- 'Feeder.MCP.Data.GameObjectRef': passes a GameObjectRef POCO directly; " +
                 "  the method body calls goRef.FindGameObject() to resolve it. " +
-                "- 'AIGD.ComponentRef': passes a ComponentRef POCO. " +
-                "- 'AIGD.ObjectRef': passes a base ObjectRef POCO. " +
+                "- 'Feeder.MCP.Data.ComponentRef': passes a ComponentRef POCO. " +
+                "- 'Feeder.MCP.Data.ObjectRef': passes a base ObjectRef POCO. " +
                 "If the method does not require parameters, leave this empty.")]
             SerializedMemberList? parameters = null,
             [Description("When true, 'csharpCode' is treated as just the method body. " +
                 "The tool auto-generates standard using directives (System, UnityEngine, " +
-                "AIGD, Feeder.MCP.Runtime.Extensions, UnityEditor), " +
+                "Feeder.MCP.Data, Feeder.MCP.Runtime.Extensions, UnityEditor), " +
                 "the class definition, and the method signature (void return type). " +
                 "Parameters from the 'parameters' list are automatically added to the method signature using their typeName and name. " +
                 "When false (default), 'csharpCode' must be a complete C# compilation unit with class and method definitions.")]
@@ -107,15 +107,17 @@ namespace Feeder.MCP.Editor.API
                 codeToCompile = csharpCode;
             }
 
+            var assemblyBytes = CompileOnServer(codeToCompile);
+
             return MainThread.Instance.Run(() =>
             {
                 var logger = UnityLoggerFactory.LoggerFactory.CreateLogger("Tool_Script.Execute");
 
-                // Compile C# code using Roslyn and execute it immediately
+                // load the assembly the server compiled and execute it immediately
                 if (!ExecuteCSharpCode(
                     className: className,
                     methodName: methodName,
-                    code: codeToCompile,
+                    assemblyBytes: assemblyBytes,
                     parameters: parameters,
                     returnValue: out var result,
                     returnType: out var returnType,
@@ -142,7 +144,7 @@ namespace Feeder.MCP.Editor.API
                 if (result is SerializedMember serializedResult)
                     return serializedResult;
 
-                var reflector = UnityMcpPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
+                var reflector = MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
 
                 var serializedResultByReflector = reflector.Serialize(
                     obj: result,
@@ -172,7 +174,7 @@ namespace Feeder.MCP.Editor.API
             if (IsAssemblyLoaded("UnityEngine.UI"))
                 sb.AppendLine("using UnityEngine.UI;");
             sb.AppendLine("using UnityEngine.SceneManagement;");
-            sb.AppendLine("using AIGD;");
+            sb.AppendLine("using Feeder.MCP.Data;");
             sb.AppendLine("using Feeder.MCP.Runtime.Extensions;");
             sb.AppendLine("using UnityEditor;");
             sb.AppendLine();
@@ -202,55 +204,43 @@ namespace Feeder.MCP.Editor.API
                 string.Equals(a.GetName().Name, assemblyName, StringComparison.Ordinal));
 
         // statics reset on domain reload, so the cache only has to track assemblies loaded since then
-        static MetadataReference[]? cachedReferences;
+        static string[]? cachedReferencePaths;
         static int cachedReferenceSourceCount = -1;
 
-        static MetadataReference[] GetMetadataReferences(ILogger? logger)
+        static string[] GetReferencePaths()
         {
             var sources = AssemblyUtils.AllAssemblies
                 .Where(a => !a.IsDynamic) // Exclude dynamic assemblies
                 .Where(a => !string.IsNullOrEmpty(a.Location))
                 .ToArray();
 
-            if (cachedReferences != null && cachedReferenceSourceCount == sources.Length)
-                return cachedReferences;
+            if (cachedReferencePaths != null && cachedReferenceSourceCount == sources.Length)
+                return cachedReferencePaths;
 
-            cachedReferences = sources
-                .Select(a =>
-                {
-                    try
-                    {
-                        return MetadataReference.CreateFromFile(a.Location);
-                    }
-                    catch (DirectoryNotFoundException ex)
-                    {
-                        logger?.LogWarning(ex, "Directory not found for assembly '{AssemblyName}' at '{Location}': {Error}",
-                            a.GetName().Name, a.Location, ex.Message);
-                        return null;
-                    }
-                    catch (FileNotFoundException ex)
-                    {
-                        logger?.LogWarning(ex, "File not found for assembly '{AssemblyName}' at '{Location}': {Error}",
-                            a.GetName().Name, a.Location, ex.Message);
-                        return null;
-                    }
-                    catch (Exception ex)
-                    {
-                        logger?.LogWarning(ex, "Failed to load metadata reference for assembly '{AssemblyName}' at '{Location}': {Error}",
-                            a.GetName().Name, a.Location, ex.Message);
-                        return null;
-                    }
-                })
-                .OfType<MetadataReference>()
+            cachedReferencePaths = sources
+                .Select(a => a.Location)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             cachedReferenceSourceCount = sources.Length;
-            return cachedReferences;
+            return cachedReferencePaths;
+        }
+
+        static byte[] CompileOnServer(string code)
+        {
+            var response = MatrixPluginEditor.Instance
+                .CompileOnServerAsync(new CompileRequest { Source = code, ReferencePaths = GetReferencePaths() }, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            if (!string.IsNullOrEmpty(response.Error))
+                throw new Exception($"Compile service failed: {response.Error}");
+            if (!response.Success)
+                throw new Exception($"Compilation failed:\n{string.Join("\n", response.Diagnostics ?? Array.Empty<string>())}");
+            return response.Assembly ?? throw new Exception("Compile service returned no assembly.");
         }
 
         static bool ExecuteCSharpCode(
             string className,
             string methodName,
-            string code,
+            byte[] assemblyBytes,
             SerializedMemberList? parameters,
             out object? returnValue,
             out Type? returnType,
@@ -272,7 +262,7 @@ namespace Feeder.MCP.Editor.API
                 return false;
             }
 
-            var reflector = UnityMcpPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
+            var reflector = MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
 
             var parsedParameters = parameters
                 ?.Select(p => reflector.Deserialize(
@@ -280,62 +270,43 @@ namespace Feeder.MCP.Editor.API
                     logger: logger))
                 ?.ToArray();
 
-            var compilation = CSharpCompilation.Create(
-                assemblyName: "DynamicAssembly",
-                syntaxTrees: new[] { CSharpSyntaxTree.ParseText(code) },
-                references: GetMetadataReferences(logger),
-                options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
-            );
-
-            using (var ms = new MemoryStream())
+            var assembly = Assembly.Load(assemblyBytes);
+            var type = assembly.GetType(className);
+            if (type == null)
             {
-                var result = compilation.Emit(ms);
-                if (!result.Success)
-                {
-                    error = $"Compilation failed:\n{string.Join("\n", result.Diagnostics.Select(d => d.ToString()))}";
-                    returnValue = null;
-                    returnType = null;
-                    return false;
-                }
-                ms.Seek(0, SeekOrigin.Begin);
-                var assembly = Assembly.Load(ms.ToArray());
-                var type = assembly.GetType(className);
-                if (type == null)
-                {
-                    error = $"Class '{className}' not found in the compiled assembly.";
-                    returnValue = null;
-                    returnType = null;
-                    return false;
-                }
-                var method = type.GetMethod(methodName);
-                if (method == null)
-                {
-                    error = $"Method '{methodName}' not found in class '{className}'.";
-                    returnValue = null;
-                    returnType = null;
-                    return false;
-                }
-                try
-                {
-                    returnValue = method.Invoke(null, parsedParameters);
-                    returnType = method.ReturnType;
-                    error = null;
-                    return true;
-                }
-                catch (TargetInvocationException ex)
-                {
-                    error = $"Execution failed. TargetInvocationException: {ex.InnerException?.Message ?? ex.Message}\n{ex.InnerException?.StackTrace ?? ex.StackTrace}";
-                    returnValue = null;
-                    returnType = null;
-                    return false;
-                }
-                catch (Exception ex)
-                {
-                    error = $"Execution failed: {ex.InnerException?.Message ?? ex.Message}\n{ex.InnerException?.StackTrace ?? ex.StackTrace}";
-                    returnValue = null;
-                    returnType = null;
-                    return false;
-                }
+                error = $"Class '{className}' not found in the compiled assembly.";
+                returnValue = null;
+                returnType = null;
+                return false;
+            }
+            var method = type.GetMethod(methodName);
+            if (method == null)
+            {
+                error = $"Method '{methodName}' not found in class '{className}'.";
+                returnValue = null;
+                returnType = null;
+                return false;
+            }
+            try
+            {
+                returnValue = method.Invoke(null, parsedParameters);
+                returnType = method.ReturnType;
+                error = null;
+                return true;
+            }
+            catch (TargetInvocationException ex)
+            {
+                error = $"Execution failed. TargetInvocationException: {ex.InnerException?.Message ?? ex.Message}\n{ex.InnerException?.StackTrace ?? ex.StackTrace}";
+                returnValue = null;
+                returnType = null;
+                return false;
+            }
+            catch (Exception ex)
+            {
+                error = $"Execution failed: {ex.InnerException?.Message ?? ex.Message}\n{ex.InnerException?.StackTrace ?? ex.StackTrace}";
+                returnValue = null;
+                returnType = null;
+                return false;
             }
         }
     }

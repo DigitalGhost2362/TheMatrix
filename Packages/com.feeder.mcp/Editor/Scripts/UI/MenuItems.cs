@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Feeder.MCP.Editor.Utils;
 using UnityEditor;
 using UnityEngine;
-using static Feeder.McpPlugin.Common.Consts.MCP.Server;
+using static Feeder.ToolHost.Common.Consts.MCP.Server;
 
 namespace Feeder.MCP.Editor.UI
 {
@@ -84,7 +84,7 @@ namespace Feeder.MCP.Editor.UI
         [MenuItem("Tools/Feeder/Server/Launch MCP Inspector", priority = 1004)]
         public static void LaunchMcpInspector()
         {
-            if (UnityMcpPluginEditor.TransportMethod != TransportMethod.streamableHttp)
+            if (MatrixPluginEditor.TransportMethod != TransportMethod.streamableHttp)
             {
                 NotificationPopupWindow.Show(
                     windowTitle: "Error",
@@ -97,8 +97,8 @@ namespace Feeder.MCP.Editor.UI
                 return;
             }
 
-            // Run command in a terminal window: npx @modelcontextprotocol/inspector http://localhost:8080 --transport http
-            var npxArgs = $"-y @modelcontextprotocol/inspector {UnityMcpPluginEditor.Host} --transport http";
+            // Run command in a terminal window: npx @modelcontextprotocol/inspector http://localhost:20000 --transport http
+            var npxArgs = $"-y @modelcontextprotocol/inspector {MatrixPluginEditor.Host} --transport http";
             Debug.Log($"Launching MCP Inspector with command: npx {npxArgs}");
 
             var processInfo = new System.Diagnostics.ProcessStartInfo
@@ -156,7 +156,7 @@ namespace Feeder.MCP.Editor.UI
         [MenuItem("Tools/Feeder/Server/Reset Config", priority = 2020)]
         public static void ResetConfig()
         {
-            UnityMcpPluginEditor.ResetConfig();
+            MatrixPluginEditor.ResetConfig();
             // Reload Domain to ensure all changes are picked up.
             EditorUtility.RequestScriptReload();
         }

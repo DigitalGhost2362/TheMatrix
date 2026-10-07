@@ -1,10 +1,10 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using Feeder.McpPlugin.Common.Utils;
+using Feeder.ToolHost.Common.Utils;
 using Feeder.MCP.Utils;
-using Microsoft.Extensions.Logging;
-using static Feeder.McpPlugin.Common.Consts.MCP.Server;
+using Feeder.Logging;
+using static Feeder.ToolHost.Common.Consts.MCP.Server;
 
 namespace Feeder.MCP.Runtime.Utils
 {
@@ -13,9 +13,8 @@ namespace Feeder.MCP.Runtime.Utils
     /// runtime overrides from environment variables and process command-line arguments.
     ///
     /// Priority (highest wins):
-    ///   1. Process command-line flags (e.g. <c>--url</c>, <c>--token</c>, <c>--auth</c>,
-    ///      or any <c>--UNITY_MCP_*</c> variant)
-    ///   2. Process environment variables (<c>UNITY_MCP_*</c>)
+    ///   1. Process command-line flags (any <c>--FEEDER_MATRIX_*</c> variant)
+    ///   2. Process environment variables (<c>FEEDER_MATRIX_*</c>)
     ///   3. On-disk config (<c>UserSettings/Feeder-MCP-Config.json</c>)
     ///   4. Built-in defaults
     ///
@@ -23,38 +22,32 @@ namespace Feeder.MCP.Runtime.Utils
     /// they are runtime-only. The <see cref="OverrideRecord"/> returned by
     /// <see cref="ApplyEnvironmentOverrides"/> captures both the disk-baseline values
     /// and the override values so that the editor's Save() flow can restore the
-    /// baseline before serializing. See <c>UnityMcpPluginEditor.Save</c>.
+    /// baseline before serializing. See <c>MatrixPluginEditor.Save</c>.
     /// </summary>
     public static class EnvironmentUtils
     {
         static readonly ILogger _logger = UnityLoggerFactory.LoggerFactory.CreateLogger(nameof(EnvironmentUtils));
 
         // Environment variable names for MCP connection overrides.
-        public const string EnvHost = "UNITY_MCP_HOST";
-        public const string EnvKeepConnected = "UNITY_MCP_KEEP_CONNECTED";
-        public const string EnvAuthOption = "UNITY_MCP_AUTH_OPTION";
-        public const string EnvToken = "UNITY_MCP_TOKEN";
-        public const string EnvTools = "UNITY_MCP_TOOLS";
-        public const string EnvStartServer = "UNITY_MCP_START_SERVER";
-        public const string EnvTransport = "UNITY_MCP_TRANSPORT";
-
-        // Short flag aliases recognised by the in-plugin command-line parser.
-        // The CLI tool already translates these to the equivalent env vars before
-        // launching Unity, but the plugin still parses them directly so
-        // out-of-band invocations (manual editor launch, IDE config, etc.) work.
-        public const string FlagUrl = "url";
-        public const string FlagToken = "token";
-        public const string FlagAuth = "auth";
+        // Only this package's own prefix is read: variables that belong to other tools must never steer this package.
+        public const string EnvPrefix = "FEEDER_MATRIX_";
+        public const string EnvHost = EnvPrefix + "HOST";
+        public const string EnvKeepConnected = EnvPrefix + "KEEP_CONNECTED";
+        public const string EnvAuthOption = EnvPrefix + "AUTH_OPTION";
+        public const string EnvToken = EnvPrefix + "TOKEN";
+        public const string EnvTools = EnvPrefix + "TOOLS";
+        public const string EnvStartServer = EnvPrefix + "START_SERVER";
+        public const string EnvTransport = EnvPrefix + "TRANSPORT";
 
         // Field-name keys used by OverrideRecord to track which fields were overridden
         // by env/flags so the Save flow can restore disk-baseline values before writing.
-        public const string FieldHost = nameof(UnityMcpPlugin.UnityConnectionConfig.LocalHost);
-        public const string FieldKeepConnected = nameof(UnityMcpPlugin.UnityConnectionConfig.KeepConnected);
-        public const string FieldAuthOption = nameof(UnityMcpPlugin.UnityConnectionConfig.AuthOption);
-        public const string FieldLocalToken = nameof(UnityMcpPlugin.UnityConnectionConfig.LocalToken);
-        public const string FieldTools = nameof(UnityMcpPlugin.UnityConnectionConfig.EnabledToolsOverride);
-        public const string FieldStartServer = nameof(UnityMcpPlugin.UnityConnectionConfig.KeepServerRunning);
-        public const string FieldTransport = nameof(UnityMcpPlugin.UnityConnectionConfig.TransportMethod);
+        public const string FieldHost = nameof(MatrixPlugin.UnityConnectionConfig.LocalHost);
+        public const string FieldKeepConnected = nameof(MatrixPlugin.UnityConnectionConfig.KeepConnected);
+        public const string FieldAuthOption = nameof(MatrixPlugin.UnityConnectionConfig.AuthOption);
+        public const string FieldLocalToken = nameof(MatrixPlugin.UnityConnectionConfig.LocalToken);
+        public const string FieldTools = nameof(MatrixPlugin.UnityConnectionConfig.EnabledToolsOverride);
+        public const string FieldStartServer = nameof(MatrixPlugin.UnityConnectionConfig.KeepServerRunning);
+        public const string FieldTransport = nameof(MatrixPlugin.UnityConnectionConfig.TransportMethod);
 
         /// <summary>
         /// Captures, per overridden field, the disk-baseline value (what was read from JSON)
@@ -102,7 +95,7 @@ namespace Feeder.MCP.Runtime.Utils
         /// already present on <paramref name="config"/>. Returns an <see cref="OverrideRecord"/>
         /// that captures the disk-baseline value for each field that was overridden.
         /// </summary>
-        public static OverrideRecord ApplyEnvironmentOverrides(UnityMcpPlugin.UnityConnectionConfig config)
+        public static OverrideRecord ApplyEnvironmentOverrides(MatrixPlugin.UnityConnectionConfig config)
         {
             var args = ArgsUtils.ParseCommandLineArguments();
             return ApplyEnvironmentOverrides(config, args, Environment.GetEnvironmentVariable);
@@ -114,7 +107,7 @@ namespace Feeder.MCP.Runtime.Utils
         /// environment variables. Either may be empty / always-null to disable that source.
         /// </summary>
         public static OverrideRecord ApplyEnvironmentOverrides(
-            UnityMcpPlugin.UnityConnectionConfig config,
+            MatrixPlugin.UnityConnectionConfig config,
             IReadOnlyDictionary<string, string> argReader,
             Func<string, string?> envReader)
         {
@@ -124,16 +117,10 @@ namespace Feeder.MCP.Runtime.Utils
 
             var record = new OverrideRecord();
 
-            // Resolve a value with priority: short-flag-alias (highest) > UNITY_MCP_* env-style flag > env var.
+            // Resolve a value with priority: FEEDER_MATRIX_* env-style flag (highest) > env var.
             // Returns null if no source provided a non-empty value.
-            string? Resolve(string envKey, string? flagAlias)
+            string? Resolve(string envKey)
             {
-                if (!string.IsNullOrEmpty(flagAlias)
-                    && argReader.TryGetValue(flagAlias, out var flagValue)
-                    && !string.IsNullOrWhiteSpace(flagValue))
-                {
-                    return flagValue;
-                }
                 if (argReader.TryGetValue(envKey, out var envFlagValue)
                     && !string.IsNullOrWhiteSpace(envFlagValue))
                 {
@@ -147,7 +134,7 @@ namespace Feeder.MCP.Runtime.Utils
 
             string Sanitize(string raw) => raw.Trim().Trim('"');
 
-            var rawHost = Resolve(EnvHost, FlagUrl);
+            var rawHost = Resolve(EnvHost);
             if (rawHost != null)
             {
                 var host = Sanitize(rawHost).TrimEnd('/');
@@ -166,7 +153,7 @@ namespace Feeder.MCP.Runtime.Utils
                 }
             }
 
-            var rawKeep = Resolve(EnvKeepConnected, flagAlias: null);
+            var rawKeep = Resolve(EnvKeepConnected);
             if (rawKeep != null && bool.TryParse(Sanitize(rawKeep), out var keep) && keep != config.KeepConnected)
             {
                 record.Track(FieldKeepConnected, config.KeepConnected, keep);
@@ -174,7 +161,7 @@ namespace Feeder.MCP.Runtime.Utils
                 _logger.LogInformation("[MCP] Override: {Key}={Value}", EnvKeepConnected, keep);
             }
 
-            var rawAuth = Resolve(EnvAuthOption, FlagAuth);
+            var rawAuth = Resolve(EnvAuthOption);
             if (rawAuth != null
                 && Enum.TryParse<AuthOption>(Sanitize(rawAuth), ignoreCase: true, out var ao)
                 && ao != config.AuthOption)
@@ -184,7 +171,7 @@ namespace Feeder.MCP.Runtime.Utils
                 _logger.LogInformation("[MCP] Override: {Key}={Value}", EnvAuthOption, ao);
             }
 
-            var rawToken = Resolve(EnvToken, FlagToken);
+            var rawToken = Resolve(EnvToken);
             if (rawToken != null)
             {
                 var token = Sanitize(rawToken);
@@ -196,7 +183,7 @@ namespace Feeder.MCP.Runtime.Utils
                 }
             }
 
-            var rawTransport = Resolve(EnvTransport, flagAlias: null);
+            var rawTransport = Resolve(EnvTransport);
             if (rawTransport != null
                 && Enum.TryParse<TransportMethod>(Sanitize(rawTransport), ignoreCase: true, out var tm)
                 && tm != config.TransportMethod)
@@ -206,7 +193,7 @@ namespace Feeder.MCP.Runtime.Utils
                 _logger.LogInformation("[MCP] Override: {Key}={Value}", EnvTransport, tm);
             }
 
-            var rawStart = Resolve(EnvStartServer, flagAlias: null);
+            var rawStart = Resolve(EnvStartServer);
             if (rawStart != null && bool.TryParse(Sanitize(rawStart), out var ss) && ss != config.KeepServerRunning)
             {
                 record.Track(FieldStartServer, config.KeepServerRunning, ss);
@@ -216,7 +203,7 @@ namespace Feeder.MCP.Runtime.Utils
 
             // EnabledToolsOverride is [JsonIgnore] so it is never persisted regardless of the
             // baseline-restoration logic; we still track it for completeness.
-            var rawTools = Resolve(EnvTools, flagAlias: null);
+            var rawTools = Resolve(EnvTools);
             if (rawTools != null)
             {
                 var ids = rawTools.Split(',', StringSplitOptions.RemoveEmptyEntries);
@@ -241,7 +228,7 @@ namespace Feeder.MCP.Runtime.Utils
         /// (i.e. reverses runtime overrides so the in-memory config reflects what is on disk).
         /// Used by the editor's Save() flow to ensure runtime-only overrides are not persisted.
         /// </summary>
-        public static void ApplyBaseline(UnityMcpPlugin.UnityConnectionConfig config, OverrideRecord record)
+        public static void ApplyBaseline(MatrixPlugin.UnityConnectionConfig config, OverrideRecord record)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
             if (record == null) throw new ArgumentNullException(nameof(record));
@@ -252,21 +239,21 @@ namespace Feeder.MCP.Runtime.Utils
         /// Re-applies the OverrideValues from <paramref name="record"/> to <paramref name="config"/>
         /// (i.e. restores runtime overrides after a temporary baseline-restore).
         /// </summary>
-        public static void ApplyOverrides(UnityMcpPlugin.UnityConnectionConfig config, OverrideRecord record)
+        public static void ApplyOverrides(MatrixPlugin.UnityConnectionConfig config, OverrideRecord record)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
             if (record == null) throw new ArgumentNullException(nameof(record));
             ApplyValues(config, record.OverrideValues);
         }
 
-        static void ApplyValues(UnityMcpPlugin.UnityConnectionConfig config, IReadOnlyDictionary<string, object?> values)
+        static void ApplyValues(MatrixPlugin.UnityConnectionConfig config, IReadOnlyDictionary<string, object?> values)
         {
             foreach (var kvp in values)
             {
                 switch (kvp.Key)
                 {
                     case FieldHost:
-                        config.LocalHost = (string?)kvp.Value ?? UnityMcpPlugin.UnityConnectionConfig.DefaultHost;
+                        config.LocalHost = (string?)kvp.Value ?? MatrixPlugin.UnityConnectionConfig.DefaultHost;
                         break;
                     case FieldKeepConnected:
                         if (kvp.Value is bool kc) config.KeepConnected = kc;

@@ -1,13 +1,13 @@
 #nullable enable
 using System.ComponentModel;
 using System.Linq;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Model;
+using Feeder.Reflect;
+using Feeder.Reflect.Model;
 using Feeder.MCP.Runtime.Utils;
 using UnityEngine;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
+using ILogger = Feeder.Logging.ILogger;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     public class GameObjectData
     {

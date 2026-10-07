@@ -1,9 +1,9 @@
 #nullable enable
 using System;
-using Feeder.McpPlugin.Common.Utils;
-using Feeder.ReflectorNet;
+using Feeder.ToolHost.Common.Utils;
+using Feeder.Reflect;
 using Feeder.MCP.Utils;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 using UnityEngine;
 
 namespace Feeder.MCP.Runtime.Utils
@@ -43,9 +43,9 @@ namespace Feeder.MCP.Runtime.Utils
         public void SerializeTarget()
         {
             var logger = UnityLoggerFactory.LoggerFactory.CreateLogger(nameof(TestSerialization));
-            if (!UnityMcpPluginRuntime.HasInstance || UnityMcpPluginRuntime.Instance.McpPluginInstance == null)
-                throw new InvalidOperationException("No active UnityMcpPluginRuntime instance. Call UnityMcpPluginRuntime.Initialize().Build() first.");
-            var reflector = UnityMcpPluginRuntime.Instance.McpPluginInstance.McpManager.Reflector
+            if (!MatrixPluginRuntime.HasInstance || MatrixPluginRuntime.Instance.ToolHostInstance == null)
+                throw new InvalidOperationException("No active MatrixPluginRuntime instance. Call MatrixPluginRuntime.Initialize().Build() first.");
+            var reflector = MatrixPluginRuntime.Instance.ToolHostInstance.McpManager.Reflector
                 ?? throw new InvalidOperationException("Reflector is null");
 
             logger.LogInformation($"Serializing target '{target?.name}' of type '{target?.GetType().GetTypeId()}' with recursive={recursive}");

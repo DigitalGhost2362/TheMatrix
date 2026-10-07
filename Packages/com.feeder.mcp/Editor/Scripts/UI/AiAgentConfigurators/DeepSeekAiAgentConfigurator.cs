@@ -1,8 +1,8 @@
 #nullable enable
 using System.Collections.Generic;
-using Microsoft.Extensions.Logging;
-using AgentConfig = Feeder.McpPlugin.AgentConfig;
-using TransportMethod = Feeder.McpPlugin.Common.Consts.MCP.Server.TransportMethod;
+using Feeder.Logging;
+using AgentConfig = Feeder.ToolHost.AgentConfig;
+using TransportMethod = Feeder.ToolHost.Common.Consts.MCP.Server.TransportMethod;
 
 namespace Feeder.MCP.Editor.UI
 {
@@ -10,7 +10,7 @@ namespace Feeder.MCP.Editor.UI
     /// DeepSeek AI agent configurator for the Matrix Bridge.
     ///
     /// The shared <see cref="AgentConfig.AiAgentConfiguratorRegistry"/> (compiled into
-    /// Feeder.McpPlugin.dll) has no runtime registration API, so DeepSeek is defined here, in
+    /// Feeder.ToolHost.dll) has no runtime registration API, so DeepSeek is defined here, in
     /// the package's Editor assembly, and injected into the agent list right after
     /// Claude Code by <see cref="AiAgentCatalog"/>.
     ///
@@ -65,7 +65,7 @@ namespace Feeder.MCP.Editor.UI
 
             public override bool IsDetected() => IsConfigured();
 
-            public override bool IsConfigured() => UnityMcpPluginEditor.IsAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id);
+            public override bool IsConfigured() => MatrixPluginEditor.IsAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id);
         }
     }
 }

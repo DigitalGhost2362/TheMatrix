@@ -2,18 +2,18 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Feeder.McpPlugin;
-using Feeder.McpPlugin.Common.Model;
+using Feeder.ToolHost;
+using Feeder.ToolHost.Common.Model;
 using Feeder.MCP.Editor.MatrixSpace;
 using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Runtime.Utils;
-using Microsoft.AspNetCore.SignalR.Client;
-using Microsoft.Extensions.Logging;
-using R3;
+using Feeder.Fmp;
+using Feeder.Logging;
+using Feeder.Rx;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
-using AgentConfig = Feeder.McpPlugin.AgentConfig;
+using AgentConfig = Feeder.ToolHost.AgentConfig;
 using LogLevel = Feeder.MCP.Runtime.Utils.LogLevel;
 
 namespace Feeder.MCP.Editor.UI
@@ -111,15 +111,15 @@ namespace Feeder.MCP.Editor.UI
                 return;
             _titleDim = false;
             SetupWindowWithIcon();
-            UnityMcpPluginEditor.ConnectionState
+            MatrixPluginEditor.ConnectionState
                 .ObserveOnCurrentSynchronizationContext()
                 .Subscribe(OnTitleState)
                 .AddTo(_titleSubscription);
         }
 
-        private void OnTitleState(HubConnectionState state)
+        private void OnTitleState(FmpState state)
         {
-            var dim = state != HubConnectionState.Connected;
+            var dim = state != FmpState.Connected;
             if (dim == _titleDim)
                 return;
             _titleDim = dim;
@@ -188,7 +188,7 @@ namespace Feeder.MCP.Editor.UI
 
         private void Bind()
         {
-            UnityMcpPluginEditor.ConnectionState
+            MatrixPluginEditor.ConnectionState
                 .ObserveOnCurrentSynchronizationContext()
                 .Subscribe(OnConnectionState)
                 .AddTo(_subscriptions);
@@ -207,8 +207,8 @@ namespace Feeder.MCP.Editor.UI
             AgentActivity.Changed
                 .Subscribe(OnAgentActivity)
                 .AddTo(_subscriptions);
-            _subscriptions.Add(UnityMcpPluginEditor.SubscribeOnChanged(OnConfigChanged, invokeImmediately: false));
-            UnityMcpPluginEditor.PluginProperty
+            _subscriptions.Add(MatrixPluginEditor.SubscribeOnChanged(OnConfigChanged, invokeImmediately: false));
+            MatrixPluginEditor.PluginProperty
                 .WhereNotNull()
                 .Subscribe(OnPlugin)
                 .AddTo(_subscriptions);
@@ -228,7 +228,7 @@ namespace Feeder.MCP.Editor.UI
             _portField = null;
         }
 
-        private void OnConnectionState(HubConnectionState state) => Refresh();
+        private void OnConnectionState(FmpState state) => Refresh();
 
         private void OnServerStatus(McpServerStatus status) => Refresh();
 
@@ -236,11 +236,11 @@ namespace Feeder.MCP.Editor.UI
 
         private void OnServerNote(string? note) => Refresh();
 
-        private void OnConfigChanged(UnityMcpPlugin.UnityConnectionConfig config) => Refresh();
+        private void OnConfigChanged(MatrixPlugin.UnityConnectionConfig config) => Refresh();
 
         private void OnAgentActivity(Unit _) => Refresh();
 
-        private void OnPlugin(IMcpPlugin plugin)
+        private void OnPlugin(IToolHost plugin)
         {
             _clientsSubscription?.Dispose();
             _clientsSubscription = plugin.McpManager.OnClientsChanged
@@ -262,11 +262,11 @@ namespace Feeder.MCP.Editor.UI
 
         private BridgePhase ResolvePhase()
         {
-            var connection = UnityMcpPluginEditor.ConnectionState.CurrentValue;
+            var connection = MatrixPluginEditor.ConnectionState.CurrentValue;
             return BridgeStatus.Resolve(
                 MatrixActivation.IsEnabled && McpServerManager.PendingNote.CurrentValue != null,
-                connection == HubConnectionState.Connected,
-                connection == HubConnectionState.Connecting || connection == HubConnectionState.Reconnecting,
+                connection == FmpState.Connected,
+                connection == FmpState.Connecting || connection == FmpState.Reconnecting,
                 McpServerManager.ServerStatus.CurrentValue,
                 CurrentFault,
                 AgentActivity.IsAgentPlay,
@@ -288,7 +288,7 @@ namespace Feeder.MCP.Editor.UI
             foreach (var stateClass in _phaseClasses)
                 _state.EnableInClassList(stateClass, stateClass == phaseClass);
 
-            var host = UnityMcpPluginEditor.Host.Replace("https://", string.Empty).Replace("http://", string.Empty).TrimEnd('/');
+            var host = MatrixPluginEditor.Host.Replace("https://", string.Empty).Replace("http://", string.Empty).TrimEnd('/');
             var count = clients == 0 ? "no agents" : clients == 1 ? "1 agent" : $"{clients} agents";
             _address.text = $"{host}  -  {count}";
             _address.tooltip = _clientNames.Count > 0 && !_previewActive
@@ -329,7 +329,7 @@ namespace Feeder.MCP.Editor.UI
             {
                 McpServerStatus.Installing => "installing server",
                 McpServerStatus.Starting => "starting server",
-                _ => $"waiting for server on :{UnityMcpPluginEditor.Port}",
+                _ => $"waiting for server on :{MatrixPluginEditor.Port}",
             };
         }
 
@@ -513,7 +513,7 @@ namespace Feeder.MCP.Editor.UI
             else
                 menu.AddDisabledItem(new GUIContent("Change port"));
             foreach (var level in _menuLogLevels)
-                menu.AddItem(new GUIContent("Logging/" + level), UnityMcpPluginEditor.LogLevel == level, SetLogLevel, level);
+                menu.AddItem(new GUIContent("Logging/" + level), MatrixPluginEditor.LogLevel == level, SetLogLevel, level);
             menu.AddItem(new GUIContent("Skills"), false, MenuItems.ShowSkills);
             menu.AddItem(new GUIContent("Rain"), MatrixSpaceSettings.RainBackground.Value, ToggleRain);
             menu.AddSeparator(string.Empty);
@@ -523,14 +523,14 @@ namespace Feeder.MCP.Editor.UI
             menu.DropDown(_menu.worldBound);
         }
 
-        private static void CopyEndpoint() => GUIUtility.systemCopyBuffer = McpServerManager.GetMcpEndpointUrl(UnityMcpPluginEditor.Host);
+        private static void CopyEndpoint() => GUIUtility.systemCopyBuffer = McpServerManager.GetMcpEndpointUrl(MatrixPluginEditor.Host);
 
         private static void SetLogLevel(object level)
         {
             if (level is not LogLevel value)
                 return;
-            UnityMcpPluginEditor.LogLevel = value;
-            UnityMcpPluginEditor.Instance.Save();
+            MatrixPluginEditor.LogLevel = value;
+            MatrixPluginEditor.Instance.Save();
         }
 
         private void ToggleRain()
@@ -539,7 +539,7 @@ namespace Feeder.MCP.Editor.UI
             CreateGUI();
         }
 
-        private static void RevealConfigFile() => EditorUtility.RevealInFinder(UnityMcpPluginEditor.AssetsFileAbsolutePath);
+        private static void RevealConfigFile() => EditorUtility.RevealInFinder(MatrixPluginEditor.AssetsFileAbsolutePath);
 
         private static void ReinstallServer() => _ = McpServerManager.InstallServerBinaryIfNeeded(force: true);
 
@@ -554,7 +554,7 @@ namespace Feeder.MCP.Editor.UI
             if (_phase != BridgePhase.Offline || _address == null || _core == null || _portField != null)
                 return;
 
-            var field = new TextField { value = UnityMcpPluginEditor.Port.ToString() };
+            var field = new TextField { value = MatrixPluginEditor.Port.ToString() };
             field.AddToClassList("mb-port");
             BridgeFont.Apply(field);
             field.RegisterCallback<KeyDownEvent>(OnPortKey);
@@ -591,16 +591,16 @@ namespace Feeder.MCP.Editor.UI
                 Logger.LogWarning("{method} port must be a number from {min} to {max}.", nameof(CommitPort), MinPort, MaxPort);
                 return;
             }
-            if (port == UnityMcpPluginEditor.Port)
+            if (port == MatrixPluginEditor.Port)
                 return;
 
             McpServerManager.StopServer();
-            UnityMcpPluginEditor.LocalHost = $"http://localhost:{port}";
-            UnityMcpPluginEditor.Instance.Save();
-            if (UnityMcpPluginEditor.Instance.HasMcpPluginInstance)
+            MatrixPluginEditor.LocalHost = $"http://localhost:{port}";
+            MatrixPluginEditor.Instance.Save();
+            if (MatrixPluginEditor.Instance.HasToolHostInstance)
             {
-                UnityMcpPluginEditor.Instance.DisposeMcpPluginInstance();
-                UnityMcpPluginEditor.Instance.BuildMcpPluginIfNeeded();
+                MatrixPluginEditor.Instance.DisposeToolHostInstance();
+                MatrixPluginEditor.Instance.BuildToolHostIfNeeded();
             }
             Refresh();
             RefreshChips();

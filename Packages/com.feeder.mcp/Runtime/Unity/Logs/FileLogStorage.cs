@@ -3,19 +3,19 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using Feeder.Json;
+using Feeder.Json.Serialization;
 using System.Threading.Tasks;
-using Feeder.McpPlugin.Common;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost.Common;
+using Feeder.Reflect;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Utils;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 using UnityEngine;
 
 namespace Feeder.MCP
 {
-    using ILogger = Microsoft.Extensions.Logging.ILogger;
+    using ILogger = Feeder.Logging.ILogger;
 
     public class FileLogStorage : ILogStorage, IDisposable
     {
@@ -55,12 +55,12 @@ namespace Feeder.MCP
             _logger = logger ?? UnityLoggerFactory.LoggerFactory.CreateLogger(GetType().GetTypeShortName());
 
             _directoryPath = Path.GetFullPath(directoryPath ?? (Application.isEditor
-                ? $"{Path.GetDirectoryName(Application.dataPath)}/Temp/mcp-server"
-                : $"{Application.persistentDataPath}/Temp/mcp-server"));
+                ? $"{Path.GetDirectoryName(Application.dataPath)}/Temp/feeder-matrix"
+                : $"{Application.persistentDataPath}/Temp/feeder-matrix"));
 
             _requestedFileName = requestedFileName ?? (Application.isEditor
-                ? "ai-editor-logs.txt"
-                : "ai-player-logs.txt");
+                ? "editor-logs.txt"
+                : "player-logs.txt");
 
             if (!Directory.Exists(_directoryPath))
                 Directory.CreateDirectory(_directoryPath);
@@ -212,7 +212,7 @@ namespace Feeder.MCP
 
             foreach (var entry in entries)
             {
-                System.Text.Json.JsonSerializer.Serialize(fileWriteStream, entry, _jsonOptions);
+                Feeder.Json.JsonSerializer.Serialize(fileWriteStream, entry, _jsonOptions);
                 fileWriteStream.WriteByte((byte)'\n');
             }
             fileWriteStream.Flush();
@@ -410,7 +410,7 @@ namespace Feeder.MCP
         {
             try
             {
-                return System.Text.Json.JsonSerializer.Deserialize<LogEntry>(json, _jsonOptions);
+                return Feeder.Json.JsonSerializer.Deserialize<LogEntry>(json, _jsonOptions);
             }
             catch
             {

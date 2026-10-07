@@ -2,7 +2,7 @@
 using System;
 using System.Threading;
 using Feeder.MCP.Utils;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 
 namespace Feeder.MCP.Runtime.Utils
 {

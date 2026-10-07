@@ -2,9 +2,9 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using Feeder.McpPlugin.Common.Model;
-using Feeder.McpPlugin.Common.Utils;
-using R3;
+using Feeder.ToolHost.Common.Model;
+using Feeder.ToolHost.Common.Utils;
+using Feeder.Rx;
 using UnityEngine.UIElements;
 
 namespace Feeder.MCP.Editor.UI.MatrixSpace
@@ -42,7 +42,7 @@ namespace Feeder.MCP.Editor.UI.MatrixSpace
             Unsubscribe();
             _disposables = new CompositeDisposable();
 
-            UnityMcpPluginEditor.PluginProperty
+            MatrixPluginEditor.PluginProperty
                 .WhereNotNull()
                 .Subscribe(plugin =>
                 {
@@ -56,7 +56,7 @@ namespace Feeder.MCP.Editor.UI.MatrixSpace
                 .AddTo(_disposables);
 
             // Initial snapshot in case the plugin was already up before this view attached.
-            var manager = UnityMcpPluginEditor.Instance.McpPluginInstance?.McpManager;
+            var manager = MatrixPluginEditor.Instance.ToolHostInstance?.McpManager;
             if (manager != null)
                 Refresh(manager.ActiveClients);
         }

@@ -1,0 +1,22 @@
+{
+    "name": "Feeder.ToolHost",
+    "rootNamespace": "Feeder.ToolHost",
+    "references": [
+        "Feeder.Reflect",
+        "Feeder.ToolHost.Common",
+        "Feeder.Json",
+        "Feeder.Logging",
+        "Feeder.Rx"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

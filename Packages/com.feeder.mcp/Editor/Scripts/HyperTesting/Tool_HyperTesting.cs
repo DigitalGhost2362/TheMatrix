@@ -1,7 +1,7 @@
 #nullable enable
 using System.ComponentModel;
 using System.Threading.Tasks;
-using Feeder.McpPlugin;
+using Feeder.ToolHost;
 using Feeder.MCP.Editor.HyperTesting;
 
 namespace Feeder.MCP.Editor.API

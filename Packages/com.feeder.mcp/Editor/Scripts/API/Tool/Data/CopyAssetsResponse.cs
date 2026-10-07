@@ -1,9 +1,9 @@
 #nullable enable
 using System.Collections.Generic;
 using System.ComponentModel;
-using AIGD;
+using Feeder.MCP.Data;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     public class CopyAssetsResponse
     {

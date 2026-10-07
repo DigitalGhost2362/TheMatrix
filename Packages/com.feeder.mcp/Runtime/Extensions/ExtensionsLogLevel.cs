@@ -1,5 +1,5 @@
 #nullable enable
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 
 namespace Feeder.MCP.Runtime.Extensions
 {

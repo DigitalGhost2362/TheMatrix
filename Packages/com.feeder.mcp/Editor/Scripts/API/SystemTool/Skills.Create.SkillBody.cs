@@ -8,10 +8,10 @@ namespace Feeder.MCP.Editor.API
 #nullable enable
 using System;
 using System.ComponentModel;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Editor.Utils;
-using AIGD;
+using Feeder.MCP.Data;
 using UnityEditor;
 using UnityEngine;
 
@@ -87,7 +87,7 @@ Some operations take time to complete and may trigger a Unity domain reload (e.g
 3. Schedule the actual work asynchronously via `MainThread.Instance.RunAsync(async () => { await Task.Yield(); ... })`.
 4. When the operation finishes, send the final result by calling:
 ```csharp
-_ = UnityMcpPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
+_ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
 {
     RequestId = requestId,
     Result = ResponseCallTool.Success(""Operation completed."").SetRequestID(requestId)
@@ -96,10 +96,9 @@ _ = UnityMcpPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
 If the operation may survive a domain reload (e.g. a .cs file was saved and Unity will recompile), use `ScriptUtils.SchedulePostCompilationNotification(requestId, filePath, operationType)` instead of calling `NotifyToolRequestCompleted` directly — it persists the pending notification to `SessionState` and sends it automatically after the domain reload completes. For package install/removal or other non-compilation domain reloads use `PackageUtils.SchedulePostDomainReloadNotification(requestId, label, action, expectedResult)` the same way.
 
 ### Return structured data with a typed response
-Prefer returning a structured data model over a plain string so the AI can parse individual fields. Data models for MCP tools MUST be declared as TOP-LEVEL types in the `AIGD` namespace - never nested inside the tool class. Place each data model in its own `.cs` file (one type per file) and use `ResponseCallValueTool<T>` as the return type. The flat `AIGD` namespace keeps the auto-generated JSON Schema `$defs` keys short and intuitive for AI agents.
+Prefer returning a structured data model over a plain string so the AI can parse individual fields. Data models for MCP tools MUST be declared as TOP-LEVEL types in the `Feeder.MCP.Data` namespace - never nested inside the tool class. Place each data model in its own `.cs` file (one type per file) and use `ResponseCallValueTool<T>` as the return type. The flat `Feeder.MCP.Data` namespace keeps the auto-generated JSON Schema `$defs` keys short and intuitive for AI agents.
 ```csharp
-// Tool file (Tool/MyTool.cs) - references the data model from AIGD:
-using AIGD;
+// Tool file (Tool/MyTool.cs) - references the data model from Feeder.MCP.Data:
 
 namespace Feeder.MCP.Editor.API
 {
@@ -117,8 +116,8 @@ namespace Feeder.MCP.Editor.API
     }
 }
 
-// Data model (Tool/Data/MyResult.cs) - top-level, in AIGD namespace, NOT nested:
-namespace AIGD
+// Data model (Tool/Data/MyResult.cs) - top-level, in Feeder.MCP.Data namespace, NOT nested:
+namespace Feeder.MCP.Data
 {
     public class MyResult
     {
@@ -130,7 +129,7 @@ namespace AIGD
     }
 }
 ```
-For simpler cases that do not need async/processing, you may return the model directly (without `ResponseCallValueTool<T>`) and Feeder MCP will wrap it automatically. The data model itself MUST still live as a top-level type in the `AIGD` namespace.
+For simpler cases that do not need async/processing, you may return the model directly (without `ResponseCallValueTool<T>`) and Feeder MCP will wrap it automatically. The data model itself MUST still live as a top-level type in the `Feeder.MCP.Data` namespace.
 
 ### Validate inputs early and throw clearly
 Always validate required parameters at the top of the method before any Unity API calls. Throw `ArgumentException` or `InvalidOperationException` with descriptive messages so the AI knows exactly what went wrong and can self-correct:

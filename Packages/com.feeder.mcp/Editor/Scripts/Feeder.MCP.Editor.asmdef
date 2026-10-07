@@ -3,9 +3,13 @@
     "rootNamespace": "Feeder.MCP.Editor",
     "references": [
         "Feeder.MCP.Runtime",
-        "Feeder.ReflectorNet",
-        "Feeder.McpPlugin.Common",
-        "Feeder.McpPlugin"
+        "Feeder.Reflect",
+        "Feeder.ToolHost.Common",
+        "Feeder.ToolHost",
+        "Feeder.Json",
+        "Feeder.Logging",
+        "Feeder.Rx",
+        "Feeder.Fmp"
     ],
     "includePlatforms": [
         "Editor"
@@ -13,18 +17,7 @@
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": true,
-    "precompiledReferences": [
-        "R3.dll",
-        "Microsoft.Extensions.Logging.Abstractions.dll",
-        "Microsoft.Extensions.Logging.dll",
-        "Microsoft.AspNetCore.SignalR.Client.dll",
-        "Microsoft.AspNetCore.SignalR.Client.Core.dll",
-        "Microsoft.AspNetCore.SignalR.Common.dll",
-        "Microsoft.CodeAnalysis.CSharp.dll",
-        "Microsoft.CodeAnalysis.dll",
-        "System.Collections.Immutable.dll",
-        "System.Text.Json.dll"
-    ],
+    "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],

@@ -3,10 +3,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.Reflect;
+using Feeder.Reflect.Model;
+using Feeder.Reflect.Utils;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -140,7 +140,7 @@ namespace Feeder.MCP.Editor.API
         {
             public static string MoreThanOneMethodFound(List<MethodInfo> methods)
             {
-                var reflector = UnityMcpPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
+                var reflector = MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
                 var methodsString = methods
                     .Select(method => new MethodData(reflector, method, justRef: false))
                     .ToJson(reflector);

@@ -3,14 +3,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Converter;
-using Feeder.ReflectorNet.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.Reflect;
+using Feeder.Reflect.Converter;
+using Feeder.Reflect.Model;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Runtime.Extensions;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 using UnityEngine;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
+using ILogger = Feeder.Logging.ILogger;
 
 namespace Feeder.MCP.Reflection.Converter
 {
@@ -66,7 +66,7 @@ namespace Feeder.MCP.Reflection.Converter
             Reflector reflector,
             ref object? obj,
             Type type,
-            System.Text.Json.JsonElement? value,
+            Feeder.Json.JsonElement? value,
             int depth = 0,
             Logs? logs = null,
             ILogger? logger = null)
@@ -78,7 +78,7 @@ namespace Feeder.MCP.Reflection.Converter
             if (type.IsValueType && !type.IsPrimitive && !type.IsEnum && originalObj != null)
             {
                 var hasExplicitValue = value.HasValue &&
-                    value.Value.ValueKind != System.Text.Json.JsonValueKind.Undefined;
+                    value.Value.ValueKind != Feeder.Json.JsonValueKind.Undefined;
                 if (!hasExplicitValue)
                 {
                     // No explicit value provided - keep the original struct value
@@ -100,7 +100,7 @@ namespace Feeder.MCP.Reflection.Converter
             // This handles cases where TryModify is called with an existing object but no valueJsonElement.
             if (obj == null && originalObj != null)
             {
-                var isExplicitNull = value.HasValue && value.Value.ValueKind == System.Text.Json.JsonValueKind.Null;
+                var isExplicitNull = value.HasValue && value.Value.ValueKind == Feeder.Json.JsonValueKind.Null;
                 if (!isExplicitNull)
                 {
                     obj = originalObj;

@@ -79,6 +79,9 @@ public sealed class UnityLinkRegistry
 
     public IReadOnlyCollection<UnityLink> Links => _linksByProject.Values.ToArray();
 
+    public bool IsRegistered(string connectionId)
+        => _linksByProject.Values.Any(l => l.Connected && l.ConnectionId == connectionId);
+
     public TaskCompletionSource<ToolResult> CreateOperation(string operationId)
     {
         var tcs = new TaskCompletionSource<ToolResult>(TaskCreationOptions.RunContinuationsAsynchronously);

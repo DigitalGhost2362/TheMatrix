@@ -3,10 +3,10 @@ using System;
 using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.Reflect;
+using Feeder.Reflect.Model;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Utils;
 
 namespace Feeder.MCP.Editor.API
@@ -144,11 +144,11 @@ namespace Feeder.MCP.Editor.API
 
             Func<SerializedMember> action = () =>
             {
-                var reflector = UnityMcpPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
+                var reflector = MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
 
                 var dictInputParameters = inputParameters?.ToDictionary(
                     keySelector: p => p.name ?? throw new InvalidOperationException($"Input parameter name is null. Please specify 'name' property for each input parameter."),
-                    elementSelector: p => reflector.Deserialize(p, logger: UnityMcpPluginEditor.Instance.Logger)
+                    elementSelector: p => reflector.Deserialize(p, logger: MatrixPluginEditor.Instance.Logger)
                 );
 
                 var methodWrapper = default(MethodWrapper);
@@ -156,18 +156,18 @@ namespace Feeder.MCP.Editor.API
                 if (string.IsNullOrEmpty(targetObject?.typeName))
                 {
                     // No object instance needed. Probably static method.
-                    methodWrapper = new MethodWrapper(reflector, logger: UnityMcpPluginEditor.Instance.Logger, method);
+                    methodWrapper = new MethodWrapper(reflector, logger: MatrixPluginEditor.Instance.Logger, method);
                 }
                 else
                 {
                     // Object instance needed. Probably instance method.
-                    var obj = reflector.Deserialize(targetObject!, logger: UnityMcpPluginEditor.Instance.Logger);
+                    var obj = reflector.Deserialize(targetObject!, logger: MatrixPluginEditor.Instance.Logger);
                     if (obj == null)
                         throw new Exception($"'{nameof(targetObject)}' deserialized instance is null. Please specify the '{nameof(targetObject)}' properly.");
 
                     methodWrapper = new MethodWrapper(
                         reflector: reflector,
-                        logger: UnityMcpPluginEditor.Instance.Logger,
+                        logger: MatrixPluginEditor.Instance.Logger,
                         targetInstance: obj,
                         methodInfo: method);
                 }

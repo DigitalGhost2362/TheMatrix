@@ -1,0 +1,19 @@
+{
+    "name": "Feeder.Reflect",
+    "rootNamespace": "Feeder.Reflect",
+    "references": [
+        "Feeder.Json",
+        "Feeder.Logging"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

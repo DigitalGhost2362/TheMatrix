@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <!-- the library under test is compared with the package it replaces -->
+  <ItemGroup>
+    <PackageReference Include="R3" Version="1.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\..\Runtime\Lib\Feeder.Rx\**\*.cs" />
+  </ItemGroup>
+
+  <!-- Differential\Scenarios.cs is written against the reference package; the same text is compiled again against Feeder.Rx -->
+  <Target Name="MirrorScenarios" BeforeTargets="CoreCompile">
+    <ReadLinesFromFile File="Differential\Scenarios.cs">
+      <Output TaskParameter="Lines" ItemName="ScenarioLine" />
+    </ReadLinesFromFile>
+    <WriteLinesToFile File="$(IntermediateOutputPath)Scenarios.Mine.g.cs" Overwrite="true" WriteOnlyWhenDifferent="true"
+                      Lines="@(ScenarioLine->Replace('using R3;', 'using Feeder.Rx;')->Replace('Differential.Real', 'Differential.Mine'))" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)Scenarios.Mine.g.cs" />
+      <FileWrites Include="$(IntermediateOutputPath)Scenarios.Mine.g.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

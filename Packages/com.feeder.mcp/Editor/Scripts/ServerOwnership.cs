@@ -14,7 +14,7 @@ namespace Feeder.MCP.Editor
     {
         Ours,
         OtherProject,
-        NotMcp,
+        Foreign,
         Unknown,
     }
 
@@ -27,13 +27,14 @@ namespace Feeder.MCP.Editor
         public string exePath = string.Empty;
     }
 
-    // a server is identified by the exe it runs from: <project>/Library/mcp-server/<rid>/..., true for every plugin version
+    // a server is identified by the exe it runs from: <project>/Library/feeder-matrix/<rid>/..., never by its process name
     public static class ServerOwnership
     {
-        public const string ProcessName = "matrix-server";
-        // packages up to 0.87 shipped the exe under this name; still recognised so an update can stop and replace it
-        public const string LegacyProcessName = "gamedev-mcp-server";
-        public static readonly string[] AllProcessNames = { ProcessName, LegacyProcessName };
+        // every name the server lifecycle owns, all under the project's own Library and Temp folders
+        public const string ExeName = "matrix-server";
+        public const string FolderName = "feeder-matrix"; // Library/feeder-matrix/<rid>/ and Temp/feeder-matrix/
+        public const string StagingPrefix = FolderName + "-staging-"; // Library/feeder-matrix-staging-<guid>
+        public const string OwnerFileName = "server-owner.json"; // Temp/feeder-matrix/server-owner.json
         public const int MinAutoPort = 20000;
         public const int MaxAutoPort = 29999;
 
@@ -42,16 +43,13 @@ namespace Feeder.MCP.Editor
             : StringComparison.Ordinal;
 
         public static string OwnerFilePath
-            => Path.GetFullPath(Path.Combine(Application.dataPath, "../Temp", "mcp-server-owner.json"));
+            => Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Temp", FolderName, OwnerFileName));
 
         #region Classify
 
-        public static ServerOwner Classify(string? processName, string? exePath, string ownRoot)
+        // ours = under our root; OtherProject = under another project's Library/feeder-matrix; anything else is foreign
+        public static ServerOwner Classify(string? exePath, string ownRoot)
         {
-            if (processName == null)
-                return ServerOwner.Unknown;
-            if (!AllProcessNames.Any(name => processName.IndexOf(name, StringComparison.OrdinalIgnoreCase) >= 0))
-                return ServerOwner.NotMcp;
             if (string.IsNullOrEmpty(exePath))
                 return ServerOwner.Unknown;
 
@@ -59,7 +57,10 @@ namespace Feeder.MCP.Editor
             string full;
             try { full = Path.GetFullPath(exePath); }
             catch (Exception) { return ServerOwner.Unknown; }
-            return full.StartsWith(root, PathComparison) ? ServerOwner.Ours : ServerOwner.OtherProject;
+            if (full.StartsWith(root, PathComparison))
+                return ServerOwner.Ours;
+            var marker = $"{Path.DirectorySeparatorChar}Library{Path.DirectorySeparatorChar}{FolderName}{Path.DirectorySeparatorChar}";
+            return full.IndexOf(marker, PathComparison) > 0 ? ServerOwner.OtherProject : ServerOwner.Foreign;
         }
 
         public static ServerOwner ClassifyProcess(int pid, string ownRoot)
@@ -79,18 +80,16 @@ namespace Feeder.MCP.Editor
 
         public static ServerOwner ClassifyProcess(Process process, string ownRoot)
         {
-            string? name;
             try
             {
                 if (process.HasExited)
                     return ServerOwner.Unknown;
-                name = process.ProcessName;
             }
             catch (Exception)
             {
                 return ServerOwner.Unknown;
             }
-            return Classify(name, ReadExePath(process), ownRoot);
+            return Classify(ReadExePath(process), ownRoot);
         }
 
         public static string? ReadExePath(Process process)
@@ -105,12 +104,12 @@ namespace Feeder.MCP.Editor
             }
         }
 
-        // "<P>/Library/mcp-server/<rid>/matrix-server.exe" -> "P"
+        // "<P>/Library/feeder-matrix/<rid>/matrix-server.exe" -> "P"
         public static string DescribeOwner(string? exePath)
         {
             if (string.IsNullOrEmpty(exePath))
                 return "another process";
-            var marker = $"{Path.DirectorySeparatorChar}Library{Path.DirectorySeparatorChar}mcp-server";
+            var marker = $"{Path.DirectorySeparatorChar}Library{Path.DirectorySeparatorChar}{FolderName}";
             var full = exePath!.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
             var index = full.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
             return index > 0 ? Path.GetFileName(full.Substring(0, index)) : Path.GetFileName(full);
@@ -185,6 +184,106 @@ namespace Feeder.MCP.Editor
             {
                 return null;
             }
+        }
+
+        #endregion
+
+        #region Legacy Install
+
+        // Before 0.88 the server lived in <project>/Library/mcp-server/<rid>/, a folder name other tools may use as well. Such
+        // a folder is ours only when every file in it is one our installer wrote (our marker, web.config, version, and
+        // executables whose PE identity is our server); anything else in it and the whole folder is left alone.
+        public const string LegacyFolderName = "mcp-server";
+        public const string LegacyMarkerFileName = "feeder-mcp-server.staticwebassets.endpoints.json";
+        public const string LegacyExeIdentity = "feeder-mcp-server.dll";
+        static readonly string[] LegacyPayloadFiles = { "web.config", "version" };
+
+        internal static Func<string, string> ExeIdentity = file =>
+        {
+            try { return FileVersionInfo.GetVersionInfo(file).OriginalFilename ?? string.Empty; }
+            catch (Exception) { return string.Empty; }
+        };
+
+        public static bool IsLegacyInstall(string folder)
+            => File.Exists(Path.Combine(folder, LegacyMarkerFileName))
+               && Directory.GetDirectories(folder).Length == 0
+               && Directory.GetFiles(folder).All(IsLegacyPayloadFile);
+
+        static bool IsLegacyPayloadFile(string file)
+        {
+            var name = Path.GetFileName(file);
+            if (string.Equals(name, LegacyMarkerFileName, StringComparison.OrdinalIgnoreCase)
+                || LegacyPayloadFiles.Contains(name, StringComparer.OrdinalIgnoreCase))
+                return true;
+            return file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(ExeIdentity(file), LegacyExeIdentity, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // one line per action; a folder that is not ours is left byte-for-byte alone
+        public static List<string> RemoveLegacyInstall(string folder)
+        {
+            var actions = new List<string>();
+            if (!Directory.Exists(folder) || !IsLegacyInstall(folder))
+                return actions;
+
+            var exes = Directory.GetFiles(folder).Where(file => file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)).ToList();
+            foreach (var exe in exes)
+                foreach (var pid in KillProcessesRunning(exe))
+                    actions.Add($"stopped PID {pid} running {exe}");
+
+            // the marker goes last, so a still locked exe keeps the folder recognisable for the next editor start
+            var files = exes.Concat(LegacyPayloadFiles.Select(name => Path.Combine(folder, name))).Append(Path.Combine(folder, LegacyMarkerFileName));
+            foreach (var file in files.Where(File.Exists))
+            {
+                try
+                {
+                    File.Delete(file);
+                    actions.Add($"deleted {file}");
+                }
+                catch (Exception ex)
+                {
+                    actions.Add($"could not delete {file}, retrying on the next editor start: {ex.Message}");
+                    return actions;
+                }
+            }
+
+            if (Directory.GetFileSystemEntries(folder).Length == 0)
+            {
+                Directory.Delete(folder);
+                actions.Add($"deleted the empty folder {folder}");
+            }
+            return actions;
+        }
+
+        // kills only processes whose executable is exactly this file; the name lookup merely narrows the candidates
+        public static List<int> KillProcessesRunning(string exePath)
+        {
+            var killed = new List<int>();
+            var target = Path.GetFullPath(exePath);
+            Process[] candidates;
+            try { candidates = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(target)); }
+            catch (Exception) { return killed; }
+
+            foreach (var process in candidates)
+            {
+                try
+                {
+                    var path = ReadExePath(process);
+                    if (path == null || process.HasExited || !string.Equals(Path.GetFullPath(path), target, PathComparison))
+                        continue;
+                    process.Kill();
+                    process.WaitForExit(5000);
+                    killed.Add(process.Id);
+                }
+                catch (Exception)
+                {
+                }
+                finally
+                {
+                    process.Dispose();
+                }
+            }
+            return killed;
         }
 
         #endregion

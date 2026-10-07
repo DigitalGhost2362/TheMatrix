@@ -2,8 +2,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Text;
 using Feeder.MCP.Editor.UI;
+using Feeder.MCP.Editor.Utils;
+using Feeder.ToolHost.Skills;
 using NUnit.Framework;
 
 namespace Feeder.MCP.Editor.Tests
@@ -203,6 +208,97 @@ namespace Feeder.MCP.Editor.Tests
             Assert.AreEqual("Other", info.Group.Name);
             Assert.AreEqual("bare-tool", info.Label);
             Assert.AreEqual(string.Empty, info.Summary);
+        }
+    }
+
+    // tool skills go to matrix-<tool>; a SKILL.md this package did not write is never changed or deleted
+    public sealed class SkillFileOwnershipTests
+    {
+        const string OwnBody = "Call this tool through the MCP client connected to the local Matrix Bridge server.\n\nRead the /feeder-mcp-initial-setup skill for local connection setup.";
+        const string FirstVersionBody = "Call this tool through the MCP client connected to the local Matrix AI Connector server.\n\nRead the /feeder-mcp-initial-setup skill for local connection setup.";
+        const string ForeignBody = "Written by another tool.\nRead the /other-initial-setup skill to set it up.";
+
+        string _skills = string.Empty;
+
+        [SetUp]
+        public void SetUp()
+        {
+            _skills = Path.Combine(Path.GetTempPath(), "matrix-skills-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_skills);
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            if (Directory.Exists(_skills))
+                Directory.Delete(_skills, true);
+        }
+
+        string Skill(string folder, string body)
+        {
+            var path = Path.Combine(_skills, folder);
+            Directory.CreateDirectory(path);
+            File.WriteAllText(Path.Combine(path, "SKILL.md"), $"---\nname: {folder}\ndescription: x\n---\n\n{body}\n");
+            return path;
+        }
+
+        [Test]
+        public void UnityGenerator_ToolSkillCarriesTheOwnMark()
+        {
+            var generator = Activator.CreateInstance(typeof(UnitySkillFileGenerator));
+            var method = typeof(UnitySkillFileGenerator).GetMethod("BuildToolCommand", BindingFlags.Instance | BindingFlags.NonPublic);
+            var text = new StringBuilder();
+            method!.Invoke(generator, new object?[] { text, null, "http://localhost:1", "{}" });
+            StringAssert.Contains(SkillFileGenerator.OwnSkillMark, text.ToString());
+        }
+
+        [Test]
+        public void IsOwnSkillFile_EveryVersionOfOurToolSkill_True()
+        {
+            Assert.IsTrue(SkillFileGenerator.IsOwnSkillFile(Path.Combine(Skill("a", OwnBody), "SKILL.md")));
+            Assert.IsTrue(SkillFileGenerator.IsOwnSkillFile(Path.Combine(Skill("b", FirstVersionBody), "SKILL.md")));
+        }
+
+        [Test]
+        public void IsOwnSkillFile_ForeignOrMissing_False()
+        {
+            Assert.IsFalse(SkillFileGenerator.IsOwnSkillFile(Path.Combine(Skill("assets-find", ForeignBody), "SKILL.md")));
+            Assert.IsFalse(SkillFileGenerator.IsOwnSkillFile(Path.Combine(_skills, "missing", "SKILL.md")));
+        }
+
+        [Test]
+        public void DeleteOwnSkill_OurOldUnprefixedSkill_RemovesFolder()
+        {
+            var folder = Skill("assets-find", OwnBody);
+
+            Assert.IsTrue(SkillFileGenerator.DeleteOwnSkill(folder));
+            Assert.IsFalse(Directory.Exists(folder));
+        }
+
+        [Test]
+        public void DeleteOwnSkill_AnotherToolsSkill_LeftByteForByte()
+        {
+            var folder = Skill("assets-find", ForeignBody);
+            var before = File.ReadAllText(Path.Combine(folder, "SKILL.md"));
+
+            Assert.IsFalse(SkillFileGenerator.DeleteOwnSkill(folder));
+            Assert.AreEqual(before, File.ReadAllText(Path.Combine(folder, "SKILL.md")));
+        }
+
+        [Test]
+        public void DeleteOwnSkill_PrefixedSkillWithExtraFile_KeepsThatFileAndFolder()
+        {
+            var folder = Skill(SkillFileGenerator.ToolSkillPrefix + "assets-find", OwnBody);
+            File.WriteAllText(Path.Combine(folder, "notes.md"), "hand written");
+
+            Assert.IsTrue(SkillFileGenerator.DeleteOwnSkill(folder));
+            CollectionAssert.AreEqual(new[] { Path.Combine(folder, "notes.md") }, Directory.GetFileSystemEntries(folder));
+        }
+
+        [Test]
+        public void DeleteOwnSkill_NoFolder_False()
+        {
+            Assert.IsFalse(SkillFileGenerator.DeleteOwnSkill(Path.Combine(_skills, "missing")));
         }
     }
 }

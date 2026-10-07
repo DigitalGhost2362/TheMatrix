@@ -1,7 +1,7 @@
 #nullable enable
 using System;
 using System.ComponentModel;
-using Feeder.McpPlugin;
+using Feeder.ToolHost;
 using UnityEngine;
 
 namespace Feeder.MCP.Editor.API
@@ -43,10 +43,10 @@ namespace Feeder.MCP.Editor.API
             if (maxEntries < 1)
                 throw new ArgumentException(Error.InvalidMaxEntries(maxEntries));
 
-            if (!UnityMcpPluginEditor.HasInstance)
-                throw new InvalidOperationException("UnityMcpPluginEditor is not initialized.");
+            if (!MatrixPluginEditor.HasInstance)
+                throw new InvalidOperationException("MatrixPluginEditor is not initialized.");
 
-            var logCollector = UnityMcpPluginEditor.Instance.LogCollector;
+            var logCollector = MatrixPluginEditor.Instance.LogCollector;
             if (logCollector == null)
                 throw new InvalidOperationException("LogCollector is not initialized.");
 

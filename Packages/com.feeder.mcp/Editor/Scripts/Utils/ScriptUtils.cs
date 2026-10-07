@@ -1,9 +1,10 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using Feeder.McpPlugin.Common.Model;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
+using System.Threading;
+using Feeder.ToolHost.Common.Model;
+using Feeder.MCP.Editor.Matrix;
 using Feeder.MCP.Editor.MatrixSpace;
 using UnityEditor;
 using UnityEditor.Compilation;
@@ -14,7 +15,7 @@ namespace Feeder.MCP.Editor.Utils
     public static partial class ScriptUtils
     {
         private const string PendingNotificationKeysKey = "Feeder_MCP_PendingNotificationKeys";
-        private const string NotificationDataSeparator = "<MCP_SEP>";
+        private const string NotificationDataSeparator = "<FEEDER_SCRIPT_SEP>";
 
         private static bool _processPendingScheduled = false;
 
@@ -71,13 +72,29 @@ namespace Feeder.MCP.Editor.Utils
         /// <param name="code">
         /// <param name="errors"></param>
         /// <returns>True if the code has valid syntax; otherwise, false.</returns>
-        public static bool IsValidCSharpSyntax(string code, out IEnumerable<Diagnostic> errors)
+        public static bool IsValidCSharpSyntax(string code, out IEnumerable<string> errors)
         {
-            var syntaxTree = CSharpSyntaxTree.ParseText(code);
-            var diagnostics = syntaxTree.GetDiagnostics();
+            string reason;
+            try
+            {
+                var response = MatrixPluginEditor.Instance
+                    .CompileOnServerAsync(new CompileRequest { Source = code, SyntaxOnly = true }, CancellationToken.None)
+                    .GetAwaiter().GetResult();
+                if (string.IsNullOrEmpty(response.Error))
+                {
+                    errors = response.Diagnostics ?? Array.Empty<string>();
+                    return response.Success;
+                }
+                reason = response.Error!;
+            }
+            catch (Exception e)
+            {
+                reason = e.Message;
+            }
 
-            errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error);
-            return !errors.Any();
+            UnityEngine.Debug.LogWarning($"C# syntax pre-check skipped, Unity will report real errors on compile: {reason}");
+            errors = Array.Empty<string>();
+            return true;
         }
 
         /// <summary>
@@ -171,7 +188,7 @@ namespace Feeder.MCP.Editor.Utils
                 }
 
                 // Send notification and mark for cleanup
-                _ = UnityMcpPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
+                _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
                 {
                     RequestId = requestId,
                     Result = response

@@ -1,8 +1,8 @@
 #nullable enable
 using System;
-using Feeder.McpPlugin;
+using Feeder.ToolHost;
 using Feeder.MCP.Editor.UI;
-using R3;
+using Feeder.Rx;
 using UnityEditor;
 
 namespace Feeder.MCP.Editor.MatrixSpace
@@ -39,7 +39,7 @@ namespace Feeder.MCP.Editor.MatrixSpace
             if (AssetDatabase.IsAssetImportWorkerProcess())
                 return;
 
-            UnityMcpPluginEditor.PluginProperty.Subscribe(OnPlugin);
+            MatrixPluginEditor.PluginProperty.Subscribe(OnPlugin);
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
         }
 
@@ -49,7 +49,7 @@ namespace Feeder.MCP.Editor.MatrixSpace
             _changed.OnNext(Unit.Default);
         }
 
-        static void OnPlugin(IMcpPlugin? plugin)
+        static void OnPlugin(IToolHost? plugin)
         {
             _toolCalls?.Dispose();
             _toolCalls = null;

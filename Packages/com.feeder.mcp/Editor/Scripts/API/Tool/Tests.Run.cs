@@ -5,9 +5,9 @@ using System.ComponentModel;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Feeder.McpPlugin;
-using Feeder.McpPlugin.Common.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.ToolHost.Common.Model;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Editor.API.TestRunner;
 using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Runtime.Utils;
@@ -111,7 +111,7 @@ namespace Feeder.MCP.Editor.API
                 TestResultCollector.IncludeLogsStacktrace.Value = includeLogsStacktrace;
 
                 // Trigger AssetDatabase.Refresh to detect and compile any changed scripts
-                if (UnityMcpPlugin.IsLogEnabled(LogLevel.Info))
+                if (MatrixPlugin.IsLogEnabled(LogLevel.Info))
                     Debug.Log($"[TestRunner] Refreshing AssetDatabase before running {testMode} tests...");
 
                 UnityEditor.AssetDatabase.Refresh();
@@ -119,7 +119,7 @@ namespace Feeder.MCP.Editor.API
                 // Check if compilation was triggered (scripts changed on disk)
                 if (UnityEditor.EditorApplication.isCompiling)
                 {
-                    if (UnityMcpPlugin.IsLogEnabled(LogLevel.Info))
+                    if (MatrixPlugin.IsLogEnabled(LogLevel.Info))
                         Debug.Log($"[TestRunner] Scripts are compiling. Deferring test run until after domain reload.");
 
                     // Save filter params to SessionState (survives domain reload)
@@ -146,14 +146,14 @@ namespace Feeder.MCP.Editor.API
                 }
 
                 // No compilation needed — run tests immediately
-                if (UnityMcpPlugin.IsLogEnabled(LogLevel.Info))
+                if (MatrixPlugin.IsLogEnabled(LogLevel.Info))
                     Debug.Log($"[TestRunner] No compilation needed. Running {testMode} tests immediately.");
 
                 try
                 {
                     var filterParams = new TestFilterParameters(testAssembly, testNamespace, testClass, testMethod);
 
-                    if (UnityMcpPlugin.IsLogEnabled(LogLevel.Info))
+                    if (MatrixPlugin.IsLogEnabled(LogLevel.Info))
                         Debug.Log($"[TestRunner] Running {testMode} tests with filters: {filterParams}");
 
                     var validation = await ValidateTestFilters(TestRunnerApi, testMode, filterParams);
@@ -169,7 +169,7 @@ namespace Feeder.MCP.Editor.API
                 }
                 catch (Exception ex)
                 {
-                    if (UnityMcpPlugin.IsLogEnabled(LogLevel.Error))
+                    if (MatrixPlugin.IsLogEnabled(LogLevel.Error))
                     {
                         Debug.LogException(ex);
                         Debug.LogError($"[TestRunner] ------------------------------------- Exception {testMode} tests.");
@@ -254,7 +254,7 @@ namespace Feeder.MCP.Editor.API
                         ? CountFilteredTests(testRoot, filterParams)
                         : 0;
 
-                    if (UnityMcpPlugin.IsLogEnabled(LogLevel.Info))
+                    if (MatrixPlugin.IsLogEnabled(LogLevel.Info))
                         Debug.Log($"[TestRunner] {testCount} {testMode} tests matched for {filterParams}");
 
                     tcs.SetResult(testCount);

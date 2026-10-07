@@ -49,9 +49,6 @@ of protocol design makes two play mode sessions coexist in one Editor process.
   for in-Editor Matrix Space panes. External MCP clients bypass it entirely.
 - `McpClientTracker` has a `sessionId` per MCP client but no notion of *identity* — every Claude
   Code terminal reports `ClientInfo.Name == "claude-code"`, so lanes are indistinguishable.
-- **Constraint:** `AiToolAttribute` lives in the precompiled `Feeder.McpPlugin.dll`
-  (`Runtime/Plugins/Feeder/`). We **cannot** add `[AiToolResource(...)]` properties to it. Resource
-  classification must live in a side table in the Editor assembly.
 
 ## 3. Design overview
 

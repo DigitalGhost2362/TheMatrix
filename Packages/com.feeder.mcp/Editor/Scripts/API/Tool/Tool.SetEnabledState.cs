@@ -1,11 +1,11 @@
 #nullable enable
-using AIGD;
+using Feeder.MCP.Data;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.Reflect.Model;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Utils;
 
 namespace Feeder.MCP.Editor.API
@@ -21,7 +21,7 @@ namespace Feeder.MCP.Editor.API
             Enabled = false
         )]
         [AiSkillDescription("Enable or disable MCP tools by name in batch. " +
-            "Persists the change via `UnityMcpPluginEditor.Instance.Save()` only when at least one tool actually flipped. " +
+            "Persists the change via `MatrixPluginEditor.Instance.Save()` only when at least one tool actually flipped. " +
             "Returns per-input success flags plus optional operation logs.")]
         [AiSkillBody("Enable or disable MCP tools by name. " +
             "Allows controlling which tools are available for the AI agent.\n\n" +
@@ -48,7 +48,7 @@ namespace Feeder.MCP.Editor.API
 
             return MainThread.Instance.Run(() =>
             {
-                var toolManager = UnityMcpPluginEditor.Instance.Tools
+                var toolManager = MatrixPluginEditor.Instance.Tools
                     ?? throw new InvalidOperationException(Error.ToolManagerNotAvailable());
 
                 var logs = includeLogs == true ? new Logs() : null;
@@ -88,7 +88,7 @@ namespace Feeder.MCP.Editor.API
                 }
 
                 if (changed)
-                    UnityMcpPluginEditor.Instance.Save();
+                    MatrixPluginEditor.Instance.Save();
 
                 return new ToolToggleResult
                 {

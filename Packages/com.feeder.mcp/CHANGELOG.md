@@ -6,6 +6,8 @@ All notable changes to this package are documented here.
 
 ### Added
 
+- The Matrix server answers a `Compile` call over FMP/1 (C# source and reference paths in, assembly bytes or
+  diagnostics out) and lists `compile` in the capabilities of its register reply.
 - **Hyper Testing Mode (Experimental)** (**Tools > Feeder > Hyper Testing (Experimental)**, Windows only):
   several clone editors play test one project in parallel, each driven by its own `hyper-playtester-N`
   subagent.
@@ -54,6 +56,24 @@ All notable changes to this package are documented here.
 
 ### Changed
 
+- **The package ships no `.dll`.** The 39 precompiled libraries are gone. The parts Matrix used are source
+  in the package (`Feeder.Json`, `Feeder.Logging`, `Feeder.Rx`, `Feeder.Fmp`). Unity talks to the server
+  through a small WebSocket client of the existing `/fmp` hub. JSON now writes floating-point numbers in the shortest form that reads
+  back exactly (`0.1`, not `0.100000001`).
+- **`script-execute` compiles on the Matrix server** (server 0.3.0 carries the compiler; the payload grows by
+  10 MB) instead of inside the editor. The language version stays C# 12, the editor no longer freezes while
+  code compiles, and the tool needs the server to be running. A server older than 0.3.0 answers that it
+  cannot compile.
+- **Every assembly is Editor-only.** `Runtime/link.xml` and the build-time link merging are removed.
+- **Matrix keeps to names of its own.** The data types moved to the `Feeder.MCP.Data` namespace (custom
+  tools must update their `using`). Skill folders are
+  `matrix-<tool>`; folders that older versions wrote without the prefix are removed on the next load when
+  their content is Matrix's. Environment variables start with `FEEDER_MATRIX_` and the old names are not
+  read. Logs are in `Temp/feeder-matrix`, and the play-mode object is `Feeder.MainThreadDispatcher`.
+  The core assemblies and namespaces are now `Feeder.ToolHost`, `Feeder.ToolHost.Common` and
+  `Feeder.Reflect`, and the plugin classes are `MatrixPlugin`, `MatrixPluginEditor` and
+  `MatrixPluginRuntime`; custom tools update their `using` lines (for example
+  `Feeder.Reflect.Utils.MainThread.Instance.Run(...)`).
 - The **Tools > Feeder** menu is shorter: Setup..., Skills, Bridge, Space (experimental) and Server (the
   old MCP submenu, now with Reset Config and Debug inside it). Until Matrix is turned on, only Setup...
   works and the other items are greyed out. The windows are still called Matrix Bridge and Matrix Space.
@@ -66,11 +86,10 @@ All notable changes to this package are documented here.
 - Matrix Space agents are told to call `unity-tool-list` and `tool-set-enabled-state` when a Unity tool
   is missing from their list.
 - Matrix Setup also gitignores `.codex/config.toml`, which holds this machine's port.
-- The local server executable is now `matrix-server.exe` (was `gamedev-mcp-server.exe`). On update, the
-  project's old server is stopped and its folder in `Library/mcp-server` replaced, leftover
-  `mcp-server-staging-*` folders are removed, and wired agents get their config rewritten in the same
-  editor session. Restart the agent session afterwards. Projects with Matrix off just have the old
-  binary deleted.
+- The local server executable is now `matrix-server.exe`, installed in `Library/feeder-matrix`. On
+  update, the project's old Matrix server is stopped and the files it left in `Library` are removed, only
+  when every file in that folder is Matrix's own, and wired agents get their config rewritten in the same
+  editor session. Restart the agent session afterwards. Nothing is touched while Matrix is off.
 - The default tool timeout is now 60 s (was 10 s), so heavy editor work such as builds and NavMesh bakes
   is no longer cut off mid-run. Projects still on the old stored default of 10 s move to 60 s on the next
   editor load; any other value is kept.
@@ -80,9 +99,14 @@ All notable changes to this package are documented here.
 
 ### Fixed
 
+- Compiling the package no longer floods the Console with about 830 CS8632 nullable-annotation warnings
+  from `Feeder.Reflect`, `Feeder.ToolHost` and `Feeder.ToolHost.Common`.
+- Writing an agent config file (`.mcp.json`, `.cursor/mcp.json`, `.codex/config.toml`,
+  `.gemini/settings.json`) now replaces it atomically, keeps every entry that belongs to other tools, and
+  leaves a file it cannot parse untouched instead of overwriting it.
 - Several editors open at once no longer stop, kill or take over each other's MCP server. A server now
-  belongs to the project whose `Library/mcp-server` it runs from. Its process id is kept in
-  `Temp/mcp-server-owner.json` instead of the machine-wide editor preferences, and nothing is stopped
+  belongs to the project whose `Library/feeder-matrix` it runs from. Its process id is kept in
+  `Temp/feeder-matrix/server-owner.json` instead of the machine-wide editor preferences, and nothing is stopped
   unless it is confirmed to be this project's own server. This also covers hyper testing clones and
   projects still on an older version of the package.
 - Unity registers only with its own project's server, never with whatever answers on the port.
@@ -91,6 +115,11 @@ All notable changes to this package are documented here.
 - The Bridge no longer shows LINKING forever after the connection drops. It reconnects with the same
   back-off, shows what it is waiting for, and turns to FAULT when it gives up.
 - Hyper testing `down` and `purge` no longer fail when run from an agent tool call.
+- Hyper testing clones no longer inherit an MCP environment variable from the editor that started them,
+  so a clone never connects to the original editor's server.
+- Matrix Setup tells you to run `git rm --cached` only for a tracked config file that holds nothing but
+  Matrix's entry. For a file that may hold other tools' entries it tells you to keep it tracked and run
+  `git update-index --skip-worktree`.
 - The MCP server now counts only agents active in the last 10 minutes, so sessions left behind by closed
   clients or one-off scripts no longer pile up in the Bridge count. Requires the next server release.
 
@@ -106,6 +135,12 @@ All notable changes to this package are documented here.
 - `up` no longer reports "process exited" for a clone that is still starting, and `down` no longer has to
   kill a clone that was asked to quit: the quit runs from the update loop, which keeps running while the
   editor is in the background.
+
+### Removed
+
+- The unused SignalR connection layer and `IToolHostBuilder.Services`, `WithSkillFileGenerator<T>()`,
+  `WithDynamicToolFactory()` and `WithConfigFromArgsOrEnv()`: the builder wires its parts directly.
+- The `--url`, `--token` and `--auth` server flags, which nothing in the package passes.
 
 ## [0.87.1] - 2026-09-30
 

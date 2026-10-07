@@ -1,10 +1,10 @@
 #nullable enable
 using System;
 using System.Reflection;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Model;
-using AIGD;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
+using Feeder.Reflect;
+using Feeder.Reflect.Model;
+using Feeder.MCP.Data;
+using ILogger = Feeder.Logging.ILogger;
 
 namespace Feeder.MCP.Reflection.Converter
 {

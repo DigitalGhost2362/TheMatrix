@@ -1,8 +1,8 @@
 #nullable enable
 #if UNITY_6000_5_OR_NEWER
-using Feeder.ReflectorNet.Model;
-using AIGD;
-using R3;
+using Feeder.Reflect.Model;
+using Feeder.MCP.Data;
+using Feeder.Rx;
 
 namespace Feeder.MCP.Editor.Extensions
 {
@@ -10,7 +10,7 @@ namespace Feeder.MCP.Editor.Extensions
     {
         public static bool TryGetInstanceID(this SerializedMember member, out UnityEngine.EntityId entityId)
         {
-            var reflector = UnityMcpPluginEditor.Instance.Reflector;
+            var reflector = MatrixPluginEditor.Instance.Reflector;
             if (reflector == null)
             {
                 entityId = UnityEngine.EntityId.None;
@@ -50,7 +50,7 @@ namespace Feeder.MCP.Editor.Extensions
         }
         public static bool TryGetGameObjectInstanceID(this SerializedMember member, out UnityEngine.EntityId entityId)
         {
-            var reflector = UnityMcpPluginEditor.Instance.Reflector;
+            var reflector = MatrixPluginEditor.Instance.Reflector;
             if (reflector == null)
             {
                 entityId = UnityEngine.EntityId.None;

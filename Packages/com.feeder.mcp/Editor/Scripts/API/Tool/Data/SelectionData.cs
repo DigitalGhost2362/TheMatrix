@@ -3,15 +3,15 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Text.Json.Serialization;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet.Model;
-using AIGD;
+using Feeder.Json.Serialization;
+using Feeder.ToolHost;
+using Feeder.Reflect.Model;
+using Feeder.MCP.Data;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     public class SelectionData
     {

@@ -1,7 +1,7 @@
 #nullable enable
 using System.Collections.Generic;
 using System.Linq;
-using Feeder.McpPlugin;
+using Feeder.ToolHost;
 using Feeder.MCP.Runtime.Utils;
 
 namespace Feeder.MCP.Editor.API

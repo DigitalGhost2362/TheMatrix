@@ -156,7 +156,7 @@ namespace Feeder.MCP.Editor.HyperTesting
         public static string PoolFile => Path.Combine(ProjectRoot, "Library", "MatrixHyperTesting", "pool.json");
         public static string GitBaselineFile => Path.Combine(ProjectRoot, "Library", "MatrixHyperTesting", "origin-git-baseline.txt");
         public static string AgentsFolder => Path.Combine(ProjectRoot, ".claude", "agents");
-        public static string SkillFolder => Path.Combine(UnityMcpPluginEditor.SkillsRootFolderAbsolutePath, SkillId);
+        public static string SkillFolder => Path.Combine(MatrixPluginEditor.SkillsRootFolderAbsolutePath, SkillId);
 
         public static string ChannelFolder(string cloneRoot) => Path.Combine(cloneRoot, "Temp", "MatrixHyper");
         public static string StatusFile(string cloneRoot) => Path.Combine(ChannelFolder(cloneRoot), "status.json");

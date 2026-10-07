@@ -2,23 +2,21 @@
     "name": "Feeder.MCP.Runtime",
     "rootNamespace": "Feeder.MCP",
     "references": [
-        "Feeder.ReflectorNet",
-        "Feeder.McpPlugin.Common",
-        "Feeder.McpPlugin"
+        "Feeder.Reflect",
+        "Feeder.ToolHost.Common",
+        "Feeder.ToolHost",
+        "Feeder.Json",
+        "Feeder.Logging",
+        "Feeder.Rx",
+        "Feeder.Fmp"
     ],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": true,
-    "precompiledReferences": [
-        "R3.dll",
-        "System.Text.Json.dll",
-        "Microsoft.Extensions.Logging.dll",
-        "Microsoft.Extensions.Logging.Abstractions.dll",
-        "Microsoft.Extensions.DependencyInjection.Abstractions.dll",
-        "Microsoft.AspNetCore.SignalR.Client.dll",
-        "Microsoft.AspNetCore.SignalR.Client.Core.dll"
-    ],
+    "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],

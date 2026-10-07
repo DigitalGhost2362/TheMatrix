@@ -4,8 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Feeder.MCP.Editor.UI;
-using AiAgentConfiguratorRegistry = Feeder.McpPlugin.AgentConfig.AiAgentConfiguratorRegistry;
-using static Feeder.McpPlugin.Common.Consts.MCP.Server;
+using AiAgentConfiguratorRegistry = Feeder.ToolHost.AgentConfig.AiAgentConfiguratorRegistry;
+using static Feeder.ToolHost.Common.Consts.MCP.Server;
 
 namespace Feeder.MCP.Editor.MatrixSpace.Setup
 {
@@ -51,15 +51,15 @@ namespace Feeder.MCP.Editor.MatrixSpace.Setup
                 }
 
                 var settings = AgentConfiguratorSettingsFactory.Create();
-                var config = UnityMcpPluginEditor.TransportMethod == TransportMethod.stdio
+                var config = MatrixPluginEditor.TransportMethod == TransportMethod.stdio
                     ? configurator.GetStdioConfig(settings)
                     : configurator.GetHttpConfig(settings);
                 config.Configure();
                 ctx.Log($"MCP config written: {config.ConfigPath}");
 
                 // Keeps the config self-healing on future editor sessions.
-                UnityMcpPluginEditor.SetAutoConfigureAgent(configurator.AgentId, true);
-                UnityMcpPluginEditor.Instance.Save();
+                MatrixPluginEditor.SetAutoConfigureAgent(configurator.AgentId, true);
+                MatrixPluginEditor.Instance.Save();
             }
             catch (Exception ex)
             {

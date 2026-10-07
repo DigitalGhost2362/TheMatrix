@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Feeder.McpPlugin.Common.Model;
+using Feeder.ToolHost.Common.Model;
 using Feeder.MCP.Runtime.Utils;
 using Feeder.MCP.Editor.Persistence;
 using UnityEditor.TestTools.TestRunner.Api;
@@ -54,7 +54,7 @@ namespace Feeder.MCP.Editor.API.TestRunner
         {
             int newCount = System.Threading.Interlocked.Increment(ref counter);
 
-            UnityMcpPluginEditor.Instance.LogTrace("Ctor", typeof(TestResultCollector));
+            MatrixPluginEditor.Instance.LogTrace("Ctor", typeof(TestResultCollector));
 
             if (newCount > 1)
                 throw new InvalidOperationException($"Only one instance of {nameof(TestResultCollector)} is allowed. Current count: {newCount}");
@@ -62,7 +62,7 @@ namespace Feeder.MCP.Editor.API.TestRunner
 
         public void RunStarted(ITestAdaptor testsToRun)
         {
-            UnityMcpPluginEditor.Instance.LogInfo("RunStarted", typeof(TestResultCollector));
+            MatrixPluginEditor.Instance.LogInfo("RunStarted", typeof(TestResultCollector));
 
             startTime = DateTime.Now;
             var testCount = CountTests(testsToRun);
@@ -79,13 +79,13 @@ namespace Feeder.MCP.Editor.API.TestRunner
             Application.logMessageReceivedThreaded -= OnLogMessageReceived;
             Application.logMessageReceivedThreaded += OnLogMessageReceived;
 
-            UnityMcpPluginEditor.Instance.LogInfo("Run {testMode} started: {testCount} tests.",
+            MatrixPluginEditor.Instance.LogInfo("Run {testMode} started: {testCount} tests.",
                 typeof(TestResultCollector), TestModeAsString, testCount);
         }
 
         public void RunFinished(ITestResultAdaptor result)
         {
-            UnityMcpPluginEditor.Instance.LogInfo("RunFinished", typeof(TestResultCollector));
+            MatrixPluginEditor.Instance.LogInfo("RunFinished", typeof(TestResultCollector));
 
             // Unsubscribe from log messages
             Application.logMessageReceivedThreaded -= OnLogMessageReceived;
@@ -106,15 +106,15 @@ namespace Feeder.MCP.Editor.API.TestRunner
                 _summary.Status = TestRunStatus.Unknown;
             }
 
-            UnityMcpPluginEditor.Instance.LogInfo("Run {testMode} finished with {totalTests} test results. Result status: {status}",
+            MatrixPluginEditor.Instance.LogInfo("Run {testMode} finished with {totalTests} test results. Result status: {status}",
                 typeof(TestResultCollector), TestModeAsString, _summary.TotalTests, result.TestStatus);
-            UnityMcpPluginEditor.Instance.LogInfo("Final duration: {duration:mm\\:ss\\.fff}. Completed: {completed}/{total}",
+            MatrixPluginEditor.Instance.LogInfo("Final duration: {duration:mm\\:ss\\.fff}. Completed: {completed}/{total}",
                 typeof(TestResultCollector), duration, _results.Count, _summary.TotalTests);
 
-            UnityMcpPluginEditor.Instance.BuildMcpPluginIfNeeded();
+            MatrixPluginEditor.Instance.BuildToolHostIfNeeded();
 
             if (!EnvironmentUtils.IsCi())
-                UnityMcpPluginEditor.ConnectIfNeeded();
+                MatrixPluginEditor.ConnectIfNeeded();
 
             var requestId = TestCallRequestID.Value;
             TestCallRequestID.Value = string.Empty;
@@ -127,13 +127,13 @@ namespace Feeder.MCP.Editor.API.TestRunner
                     includeMessageStacktrace: IncludeMessageStacktrace.Value,
                     includeLogsStacktrace: IncludeLogsStacktrace.Value);
 
-                var mcpPlugin = UnityMcpPluginEditor.Instance.McpPluginInstance ?? throw new InvalidOperationException("MCP Plugin instance is not available.");
+                var mcpPlugin = MatrixPluginEditor.Instance.ToolHostInstance ?? throw new InvalidOperationException("MCP Plugin instance is not available.");
 
                 var response = ResponseCallValueTool<TestRunResponse>
                     .SuccessStructured(mcpPlugin.McpManager.Reflector.JsonSerializer.SerializeToNode(structuredResponse))
                     .SetRequestID(requestId);
 
-                _ = UnityMcpPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
+                _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
                 {
                     RequestId = requestId,
                     Result = response
@@ -170,7 +170,7 @@ namespace Feeder.MCP.Editor.API.TestRunner
                     _ => string.Empty
                 };
 
-                UnityMcpPluginEditor.Instance.LogInfo("{emoji} Test finished ({counter}/{total}): {testName} - {testStatus}",
+                MatrixPluginEditor.Instance.LogInfo("{emoji} Test finished ({counter}/{total}): {testName} - {testStatus}",
                     typeof(TestResultCollector), statusEmoji, _results.Count, _summary.TotalTests, result.Test.FullName, result.TestStatus);
 
                 // Update summary counts
@@ -193,7 +193,7 @@ namespace Feeder.MCP.Editor.API.TestRunner
                 // Check if all tests are complete
                 if (_results.Count >= _summary.TotalTests)
                 {
-                    UnityMcpPluginEditor.Instance.LogInfo("All tests completed via TestFinished. Final duration: {duration:mm\\:ss\\.fff}",
+                    MatrixPluginEditor.Instance.LogInfo("All tests completed via TestFinished. Final duration: {duration:mm\\:ss\\.fff}",
                         typeof(TestResultCollector), _summary.Duration);
                 }
             }

@@ -1,7 +1,7 @@
 #nullable enable
 using System.ComponentModel;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     public class UiLayoutIssue
     {

@@ -2,9 +2,9 @@
 using System;
 using System.ComponentModel;
 using System.Reflection;
-using Feeder.McpPlugin;
-using Feeder.McpPlugin.Common.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.ToolHost.Common.Model;
+using Feeder.Reflect.Utils;
 using UnityEditor;
 using UnityEngine;
 
@@ -125,7 +125,7 @@ namespace Feeder.MCP.Editor.API
                         UnityEngine.Object.DestroyImmediate(tex);
                 }
 
-                return ResponseCallTool.Image(pngBytes, Feeder.McpPlugin.Common.Consts.MimeType.ImagePng,
+                return ResponseCallTool.Image(pngBytes, Feeder.ToolHost.Common.Consts.MimeType.ImagePng,
                     $"Screenshot from Game View ({width}x{height})");
             });
         }

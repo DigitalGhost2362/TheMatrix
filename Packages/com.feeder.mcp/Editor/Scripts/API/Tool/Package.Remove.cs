@@ -2,9 +2,9 @@
 using System;
 using System.ComponentModel;
 using System.Threading.Tasks;
-using Feeder.McpPlugin;
-using Feeder.McpPlugin.Common.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.ToolHost.Common.Model;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Editor.Utils;
 using UnityEditor.PackageManager;
 
@@ -87,7 +87,7 @@ namespace Feeder.MCP.Editor.API
 
                     if (!isInstalled)
                     {
-                        _ = UnityMcpPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
+                        _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
                         {
                             RequestId = requestId,
                             Result = ResponseCallTool.Error(Error.PackageNotFound(cleanPackageId)).SetRequestID(requestId)
@@ -104,7 +104,7 @@ namespace Feeder.MCP.Editor.API
                 if (removeRequest.Status == StatusCode.Failure)
                 {
                     var errorMessage = Error.PackageOperationFailed("remove", cleanPackageId, removeRequest.Error?.message ?? "Unknown error");
-                    _ = UnityMcpPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
+                    _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
                     {
                         RequestId = requestId,
                         Result = ResponseCallTool.Error(errorMessage).SetRequestID(requestId)

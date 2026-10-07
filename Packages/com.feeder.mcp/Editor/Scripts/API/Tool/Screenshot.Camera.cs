@@ -1,10 +1,10 @@
 #nullable enable
 using System.ComponentModel;
 using System.Linq;
-using Feeder.McpPlugin;
-using Feeder.McpPlugin.Common.Model;
-using Feeder.ReflectorNet.Utils;
-using AIGD;
+using Feeder.ToolHost;
+using Feeder.ToolHost.Common.Model;
+using Feeder.Reflect.Utils;
+using Feeder.MCP.Data;
 using Feeder.MCP.Runtime.Extensions;
 using UnityEngine;
 
@@ -102,7 +102,7 @@ namespace Feeder.MCP.Editor.API
                     Object.DestroyImmediate(rt);
                 }
 
-                return ResponseCallTool.Image(pngBytes, Feeder.McpPlugin.Common.Consts.MimeType.ImagePng,
+                return ResponseCallTool.Image(pngBytes, Feeder.ToolHost.Common.Consts.MimeType.ImagePng,
                     $"Screenshot from camera '{camera.name}' ({width}x{height})");
             });
         }

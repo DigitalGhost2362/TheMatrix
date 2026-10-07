@@ -1,7 +1,7 @@
 #nullable enable
 #if !UNITY_6000_5_OR_NEWER
 using System.Linq;
-using AIGD;
+using Feeder.MCP.Data;
 using UnityEngine;
 
 namespace Feeder.MCP.Runtime.Extensions

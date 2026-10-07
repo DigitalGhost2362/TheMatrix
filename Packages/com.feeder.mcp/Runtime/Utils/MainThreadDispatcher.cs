@@ -31,7 +31,7 @@ namespace Feeder.MCP.Runtime.Utils
             if (!Application.isPlaying)
                 return;
 
-            var obj = new GameObject("MainThreadDispatcher");
+            var obj = new GameObject("Feeder.MainThreadDispatcher");
             instance = obj.AddComponent<MainThreadDispatcher>();
             DontDestroyOnLoad(obj);
         }

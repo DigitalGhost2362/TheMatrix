@@ -1,10 +1,10 @@
 #nullable enable
 #if !UNITY_6000_5_OR_NEWER
 using System;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using Feeder.McpPlugin;
-using AIGD;
+using Feeder.Json;
+using Feeder.Json.Serialization;
+using Feeder.ToolHost;
+using Feeder.MCP.Data;
 
 namespace Feeder.MCP.JsonConverters
 {

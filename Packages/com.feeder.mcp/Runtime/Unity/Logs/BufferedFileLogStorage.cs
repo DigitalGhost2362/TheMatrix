@@ -3,14 +3,14 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
+using Feeder.Json;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 using UnityEngine;
 
 namespace Feeder.MCP
 {
-    using ILogger = Microsoft.Extensions.Logging.ILogger;
+    using ILogger = Feeder.Logging.ILogger;
     public class BufferedFileLogStorage : FileLogStorage
     {
         protected readonly int _flushEntriesThreshold;

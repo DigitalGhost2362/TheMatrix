@@ -2,9 +2,9 @@
 using System;
 using System.ComponentModel;
 using System.IO;
-using System.Text.Json;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet.Utils;
+using Feeder.Json;
+using Feeder.ToolHost;
+using Feeder.Reflect.Utils;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -26,7 +26,7 @@ namespace Feeder.MCP.Editor.API
             "## Errors\n\n" +
             "- Returns `[Error]` when `filePath` is empty or the write fails (message includes the underlying exception text).\n\n" +
             "## Behavior\n\n" +
-            "Uses `System.Text.Json` (BCL) for serialization and `System.IO.File.WriteAllText` for the write. " +
+            "Uses `Feeder.Json` for serialization and `System.IO.File.WriteAllText` for the write. " +
             "No external Unity package is required.")]
         [Description("Saves a profiler snapshot (status + memory + rendering + script + frame) to a JSON file.")]
         public string SaveData
@@ -57,7 +57,7 @@ namespace Feeder.MCP.Editor.API
                         frame = CaptureFrame()
                     };
 
-                    var json = System.Text.Json.JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
+                    var json = Feeder.Json.JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
                     var dir = Path.GetDirectoryName(filePath);
                     if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                         Directory.CreateDirectory(dir);
