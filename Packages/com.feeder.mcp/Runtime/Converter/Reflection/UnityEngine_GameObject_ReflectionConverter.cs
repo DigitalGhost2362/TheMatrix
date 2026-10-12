@@ -3,16 +3,16 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Text.Json;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Model;
-using Feeder.ReflectorNet.Utils;
-using AIGD;
+using Feeder.Json;
+using Feeder.Reflect;
+using Feeder.Reflect.Model;
+using Feeder.Reflect.Utils;
+using Feeder.MCP.Data;
 using Feeder.MCP.Runtime.Extensions;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 using UnityEngine;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
-using LogLevel = Microsoft.Extensions.Logging.LogLevel;
+using ILogger = Feeder.Logging.ILogger;
+using LogLevel = Feeder.Logging.LogLevel;
 
 namespace Feeder.MCP.Reflection.Converter
 {
@@ -37,7 +37,7 @@ namespace Feeder.MCP.Reflection.Converter
         // UnityGenericReflectionConverter<GameObject> directly), so it needs its own override.
         // Treat GameObject-ref JSON nodes (e.g. {"instanceID": ...}) as atomic on the merge-patch
         // (Reflector.TryPatch) path so they resolve to the live GameObject instead of being
-        // structurally descended. Safe because ReflectorNet 5.3.0 only applies atomic delegation
+        // structurally descended. Safe because the reflection layer only applies atomic delegation
         // to non-root nodes.
         public override bool TreatJsonObjectAsAtomicValue(Type type) => true;
 

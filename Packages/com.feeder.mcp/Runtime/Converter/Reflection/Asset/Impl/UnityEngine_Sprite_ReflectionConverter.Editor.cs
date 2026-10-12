@@ -2,9 +2,9 @@
 #if UNITY_EDITOR && UNITY_6000_5_OR_NEWER
 using System;
 using System.Linq;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Model;
-using Microsoft.Extensions.Logging;
+using Feeder.Reflect;
+using Feeder.Reflect.Model;
+using Feeder.Logging;
 
 namespace Feeder.MCP.Reflection.Converter
 {

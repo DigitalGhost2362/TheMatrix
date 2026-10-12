@@ -1,5 +1,5 @@
 #nullable enable
-using Feeder.McpPlugin;
+using Feeder.ToolHost;
 using UnityEditor;
 
 namespace Feeder.MCP.Editor.API

@@ -1,11 +1,11 @@
 #nullable enable
 using System;
 using System.ComponentModel;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization.Metadata;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet.Utils;
+using Feeder.Json;
+using Feeder.Json.Nodes;
+using Feeder.Json.Serialization.Metadata;
+using Feeder.ToolHost;
+using Feeder.Reflect.Utils;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -74,7 +74,7 @@ namespace Feeder.MCP.Editor.API
                 throw new ArgumentException($"Type '{typeName}' not found in any loaded assembly. " +
                     "Use the full type name including namespace (e.g. 'UnityEngine.Vector3').", nameof(typeName));
 
-            var reflector = UnityMcpPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
+            var reflector = MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
 
             var schema = reflector.GetSchema(type);
             if (schema is JsonObject jsonObj)

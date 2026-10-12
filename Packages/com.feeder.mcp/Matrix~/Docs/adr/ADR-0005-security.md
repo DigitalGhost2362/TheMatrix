@@ -2,7 +2,7 @@
 
 Status: Accepted — 2026-07-10
 
-The previous server binds `0.0.0.0` (verified 2026-07-10 on PID 31324) — any LAN peer can reach the MCP endpoint. The matrix fixes this class of issue by design:
+The previous server binds `0.0.0.0` — any LAN peer can reach the MCP endpoint. The matrix fixes this class of issue by design:
 
 ## Mandatory requirements (Phase 8 gate)
 

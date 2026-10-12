@@ -40,6 +40,7 @@ public sealed record UnityRegisterResponse
     [Key(4)] public int QueueCapacity { get; set; } = FmpConstants.DefaultQueueCapacity;
     [Key(5)] public int HeartbeatIntervalSeconds { get; set; } = FmpConstants.HeartbeatIntervalSeconds;
     [Key(6)] public FmpError? Error { get; init; }
+    [Key(7)] public string[] Capabilities { get; set; } = [];
 }
 
 [MessagePackObject]
@@ -106,4 +107,23 @@ public sealed record McpClientInfo
     [Key(2)] public string ClientTitle { get; set; } = string.Empty;
     [Key(3)] public string ClientVersion { get; set; } = string.Empty;
     [Key(4)] public bool IsConnected { get; init; }
+}
+
+[MessagePackObject]
+public sealed record CompileRequest
+{
+    [Key(0)] public required string Source { get; init; }
+    [Key(1)] public string[] ReferencePaths { get; set; } = [];
+    [Key(2)] public string AssemblyName { get; set; } = FmpConstants.DefaultCompileAssemblyName;
+    [Key(3)] public bool SyntaxOnly { get; init; }
+    [Key(4)] public int TimeoutMs { get; init; }
+}
+
+[MessagePackObject]
+public sealed record CompileResponse
+{
+    [Key(0)] public bool Success { get; init; }
+    [Key(1)] public byte[]? Assembly { get; init; }
+    [Key(2)] public string[] Diagnostics { get; set; } = [];
+    [Key(3)] public string? Error { get; init; }
 }

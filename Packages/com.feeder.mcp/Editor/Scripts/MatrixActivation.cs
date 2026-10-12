@@ -20,22 +20,22 @@ namespace Feeder.MCP.Editor
         public static void Enable()
         {
             EditorPrefs.SetBool(EnabledKey, true);
-            UnityMcpPluginEditor.KeepConnected = true;
-            UnityMcpPluginEditor.KeepServerRunning = true;
-            UnityMcpPluginEditor.Instance.Save();
+            MatrixPluginEditor.KeepConnected = true;
+            MatrixPluginEditor.KeepServerRunning = true;
+            MatrixPluginEditor.Instance.Save();
             McpServerManager.Activate();
             Startup.Activate();
-            _ = UnityMcpPluginEditor.ConnectIfNeeded();
+            _ = MatrixPluginEditor.ConnectIfNeeded();
         }
 
         public static void Disable()
         {
             EditorPrefs.DeleteKey(EnabledKey);
-            UnityMcpPluginEditor.KeepConnected = false;
-            UnityMcpPluginEditor.KeepServerRunning = false;
-            UnityMcpPluginEditor.Instance.Save();
-            if (UnityMcpPluginEditor.Instance.HasMcpPluginInstance)
-                _ = UnityMcpPluginEditor.Instance.Disconnect();
+            MatrixPluginEditor.KeepConnected = false;
+            MatrixPluginEditor.KeepServerRunning = false;
+            MatrixPluginEditor.Instance.Save();
+            if (MatrixPluginEditor.Instance.HasToolHostInstance)
+                _ = MatrixPluginEditor.Instance.Disconnect();
             McpServerManager.StopServer();
         }
 

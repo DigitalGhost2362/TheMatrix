@@ -2,10 +2,10 @@
 using System;
 using System.ComponentModel;
 using System.Linq;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.Reflect;
+using Feeder.Reflect.Model;
+using Feeder.Reflect.Utils;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -86,7 +86,7 @@ namespace Feeder.MCP.Editor.API
                 if (methods.Count == 0)
                     return $"[Success] Method not found. With request:\n{filter}";
 
-                var reflector = UnityMcpPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
+                var reflector = MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
 
                 var methodRefs = methods
                     .Select(method => new MethodData(reflector, method, justRef: false))

@@ -2,9 +2,9 @@
 using System;
 using System.ComponentModel;
 using System.IO;
-using Feeder.McpPlugin;
+using Feeder.ToolHost;
 using Feeder.MCP.Utils;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -28,8 +28,8 @@ namespace Feeder.MCP.Editor.API
             "traversal segments are rejected. When null/empty, the editor's configured `SkillsRootFolderAbsolutePath` " +
             "is used.\n\n" +
             "## Behavior\n\n" +
-            "Creates the destination folder if missing, then invokes `McpPluginInstance.GenerateSkillFiles(...)` to " +
-            "emit a `SKILL.md` per enabled MCP tool and remove the skill folders of disabled tools. The plugin's `SkillsPath` is temporarily swapped to the target " +
+            "Creates the destination folder if missing, then invokes `ToolHostInstance.GenerateSkillFiles(...)` to " +
+            "emit `matrix-<tool>/SKILL.md` per enabled MCP tool and remove the ones of disabled tools; a skill folder this package did not write is never changed. The plugin's `SkillsPath` is temporarily swapped to the target " +
             "folder and restored in `finally` so the on-disk configuration is unchanged after the call returns.")]
         [Description("Generate all skills from the existed Tools in the Unity Project.")]
         public void GenerateAll
@@ -42,7 +42,7 @@ namespace Feeder.MCP.Editor.API
 
             var userProvidedPath = !string.IsNullOrEmpty(path);
             if (!userProvidedPath)
-                path = UnityMcpPluginEditor.SkillsRootFolderAbsolutePath;
+                path = MatrixPluginEditor.SkillsRootFolderAbsolutePath;
 
             if (userProvidedPath)
             {
@@ -57,7 +57,7 @@ namespace Feeder.MCP.Editor.API
                         "Path must not contain '..' traversal segments. Use a path relative to the project root.",
                         nameof(path));
 
-                path = Path.Combine(UnityMcpPluginEditor.ProjectRootPath, path);
+                path = Path.Combine(MatrixPluginEditor.ProjectRootPath, path);
             }
 
             if (!Directory.Exists(path))
@@ -68,20 +68,20 @@ namespace Feeder.MCP.Editor.API
 
             logger.LogInformation("Generating all skills in folder: {Path}", path);
 
-            var mcpPlugin = UnityMcpPluginEditor.Instance.McpPluginInstance
+            var mcpPlugin = MatrixPluginEditor.Instance.ToolHostInstance
                 ?? throw new InvalidOperationException(
-                    "McpPluginInstance is null. The Feeder MCP plugin may not be fully initialized. " +
+                    "ToolHostInstance is null. The Feeder MCP plugin may not be fully initialized. " +
                     "Ensure the plugin has completed startup before calling unity-skill-generate.");
 
-            var originalSkillsPath = UnityMcpPluginEditor.SkillsPath;
+            var originalSkillsPath = MatrixPluginEditor.SkillsPath;
             try
             {
-                UnityMcpPluginEditor.SkillsPath = path!;
-                mcpPlugin.GenerateSkillFiles(UnityMcpPluginEditor.ProjectRootPath);
+                MatrixPluginEditor.SkillsPath = path!;
+                mcpPlugin.GenerateSkillFiles(MatrixPluginEditor.ProjectRootPath);
             }
             finally
             {
-                UnityMcpPluginEditor.SkillsPath = originalSkillsPath;
+                MatrixPluginEditor.SkillsPath = originalSkillsPath;
             }
         }
     }

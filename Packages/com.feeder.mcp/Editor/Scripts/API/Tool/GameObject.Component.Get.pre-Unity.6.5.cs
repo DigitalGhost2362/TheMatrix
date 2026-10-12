@@ -4,14 +4,14 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Model;
-using Feeder.ReflectorNet.Utils;
-using AIGD;
+using Feeder.ToolHost;
+using Feeder.Reflect;
+using Feeder.Reflect.Model;
+using Feeder.Reflect.Utils;
+using Feeder.MCP.Data;
 using Feeder.MCP.Runtime.Extensions;
 using Feeder.MCP.Utils;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -108,7 +108,7 @@ namespace Feeder.MCP.Editor.API
                     Component = new ComponentDataShallow(targetComponent)
                 };
 
-                var reflector = UnityMcpPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
+                var reflector = MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
                 var logger = UnityLoggerFactory.LoggerFactory.CreateLogger<Tool_GameObject>();
 
                 if (hasPaths)

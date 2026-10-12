@@ -4,8 +4,13 @@
     "references": [
         "Feeder.MCP.Editor",
         "Feeder.MCP.Runtime",
-        "Feeder.McpPlugin",
-        "Feeder.McpPlugin.Common"
+        "Feeder.ToolHost",
+        "Feeder.ToolHost.Common",
+        "Feeder.Reflect",
+        "Feeder.Json",
+        "Feeder.Logging",
+        "Feeder.Rx",
+        "Feeder.Fmp"
     ],
     "includePlatforms": [
         "Editor"
@@ -14,8 +19,7 @@
     "allowUnsafeCode": false,
     "overrideReferences": true,
     "precompiledReferences": [
-        "nunit.framework.dll",
-        "Microsoft.Extensions.Logging.Abstractions.dll"
+        "nunit.framework.dll"
     ],
     "autoReferenced": false,
     "defineConstraints": [],

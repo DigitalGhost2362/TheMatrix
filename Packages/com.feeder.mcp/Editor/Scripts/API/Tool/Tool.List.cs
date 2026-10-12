@@ -1,13 +1,13 @@
 #nullable enable
-using AIGD;
+using Feeder.MCP.Data;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
+using Feeder.Json.Nodes;
+using Feeder.Json.Serialization;
 using System.Text.RegularExpressions;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Utils;
 
 namespace Feeder.MCP.Editor.API
@@ -50,7 +50,7 @@ namespace Feeder.MCP.Editor.API
             "- `includeDescription` (default `false`) — populate each tool's `Description` field.\n" +
             "- `includeInputs` (default `None`) — one of `None`, `Inputs` (names only), `InputsWithDescription` (names + descriptions).\n\n" +
             "## Behavior\n\n" +
-            "Iterates `UnityMcpPluginEditor.Instance.Tools.GetAllTools()`, evaluates the filter (if any), and projects " +
+            "Iterates `MatrixPluginEditor.Instance.Tools.GetAllTools()`, evaluates the filter (if any), and projects " +
             "each surviving tool into a `ToolInfoData` honoring the verbosity toggles.")]
         [Description("List all Feeder MCP tools registered in the connected Unity Editor instance, including disabled ones " +
             "(see `enabled`). Only a core set is enabled to save tokens; turn another on with tool-set-enabled-state. " +
@@ -70,7 +70,7 @@ namespace Feeder.MCP.Editor.API
         {
             return MainThread.Instance.Run(() =>
             {
-                var toolManager = UnityMcpPluginEditor.Instance.Tools
+                var toolManager = MatrixPluginEditor.Instance.Tools
                     ?? throw new InvalidOperationException(Error.ToolManagerNotAvailable());
 
                 var allTools = toolManager.GetAllTools();

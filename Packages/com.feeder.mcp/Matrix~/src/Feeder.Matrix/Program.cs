@@ -1,6 +1,7 @@
 using System.Net;
 using Feeder.Matrix;
 using Feeder.Matrix.Backends;
+using Feeder.Matrix.Compile;
 using Feeder.Matrix.Protocol;
 using Feeder.Matrix.Unity;
 using Microsoft.AspNetCore.Http.Connections;
@@ -52,6 +53,7 @@ try
     builder.Services.AddSingleton<MockUnityBackend>();
     builder.Services.AddSingleton<UnityLinkBackend>();
     builder.Services.AddSingleton<IUnityBackend, BackendRouter>();
+    builder.Services.AddSingleton<ScriptCompiler>();
 
     builder.Services
         .AddSignalR(options => options.MaximumReceiveMessageSize = matrixOptions.MaxRequestBodyBytes)
@@ -171,7 +173,7 @@ static ReadResourceResult throwResourceNotFound(string? uri)
 
 public static class MatrixVersion
 {
-    public const string Value = "0.2.1";
+    public const string Value = "0.3.0";
 }
 
 // Exposes the entry point to WebApplicationFactory-based integration tests.

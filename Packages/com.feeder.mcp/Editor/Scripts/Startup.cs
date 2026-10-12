@@ -4,7 +4,7 @@ using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Utils;
 using UnityEditor;
 using UnityEngine;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
+using ILogger = Feeder.Logging.ILogger;
 
 namespace Feeder.MCP.Editor
 {
@@ -27,8 +27,8 @@ namespace Feeder.MCP.Editor
 
         internal static void Activate()
         {
-            UnityMcpPluginEditor.Instance.BuildMcpPluginIfNeeded();
-            UnityMcpPluginEditor.Instance.AddUnityLogCollectorIfNeeded(() => new BufferedFileLogStorage());
+            MatrixPluginEditor.Instance.BuildToolHostIfNeeded();
+            MatrixPluginEditor.Instance.AddUnityLogCollectorIfNeeded(() => new BufferedFileLogStorage());
 
             if (_activated)
                 return;

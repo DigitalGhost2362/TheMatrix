@@ -1,7 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.Text.Json.Nodes;
+using Feeder.Json.Nodes;
 using UnityEngine;
 using MinMaxCurve = UnityEngine.ParticleSystem.MinMaxCurve;
 using MinMaxGradient = UnityEngine.ParticleSystem.MinMaxGradient;

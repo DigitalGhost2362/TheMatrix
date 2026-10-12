@@ -1,9 +1,9 @@
 #nullable enable
 using System.Text;
-using Feeder.McpPlugin;
-using Feeder.McpPlugin.Skills;
+using Feeder.ToolHost;
+using Feeder.ToolHost.Skills;
 using Feeder.MCP.Editor.API;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 
 namespace Feeder.MCP.Editor.Utils
 {

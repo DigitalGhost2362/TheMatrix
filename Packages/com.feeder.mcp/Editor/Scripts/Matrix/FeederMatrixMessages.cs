@@ -40,6 +40,26 @@ namespace Feeder.MCP.Editor.Matrix
         public int QueueCapacity { get; set; }
         public int HeartbeatIntervalSeconds { get; set; }
         public FmpError? Error { get; set; }
+        public string[]? Capabilities { get; set; }
+    }
+
+    [Serializable]
+    internal sealed class CompileRequest
+    {
+        public string Source { get; set; } = string.Empty;
+        public string[] ReferencePaths { get; set; } = Array.Empty<string>();
+        public string AssemblyName { get; set; } = "DynamicAssembly";
+        public bool SyntaxOnly { get; set; }
+        public int TimeoutMs { get; set; }
+    }
+
+    [Serializable]
+    internal sealed class CompileResponse
+    {
+        public bool Success { get; set; }
+        public byte[]? Assembly { get; set; }
+        public string[]? Diagnostics { get; set; }
+        public string? Error { get; set; }
     }
 
     [Serializable]

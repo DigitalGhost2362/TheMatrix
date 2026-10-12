@@ -2,9 +2,9 @@
   <PropertyGroup>
     <RootNamespace>Feeder.Matrix</RootNamespace>
     <AssemblyName>feeder-mcp-server</AssemblyName>
-    <Version>0.2.1</Version>
-    <AssemblyVersion>0.2.1.0</AssemblyVersion>
-    <FileVersion>0.2.1.0</FileVersion>
+    <Version>0.3.0</Version>
+    <AssemblyVersion>0.3.0.0</AssemblyVersion>
+    <FileVersion>0.3.0.0</FileVersion>
     <Authors>Feeder</Authors>
     <Company>Feeder</Company>
     <Product>Feeder MCP Server</Product>
@@ -14,14 +14,18 @@
     <RepositoryUrl>https://github.com/BingoBoiz/TheMatrix</RepositoryUrl>
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <!-- invariant globalization never loads localized resources; keeps the compiler's locales out of the exe -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.4.1" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" Version="10.0.9" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" />
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Feeder.Matrix.UnitTests" />
+    <InternalsVisibleTo Include="Feeder.Matrix.CompileTests" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Feeder.Matrix.Protocol\Feeder.Matrix.Protocol.csproj" />

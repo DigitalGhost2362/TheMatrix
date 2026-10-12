@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     [Description("Array of GameObjects in opened Prefab or in the active Scene.")]
     public class GameObjectRefList : List<GameObjectRef>

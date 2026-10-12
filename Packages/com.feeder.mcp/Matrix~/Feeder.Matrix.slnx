@@ -11,5 +11,10 @@
     <Project Path="tests/Feeder.Matrix.IntegrationTests/Feeder.Matrix.IntegrationTests.csproj" />
     <Project Path="tests/Feeder.Matrix.ProtocolTests/Feeder.Matrix.ProtocolTests.csproj" />
     <Project Path="tests/Feeder.Matrix.UnitTests/Feeder.Matrix.UnitTests.csproj" />
+    <Project Path="tests/Feeder.Fmp.Tests/Feeder.Fmp.Tests.csproj" />
+    <Project Path="tests/Feeder.Json.ParityTests/Feeder.Json.ParityTests.csproj" />
+    <Project Path="tests/Feeder.Logging.Tests/Feeder.Logging.Tests.csproj" />
+    <Project Path="tests/Feeder.Matrix.CompileTests/Feeder.Matrix.CompileTests.csproj" />
+    <Project Path="tests/Feeder.Rx.Tests/Feeder.Rx.Tests.csproj" />
   </Folder>
 </Solution>

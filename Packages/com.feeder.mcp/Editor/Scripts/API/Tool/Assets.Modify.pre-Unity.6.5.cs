@@ -4,15 +4,15 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet.Json;
-using Feeder.ReflectorNet.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.Reflect.Json;
+using Feeder.Reflect.Model;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Editor.Utils;
-using AIGD;
+using Feeder.MCP.Data;
 using Feeder.MCP.Runtime.Extensions;
 using Feeder.MCP.Utils;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 using UnityEditor;
 
 namespace Feeder.MCP.Editor.API
@@ -80,7 +80,7 @@ namespace Feeder.MCP.Editor.API
 
                 var obj = (object?)asset;
                 var logs = new Logs();
-                var reflector = UnityMcpPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
+                var reflector = MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
                 var logger = UnityLoggerFactory.LoggerFactory.CreateLogger<Tool_Assets>();
 
                 var anySuccess = false;

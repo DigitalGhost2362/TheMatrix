@@ -4,7 +4,7 @@ Status: Accepted — 2026-07-10
 
 ## Context
 
-Feeder Local Matrix replaces the previous server executable (101 MB, binds `0.0.0.0`) with a matrix we own, running fully local with lower latency. This phase swaps the server only; the Unity-side tool implementations stay as-is.
+Feeder Local Matrix replaces the previous server executable with a matrix we own, running fully local with lower latency. This phase swaps the server only; the Unity-side tool implementations stay as-is.
 
 ## Decision
 
@@ -29,4 +29,3 @@ Unity domain reload kills any in-editor endpoint mid-request. A persistent exter
 
 - Two processes to ship (matrix + shim) plus the Unity adapter.
 - Protocol between Unity and matrix is ours to version (see [feeder-matrix-protocol-v1.md](../protocol/feeder-matrix-protocol-v1.md)).
-- Replacing the `Feeder.McpPlugin*` DLLs for full source independence is a later phase; the matrix must interoperate with the current plugin's tool registry semantics in the meantime.

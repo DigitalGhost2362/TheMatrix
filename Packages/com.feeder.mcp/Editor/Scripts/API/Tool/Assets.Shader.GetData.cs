@@ -3,13 +3,13 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet.Model;
-using Feeder.ReflectorNet.Utils;
-using AIGD;
+using Feeder.ToolHost;
+using Feeder.Reflect.Model;
+using Feeder.Reflect.Utils;
+using Feeder.MCP.Data;
 using Feeder.MCP.Runtime.Extensions;
 using Feeder.MCP.Utils;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -56,7 +56,7 @@ namespace Feeder.MCP.Editor.API
             "subtree and/or filter by name regex / max depth / type via Reflector.View. The result populates " +
             "'View' on the returned ShaderData. These two parameters are mutually exclusive.\n" +
             "Path syntax: 'fieldName', 'nested/field', 'arrayField/[i]', 'dictField/[key]'. Leading '#/' is stripped.")]
-        public AIGD.ShaderData GetData
+        public Feeder.MCP.Data.ShaderData GetData
         (
             AssetObjectRef assetRef,
             [Description("Include compilation error and warning messages. Default: true")]
@@ -111,7 +111,7 @@ namespace Feeder.MCP.Editor.API
 
                 if (hasPaths || hasViewQuery)
                 {
-                    var reflector = UnityMcpPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
+                    var reflector = MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
                     var logger = UnityLoggerFactory.LoggerFactory.CreateLogger<Tool_Assets_Shader>();
 
                     if (hasPaths)
@@ -125,9 +125,9 @@ namespace Feeder.MCP.Editor.API
             });
         }
 
-        static AIGD.ShaderData BuildShaderData(Shader shader, ShaderDataOptions options)
+        static Feeder.MCP.Data.ShaderData BuildShaderData(Shader shader, ShaderDataOptions options)
         {
-            var data = new AIGD.ShaderData
+            var data = new Feeder.MCP.Data.ShaderData
             {
                 Reference = new AssetObjectRef(shader),
                 Name = shader.name,
@@ -143,7 +143,7 @@ namespace Feeder.MCP.Editor.API
                 var messages = ShaderUtil.GetShaderMessages(shader);
                 if (messages != null && messages.Length > 0)
                 {
-                    data.Messages = messages.Select(msg => new AIGD.ShaderMessageData
+                    data.Messages = messages.Select(msg => new Feeder.MCP.Data.ShaderMessageData
                     {
                         Message = msg.message,
                         Line = msg.line,
@@ -158,11 +158,11 @@ namespace Feeder.MCP.Editor.API
                 var propertyCount = data.PropertyCount;
                 if (propertyCount > 0)
                 {
-                    data.Properties = new List<AIGD.ShaderPropertyData>(propertyCount);
+                    data.Properties = new List<Feeder.MCP.Data.ShaderPropertyData>(propertyCount);
                     for (var i = 0; i < propertyCount; i++)
                     {
                         var propType = shader.GetPropertyType(i);
-                        var prop = new AIGD.ShaderPropertyData
+                        var prop = new Feeder.MCP.Data.ShaderPropertyData
                         {
                             Name = shader.GetPropertyName(i),
                             Description = shader.GetPropertyDescription(i),
@@ -201,11 +201,11 @@ namespace Feeder.MCP.Editor.API
                     var subshaderCount = shaderData.SubshaderCount;
                     if (subshaderCount > 0)
                     {
-                        data.Subshaders = new List<AIGD.SubshaderData>(subshaderCount);
+                        data.Subshaders = new List<Feeder.MCP.Data.SubshaderData>(subshaderCount);
                         for (var s = 0; s < subshaderCount; s++)
                         {
                             var subshader = shaderData.GetSubshader(s);
-                            var subshaderData = new AIGD.SubshaderData
+                            var subshaderData = new Feeder.MCP.Data.SubshaderData
                             {
                                 Index = s,
                                 PassCount = subshader.PassCount
@@ -213,11 +213,11 @@ namespace Feeder.MCP.Editor.API
 
                             if (subshader.PassCount > 0)
                             {
-                                subshaderData.Passes = new List<AIGD.PassData>(subshader.PassCount);
+                                subshaderData.Passes = new List<Feeder.MCP.Data.PassData>(subshader.PassCount);
                                 for (var p = 0; p < subshader.PassCount; p++)
                                 {
                                     var pass = subshader.GetPass(p);
-                                    subshaderData.Passes.Add(new AIGD.PassData
+                                    subshaderData.Passes.Add(new Feeder.MCP.Data.PassData
                                     {
                                         Index = p,
                                         Name = string.IsNullOrEmpty(pass.Name) ? null : pass.Name,

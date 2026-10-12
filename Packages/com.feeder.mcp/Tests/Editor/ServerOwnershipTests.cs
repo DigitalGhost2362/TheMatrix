@@ -2,81 +2,144 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using NUnit.Framework;
 
 namespace Feeder.MCP.Editor.Tests
 {
     public sealed class ServerOwnershipTests
     {
-        static readonly string Root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "ProjA", "Library", "mcp-server"));
-        static readonly string OtherRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "ProjB", "Library", "mcp-server"));
+        static readonly string Root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "ProjA", "Library", "feeder-matrix"));
+        static readonly string OtherRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "ProjB", "Library", "feeder-matrix"));
+        // older packages and other tools install into this folder
+        static readonly string SharedRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "ProjA", "Library", "mcp-server"));
 
         static string Exe(string root) => Path.Combine(root, "win-x64", "matrix-server.exe");
+
+        string _project = string.Empty;
+        Func<string, string> _exeIdentity = ServerOwnership.ExeIdentity;
+
+        [SetUp]
+        public void SetUp()
+        {
+            _project = Path.Combine(Path.GetTempPath(), "matrix-ownership-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_project);
+            // the test executables are text files: their content is their identity
+            _exeIdentity = ServerOwnership.ExeIdentity;
+            ServerOwnership.ExeIdentity = File.ReadAllText;
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            ServerOwnership.ExeIdentity = _exeIdentity;
+            if (Directory.Exists(_project))
+                Directory.Delete(_project, true);
+        }
 
         [Test]
         public void Classify_ExeUnderOwnRoot_IsOurs()
         {
-            Assert.AreEqual(ServerOwner.Ours, ServerOwnership.Classify("matrix-server", Exe(Root), Root));
+            Assert.AreEqual(ServerOwner.Ours, ServerOwnership.Classify(Exe(Root), Root));
         }
 
         [Test]
         public void Classify_ExeUnderOtherProject_IsOtherProject()
         {
-            Assert.AreEqual(ServerOwner.OtherProject, ServerOwnership.Classify("matrix-server", Exe(OtherRoot), Root));
+            Assert.AreEqual(ServerOwner.OtherProject, ServerOwnership.Classify(Exe(OtherRoot), Root));
         }
 
         [Test]
-        public void Classify_DifferentProcessName_IsNotMcp()
+        public void Classify_UnrelatedExe_IsForeign()
         {
-            Assert.AreEqual(ServerOwner.NotMcp, ServerOwnership.Classify("node", @"C:\node.exe", Root));
+            Assert.AreEqual(ServerOwner.Foreign, ServerOwnership.Classify(@"C:\node.exe", Root));
         }
 
         [Test]
-        public void Classify_LegacyExeNameUnderOwnRoot_IsOurs()
+        public void Classify_ExeUnderSharedOldFolder_IsForeignEvenWithOurExeName()
         {
-            var legacy = Path.Combine(Root, "win-x64", "gamedev-mcp-server.exe");
-            Assert.AreEqual(ServerOwner.Ours, ServerOwnership.Classify("gamedev-mcp-server", legacy, Root));
-        }
-
-        [Test]
-        public void Classify_LegacyExeNameUnderOtherProject_IsOtherProject()
-        {
-            var legacy = Path.Combine(OtherRoot, "win-x64", "gamedev-mcp-server.exe");
-            Assert.AreEqual(ServerOwner.OtherProject, ServerOwnership.Classify("gamedev-mcp-server", legacy, Root));
+            Assert.AreEqual(ServerOwner.Foreign, ServerOwnership.Classify(Exe(SharedRoot), Root));
+            Assert.AreEqual(ServerOwner.Foreign, ServerOwnership.Classify(Path.Combine(SharedRoot, "win-x64", "other-server.exe"), Root));
         }
 
         [Test]
         public void Classify_UnreadablePath_IsUnknown()
         {
-            Assert.AreEqual(ServerOwner.Unknown, ServerOwnership.Classify("matrix-server", null, Root));
-            Assert.AreEqual(ServerOwner.Unknown, ServerOwnership.Classify(null, Exe(Root), Root));
+            Assert.AreEqual(ServerOwner.Unknown, ServerOwnership.Classify(null, Root));
+            Assert.AreEqual(ServerOwner.Unknown, ServerOwnership.Classify(string.Empty, Root));
         }
 
         [Test]
         public void Classify_StagingSibling_IsNotOurs()
         {
             var staging = Root + "-staging-abc";
-            Assert.AreEqual(ServerOwner.OtherProject, ServerOwnership.Classify("matrix-server", Exe(staging), Root));
+            Assert.AreEqual(ServerOwner.Foreign, ServerOwnership.Classify(Exe(staging), Root));
         }
 
         [Test]
         public void Classify_RootWithTrailingSeparator_StillMatches()
         {
-            Assert.AreEqual(ServerOwner.Ours, ServerOwnership.Classify("matrix-server", Exe(Root), Root + Path.DirectorySeparatorChar));
+            Assert.AreEqual(ServerOwner.Ours, ServerOwnership.Classify(Exe(Root), Root + Path.DirectorySeparatorChar));
         }
 
         [Test]
-        public void ClassifyProcess_CurrentEditorProcess_IsNotMcp()
+        public void ClassifyProcess_CurrentEditorProcess_IsNeverOurs()
         {
             using var self = System.Diagnostics.Process.GetCurrentProcess();
-            Assert.AreEqual(ServerOwner.NotMcp, ServerOwnership.ClassifyProcess(self, Root));
+            Assert.AreNotEqual(ServerOwner.Ours, ServerOwnership.ClassifyProcess(self, Root));
+        }
+
+        [Test]
+        public void ClassifyProcess_DecidedByPathNotByName()
+        {
+            using var self = System.Diagnostics.Process.GetCurrentProcess();
+            var exe = ServerOwnership.ReadExePath(self);
+            Assume.That(exe, Is.Not.Null, "the editor's own executable path is unreadable here");
+            Assert.AreEqual(ServerOwner.Ours, ServerOwnership.ClassifyProcess(self, Path.GetDirectoryName(exe!)!));
         }
 
         [Test]
         public void ClassifyProcess_MissingPid_IsUnknown()
         {
             Assert.AreEqual(ServerOwner.Unknown, ServerOwnership.ClassifyProcess(-5, Root));
+        }
+
+        [Test]
+        public void KillProcessesRunning_FileNothingRuns_KillsNothing()
+        {
+            var exe = Path.Combine(_project, "matrix-test-" + Guid.NewGuid().ToString("N") + ".exe");
+            CollectionAssert.IsEmpty(ServerOwnership.KillProcessesRunning(exe));
+        }
+
+        [Test]
+        public void KillProcessesRunning_SameNameInOtherFolder_StopsOnlyTheExactFile()
+        {
+            var ping = Path.Combine(Environment.SystemDirectory, "PING.EXE");
+            Assume.That(File.Exists(ping), "PING.EXE is not available here");
+            var running = Path.Combine(Directory.CreateDirectory(Path.Combine(_project, "a")).FullName, "same-name.exe");
+            var other = Path.Combine(Directory.CreateDirectory(Path.Combine(_project, "b")).FullName, "same-name.exe");
+            File.Copy(ping, running);
+            File.Copy(ping, other);
+
+            using var process = Process.Start(new ProcessStartInfo(running, "-t 127.0.0.1") { UseShellExecute = false, CreateNoWindow = true })!;
+            try
+            {
+                CollectionAssert.IsEmpty(ServerOwnership.KillProcessesRunning(other));
+                Assert.IsFalse(process.HasExited, "a process running another file of the same name must survive");
+
+                CollectionAssert.AreEqual(new[] { process.Id }, ServerOwnership.KillProcessesRunning(running));
+                Assert.IsTrue(process.WaitForExit(5000));
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill();
+                    process.WaitForExit(5000);
+                }
+            }
         }
 
         [Test]
@@ -110,11 +173,17 @@ namespace Feeder.MCP.Editor.Tests
         }
 
         [TestCase(ServerOwner.OtherProject)]
-        [TestCase(ServerOwner.NotMcp)]
+        [TestCase(ServerOwner.Foreign)]
         [TestCase(ServerOwner.Unknown)]
         public void CanAdopt_NotOurs_False(ServerOwner owner)
         {
             Assert.IsFalse(ServerOwnership.CanAdopt(Record(), Start, owner, 27212));
+        }
+
+        [Test]
+        public void CanAdopt_ServerInSharedOldFolder_False()
+        {
+            Assert.IsFalse(ServerOwnership.CanAdopt(Record(), Start, ServerOwnership.Classify(Exe(SharedRoot), Root), 27212));
         }
 
         [TestCase(null)]
@@ -134,6 +203,116 @@ namespace Feeder.MCP.Editor.Tests
             Assert.AreEqual(42, parsed!.pid);
             Assert.AreEqual(Start.Ticks, parsed.startTimeUtcTicks);
             Assert.AreEqual(27212, parsed.port);
+        }
+
+        [Test]
+        public void OwnerFile_LivesInOwnTempFolder()
+        {
+            StringAssert.EndsWith(Path.Combine("Temp", "feeder-matrix", "server-owner.json"), ServerOwnership.OwnerFilePath);
+        }
+
+        // "other-*.exe" carries a foreign identity, every other executable carries ours
+        string InstallFolder(params string[] files)
+        {
+            var folder = Path.Combine(_project, "Library", ServerOwnership.LegacyFolderName, "win-x64");
+            Directory.CreateDirectory(folder);
+            foreach (var file in files)
+            {
+                var content = !file.EndsWith(".exe", StringComparison.Ordinal) ? "content of " + file
+                    : file.StartsWith("other-", StringComparison.Ordinal) ? "other-server.dll"
+                    : ServerOwnership.LegacyExeIdentity;
+                File.WriteAllText(Path.Combine(folder, file), content);
+            }
+            return folder;
+        }
+
+        static Dictionary<string, string> Snapshot(string folder) => Directory
+            .GetFiles(folder, "*", SearchOption.AllDirectories)
+            .ToDictionary(file => file, File.ReadAllText);
+
+        [Test]
+        public void RemoveLegacyInstall_OurOldInstall_RemovesItsFilesAndFolder()
+        {
+            var folder = InstallFolder("legacy-server.exe", ServerOwnership.LegacyMarkerFileName, "web.config", "version");
+
+            var actions = ServerOwnership.RemoveLegacyInstall(folder);
+
+            Assert.IsFalse(Directory.Exists(folder));
+            Assert.IsTrue(Directory.Exists(Path.GetDirectoryName(folder)), "the shared parent folder is never removed");
+            Assert.AreEqual(5, actions.Count, string.Join("\n", actions));
+        }
+
+        [Test]
+        public void RemoveLegacyInstall_OurFilesNextToAnUnknownFile_LeavesTheWholeFolder()
+        {
+            var folder = InstallFolder("legacy-server.exe", ServerOwnership.LegacyMarkerFileName, "web.config", "version", "notes.txt");
+            var before = Snapshot(folder);
+
+            var actions = ServerOwnership.RemoveLegacyInstall(folder);
+
+            CollectionAssert.IsEmpty(actions);
+            CollectionAssert.AreEquivalent(before, Snapshot(folder));
+        }
+
+        [Test]
+        public void RemoveLegacyInstall_OurMarkerWithAnotherServersExe_LeavesTheWholeFolder()
+        {
+            var folder = InstallFolder("other-server.exe", ServerOwnership.LegacyMarkerFileName, "web.config", "version");
+            var before = Snapshot(folder);
+
+            var actions = ServerOwnership.RemoveLegacyInstall(folder);
+
+            CollectionAssert.IsEmpty(actions);
+            CollectionAssert.AreEquivalent(before, Snapshot(folder));
+        }
+
+        [Test]
+        public void RemoveLegacyInstall_OurFilesNextToASubFolder_LeavesTheWholeFolder()
+        {
+            var folder = InstallFolder("legacy-server.exe", ServerOwnership.LegacyMarkerFileName, "web.config", "version");
+            Directory.CreateDirectory(Path.Combine(folder, "logs"));
+            File.WriteAllText(Path.Combine(folder, "logs", "server.log"), "log");
+            var before = Snapshot(folder);
+
+            var actions = ServerOwnership.RemoveLegacyInstall(folder);
+
+            CollectionAssert.IsEmpty(actions);
+            CollectionAssert.AreEquivalent(before, Snapshot(folder));
+        }
+
+        [Test]
+        public void RemoveLegacyInstall_ForeignInstall_LeftByteForByte()
+        {
+            var folder = InstallFolder("other-server.exe", "other-server.staticwebassets.endpoints.json", "server.json", "version", "web.config");
+            Directory.CreateDirectory(Path.Combine(folder, "logs"));
+            File.WriteAllText(Path.Combine(folder, "logs", "server.log"), "log");
+            var before = Snapshot(folder);
+
+            var actions = ServerOwnership.RemoveLegacyInstall(folder);
+
+            CollectionAssert.IsEmpty(actions);
+            CollectionAssert.AreEquivalent(before, Snapshot(folder));
+        }
+
+        [Test]
+        public void RemoveLegacyInstall_FolderWithBothMarkers_LeftAlone()
+        {
+            var folder = InstallFolder("other-server.exe", ServerOwnership.LegacyMarkerFileName, "other-server.staticwebassets.endpoints.json", "version", "web.config");
+            var before = Snapshot(folder);
+
+            var actions = ServerOwnership.RemoveLegacyInstall(folder);
+
+            CollectionAssert.IsEmpty(actions);
+            CollectionAssert.AreEquivalent(before, Snapshot(folder));
+        }
+
+        [Test]
+        public void RemoveLegacyInstall_NoFolder_NoOp()
+        {
+            var folder = Path.Combine(_project, "Library", ServerOwnership.LegacyFolderName, "win-x64");
+
+            CollectionAssert.IsEmpty(ServerOwnership.RemoveLegacyInstall(folder));
+            Assert.IsFalse(Directory.Exists(Path.Combine(_project, "Library")));
         }
 
         [Test]

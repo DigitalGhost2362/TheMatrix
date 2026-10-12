@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text.Json.Nodes;
+using Feeder.Json.Nodes;
 using UnityEngine;
 
 namespace Feeder.MCP.Editor.Vfx

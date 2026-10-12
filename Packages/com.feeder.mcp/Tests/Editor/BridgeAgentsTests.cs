@@ -4,8 +4,8 @@ using System;
 using System.IO;
 using Feeder.MCP.Editor.UI;
 using NUnit.Framework;
-using AgentConfig = Feeder.McpPlugin.AgentConfig;
-using TransportMethod = Feeder.McpPlugin.Common.Consts.MCP.Server.TransportMethod;
+using AgentConfig = Feeder.ToolHost.AgentConfig;
+using TransportMethod = Feeder.ToolHost.Common.Consts.MCP.Server.TransportMethod;
 
 namespace Feeder.MCP.Editor.Tests
 {
@@ -27,14 +27,14 @@ namespace Feeder.MCP.Editor.Tests
             _settings = AgentConfig.AgentConfiguratorSettings.CreateForHost(_root, "C:/matrix/server.exe", 25999, 10000, "http://localhost:25999/mcp");
             _claude = Agent(ClaudeId);
             _deepSeek = Agent(DeepSeekAiAgentConfigurator.Id);
-            _deepSeekWasOn = UnityMcpPluginEditor.IsAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id);
-            UnityMcpPluginEditor.SetAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id, false);
+            _deepSeekWasOn = MatrixPluginEditor.IsAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id);
+            MatrixPluginEditor.SetAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id, false);
         }
 
         [TearDown]
         public void TearDown()
         {
-            UnityMcpPluginEditor.SetAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id, _deepSeekWasOn);
+            MatrixPluginEditor.SetAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id, _deepSeekWasOn);
             if (Directory.Exists(_root))
                 Directory.Delete(_root, true);
         }
@@ -53,7 +53,7 @@ namespace Feeder.MCP.Editor.Tests
         [TestCase(TransportMethod.streamableHttp)]
         public void WiringDeepSeek_LeavesClaudeOff_AndWritesNoMcpJson(TransportMethod transport)
         {
-            UnityMcpPluginEditor.SetAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id, true);
+            MatrixPluginEditor.SetAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id, true);
 
             Config(_deepSeek, transport).Configure();
 
@@ -67,10 +67,10 @@ namespace Feeder.MCP.Editor.Tests
         public void UnwiringDeepSeek_KeepsClaudesEntry(TransportMethod transport)
         {
             Config(_claude, transport).Configure();
-            UnityMcpPluginEditor.SetAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id, true);
+            MatrixPluginEditor.SetAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id, true);
 
             Config(_deepSeek, transport).Unconfigure();
-            UnityMcpPluginEditor.SetAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id, false);
+            MatrixPluginEditor.SetAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id, false);
 
             Assert.AreEqual(AgentConfig.ConfiguratorStatus.Configured, Status(_claude, transport));
             Assert.AreEqual(AgentConfig.ConfiguratorStatus.NotConfigured, Status(_deepSeek, transport));
@@ -81,12 +81,60 @@ namespace Feeder.MCP.Editor.Tests
         public void UnwiringClaude_KeepsDeepSeekOn(TransportMethod transport)
         {
             Config(_claude, transport).Configure();
-            UnityMcpPluginEditor.SetAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id, true);
+            MatrixPluginEditor.SetAutoConfigureAgent(DeepSeekAiAgentConfigurator.Id, true);
 
             Config(_claude, transport).Unconfigure();
 
             Assert.AreEqual(AgentConfig.ConfiguratorStatus.NotConfigured, Status(_claude, transport));
             Assert.AreEqual(AgentConfig.ConfiguratorStatus.Configured, Status(_deepSeek, transport));
+        }
+
+        // an entry of someone else that shares our command and url must survive wiring and unwiring
+        [TestCase(TransportMethod.stdio)]
+        [TestCase(TransportMethod.streamableHttp)]
+        public void WiringAndUnwiringClaude_KeepsAnotherServerWithTheSameCommandAndUrl(TransportMethod transport)
+        {
+            var path = Path.Combine(_root, ".mcp.json");
+            File.WriteAllText(path, "{ \"mcpServers\": { \"other-tool\": { \"command\": \"C:/matrix/server.exe\", \"url\": \"http://localhost:25999/mcp\" } } }");
+
+            Config(_claude, transport).Configure();
+            StringAssert.Contains("other-tool", File.ReadAllText(path));
+            Assert.AreEqual(AgentConfig.ConfiguratorStatus.Configured, Status(_claude, transport));
+
+            Config(_claude, transport).Unconfigure();
+            StringAssert.Contains("other-tool", File.ReadAllText(path));
+        }
+
+        [Test]
+        public void WiringAndUnwiringCodex_KeepsTheNextSectionItsCommentAndLineEndings()
+        {
+            var codex = Agent("codex");
+            var path = Path.Combine(_root, ".codex", "config.toml");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            const string other = "\n# another tool\n[mcp_servers.other]\nurl = \"http://localhost:25999/mcp\"\n";
+            File.WriteAllText(path, "[mcp_servers.Feeder-MCP]\nurl = \"http://localhost:1/mcp\"\n" + other);
+
+            Config(codex, TransportMethod.streamableHttp).Configure();
+            var written = File.ReadAllText(path);
+            StringAssert.EndsWith(other, written);
+            StringAssert.DoesNotContain("\r", written);
+            Assert.AreEqual(AgentConfig.ConfiguratorStatus.Configured, Status(codex, TransportMethod.streamableHttp));
+
+            Config(codex, TransportMethod.streamableHttp).Unconfigure();
+            Assert.AreEqual(other, File.ReadAllText(path));
+        }
+
+        [Test]
+        public void CanRewrite_OnlyPlainJsonOrNoFile()
+        {
+            var config = Config(_claude, TransportMethod.streamableHttp);
+            Assert.IsTrue(BridgeAgents.CanRewrite(config));
+
+            File.WriteAllText(config.ConfigPath, "// shared file\n{ \"mcpServers\": {} }");
+            Assert.IsFalse(BridgeAgents.CanRewrite(config));
+
+            File.WriteAllText(config.ConfigPath, "{ \"mcpServers\": {} }");
+            Assert.IsTrue(BridgeAgents.CanRewrite(config));
         }
 
         static AgentConfig.AiAgentConfigurator Agent(string agentId)

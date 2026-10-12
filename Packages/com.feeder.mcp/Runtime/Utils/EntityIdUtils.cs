@@ -58,7 +58,7 @@ namespace Feeder.MCP.Runtime.Utils
         /// Accepts legacy int form ("-4996"), raw ulong form ("568105584918790144"),
         /// and JSON floating-point variants ("568105584918790144.0", "5.6810558E+17")
         /// that STJ can produce when round-tripping large integers through
-        /// <see cref="System.Text.Json.JsonElement"/>.
+        /// <see cref="Feeder.Json.JsonElement"/>.
         /// </summary>
         public static EntityId FromString(string value)
         {

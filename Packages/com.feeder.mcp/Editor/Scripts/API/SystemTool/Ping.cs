@@ -1,6 +1,6 @@
 #nullable enable
 using System.ComponentModel;
-using Feeder.McpPlugin;
+using Feeder.ToolHost;
 
 namespace Feeder.MCP.Editor.API
 {

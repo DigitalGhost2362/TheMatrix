@@ -2,13 +2,13 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Text.Json.Serialization;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet.Model;
-using AIGD;
+using Feeder.Json.Serialization;
+using Feeder.ToolHost;
+using Feeder.Reflect.Model;
+using Feeder.MCP.Data;
 using UnityEditor;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     [Description("Available information about 'UnityEditor.EditorApplication'.")]
     public class EditorStatsData

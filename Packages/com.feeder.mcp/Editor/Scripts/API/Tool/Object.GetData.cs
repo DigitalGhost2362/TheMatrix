@@ -2,13 +2,13 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet.Model;
-using Feeder.ReflectorNet.Utils;
-using AIGD;
+using Feeder.ToolHost;
+using Feeder.Reflect.Model;
+using Feeder.Reflect.Utils;
+using Feeder.MCP.Data;
 using Feeder.MCP.Runtime.Extensions;
 using Feeder.MCP.Utils;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -82,7 +82,7 @@ namespace Feeder.MCP.Editor.API
                 if (obj == null)
                     throw new Exception("Not found UnityEngine.Object with provided data.");
 
-                var reflector = UnityMcpPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
+                var reflector = MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
                 var logger = UnityLoggerFactory.LoggerFactory.CreateLogger<Tool_Object>();
 
                 if (hasPaths)

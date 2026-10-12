@@ -1,6 +1,6 @@
 #nullable enable
 #if UNITY_EDITOR && !UNITY_6000_5_OR_NEWER
-using Feeder.McpPlugin.Common;
+using Feeder.ToolHost.Common;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 

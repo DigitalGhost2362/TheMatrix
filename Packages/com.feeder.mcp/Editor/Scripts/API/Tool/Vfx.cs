@@ -3,10 +3,10 @@ using System;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
-using System.Text.Json.Nodes;
-using Feeder.McpPlugin;
-using Feeder.McpPlugin.Common.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.Json.Nodes;
+using Feeder.ToolHost;
+using Feeder.ToolHost.Common.Model;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Editor.Vfx;
 using UnityEditor;
 using UnityEngine;
@@ -23,7 +23,7 @@ namespace Feeder.MCP.Editor.API
         public const string HistoryToolId = "vfx-history";
 
         const string SeeSkill = " Spec format, workflow and recipes: skill '" + Skill_Vfx.SkillId + "'.";
-        const string Png = Feeder.McpPlugin.Common.Consts.MimeType.ImagePng;
+        const string Png = Feeder.ToolHost.Common.Consts.MimeType.ImagePng;
 
         [AiTool(ApplyToolId, Title = "VFX / Apply spec", Enabled = false)]
         [AiSkillDescription("Create or patch a ParticleSystem VFX prefab from a compact JSON spec (emitters addressed by name, only changed fields). Saves a history version and returns text stats, optionally a time-lapse contact sheet.")]

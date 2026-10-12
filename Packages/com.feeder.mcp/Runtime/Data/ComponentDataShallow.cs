@@ -1,8 +1,8 @@
 #nullable enable
 #if UNITY_6000_5_OR_NEWER
-using Feeder.ReflectorNet;
+using Feeder.Reflect;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     [System.Serializable]
     public class ComponentDataShallow

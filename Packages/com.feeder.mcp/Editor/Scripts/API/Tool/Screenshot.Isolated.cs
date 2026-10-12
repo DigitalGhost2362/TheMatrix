@@ -3,12 +3,12 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using Feeder.McpPlugin;
-using Feeder.McpPlugin.Common.Model;
-using Feeder.ReflectorNet.Utils;
-using AIGD;
+using Feeder.Json;
+using Feeder.Json.Serialization;
+using Feeder.ToolHost;
+using Feeder.ToolHost.Common.Model;
+using Feeder.Reflect.Utils;
+using Feeder.MCP.Data;
 using Feeder.MCP.Runtime.Extensions;
 using UnityEngine;
 
@@ -298,7 +298,7 @@ namespace Feeder.MCP.Editor.API
                             out readbackTexture);
                     }
 
-                    return ResponseCallTool.Image(pngBytes, Feeder.McpPlugin.Common.Consts.MimeType.ImagePng,
+                    return ResponseCallTool.Image(pngBytes, Feeder.ToolHost.Common.Consts.MimeType.ImagePng,
                         $"Isolated screenshot of '{target.name}' ({resolvedCameraView}, {resolvedResolution}x{resolvedResolution}, isolated={resolvedIsolated}, backgroundMode={resolvedBackgroundMode})");
                 }
                 finally
@@ -337,7 +337,7 @@ namespace Feeder.MCP.Editor.API
             if (string.IsNullOrWhiteSpace(lights))
                 return DefaultLights();
 
-            var parsed = System.Text.Json.JsonSerializer.Deserialize<List<IsolatedLightConfig>>(lights!);
+            var parsed = Feeder.Json.JsonSerializer.Deserialize<List<IsolatedLightConfig>>(lights!);
             return parsed ?? DefaultLights();
         }
 

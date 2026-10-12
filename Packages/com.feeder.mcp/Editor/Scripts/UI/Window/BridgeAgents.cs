@@ -1,12 +1,14 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using Feeder.Json.Nodes;
 using Feeder.MCP.Utils;
-using Microsoft.Extensions.Logging;
-using AgentConfig = Feeder.McpPlugin.AgentConfig;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
-using static Feeder.McpPlugin.Common.Consts.MCP.Server;
+using Feeder.Logging;
+using AgentConfig = Feeder.ToolHost.AgentConfig;
+using ILogger = Feeder.Logging.ILogger;
+using static Feeder.ToolHost.Common.Consts.MCP.Server;
 
 namespace Feeder.MCP.Editor.UI
 {
@@ -51,7 +53,7 @@ namespace Feeder.MCP.Editor.UI
 
         public static AgentWiring GetState(AgentConfig.AiAgentConfigurator agent)
         {
-            var status = agent.GetStatus(AgentConfiguratorSettingsFactory.Create(), UnityMcpPluginEditor.TransportMethod);
+            var status = agent.GetStatus(AgentConfiguratorSettingsFactory.Create(), MatrixPluginEditor.TransportMethod);
             return status switch
             {
                 AgentConfig.ConfiguratorStatus.Configured => AgentWiring.Wired,
@@ -62,7 +64,7 @@ namespace Feeder.MCP.Editor.UI
 
         public static string Describe(AgentConfig.AiAgentConfigurator agent)
         {
-            var transport = UnityMcpPluginEditor.TransportMethod;
+            var transport = MatrixPluginEditor.TransportMethod;
             var path = Config(agent, AgentConfiguratorSettingsFactory.Create(), transport).ConfigPath;
             return $"{agent.AgentName}\n{path}";
         }
@@ -80,40 +82,64 @@ namespace Feeder.MCP.Editor.UI
                 ? agent.GetStdioConfig(settings)
                 : agent.GetHttpConfig(settings);
 
+        // The JSON writer replaces a config file it cannot parse (comments, a half-written file) with only our entry,
+        // dropping every other server and setting in it, so such a file is left alone.
+        internal static bool CanRewrite(AgentConfig.AiAgentConfig config)
+        {
+            if (config is not AgentConfig.JsonAiAgentConfig || !File.Exists(config.ConfigPath))
+                return true;
+            try
+            {
+                var text = File.ReadAllText(config.ConfigPath);
+                return string.IsNullOrWhiteSpace(text) || JsonNode.Parse(text) is JsonObject;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         static void Wire(AgentConfig.AiAgentConfigurator agent)
         {
             var settings = AgentConfiguratorSettingsFactory.Create();
-            Config(agent, settings, UnityMcpPluginEditor.TransportMethod).Configure();
-            UnityMcpPluginEditor.SetAutoConfigureAgent(agent.AgentId, true);
+            var config = Config(agent, settings, MatrixPluginEditor.TransportMethod);
+            if (!CanRewrite(config))
+            {
+                _logger.LogError("Not wiring {agent}: {path} is not plain JSON (comments or a half-written file), and rewriting it would drop the other entries. Fix the file, then wire again.",
+                    agent.AgentName, config.ConfigPath);
+                return;
+            }
+            config.Configure();
+            MatrixPluginEditor.SetAutoConfigureAgent(agent.AgentId, true);
             if (agent.SupportsSkills)
             {
-                UnityMcpPluginEditor.SetAutoGenerateSkills(agent.AgentId, true);
+                MatrixPluginEditor.SetAutoGenerateSkills(agent.AgentId, true);
                 GenerateSkills(agent);
             }
-            UnityMcpPluginEditor.Instance.Save();
+            MatrixPluginEditor.Instance.Save();
         }
 
         public static void GenerateSkills(AgentConfig.AiAgentConfigurator agent)
         {
-            var previous = UnityMcpPluginEditor.SkillsPath;
+            var previous = MatrixPluginEditor.SkillsPath;
             try
             {
-                UnityMcpPluginEditor.SkillsPath = agent.SkillsPath!;
-                UnityMcpPluginEditor.Instance.McpPluginInstance?.GenerateSkillFiles(UnityMcpPluginEditor.ProjectRootPath);
+                MatrixPluginEditor.SkillsPath = agent.SkillsPath!;
+                MatrixPluginEditor.Instance.ToolHostInstance?.GenerateSkillFiles(MatrixPluginEditor.ProjectRootPath);
             }
             finally
             {
-                UnityMcpPluginEditor.SkillsPath = previous;
+                MatrixPluginEditor.SkillsPath = previous;
             }
         }
 
         public static int RegenerateSkills()
         {
             var count = 0;
-            foreach (var agentId in UnityMcpPluginEditor.AutoConfigureAgentIds)
+            foreach (var agentId in MatrixPluginEditor.AutoConfigureAgentIds)
             {
                 var agent = AiAgentCatalog.GetByAgentId(agentId);
-                if (agent?.SupportsSkills != true || !UnityMcpPluginEditor.IsAutoGenerateSkills(agent.AgentId))
+                if (agent?.SupportsSkills != true || !MatrixPluginEditor.IsAutoGenerateSkills(agent.AgentId))
                     continue;
 
                 GenerateSkills(agent);
@@ -125,11 +151,11 @@ namespace Feeder.MCP.Editor.UI
         static void Unwire(AgentConfig.AiAgentConfigurator agent)
         {
             var settings = AgentConfiguratorSettingsFactory.Create();
-            Config(agent, settings, UnityMcpPluginEditor.TransportMethod).Unconfigure();
-            UnityMcpPluginEditor.SetAutoConfigureAgent(agent.AgentId, false);
+            Config(agent, settings, MatrixPluginEditor.TransportMethod).Unconfigure();
+            MatrixPluginEditor.SetAutoConfigureAgent(agent.AgentId, false);
             if (agent.SupportsSkills)
-                UnityMcpPluginEditor.SetAutoGenerateSkills(agent.AgentId, false);
-            UnityMcpPluginEditor.Instance.Save();
+                MatrixPluginEditor.SetAutoGenerateSkills(agent.AgentId, false);
+            MatrixPluginEditor.Instance.Save();
         }
     }
 }

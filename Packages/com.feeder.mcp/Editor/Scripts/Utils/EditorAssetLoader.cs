@@ -1,7 +1,7 @@
 #nullable enable
 
 using System.Collections.Generic;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 using UnityEditor;
 
 namespace Feeder.MCP.Editor.Utils

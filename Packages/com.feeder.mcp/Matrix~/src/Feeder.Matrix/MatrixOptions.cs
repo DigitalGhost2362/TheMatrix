@@ -20,4 +20,17 @@ public sealed class MatrixOptions
 
     /// <summary>Per-project token supplied by the Unity package when authentication is enabled.</summary>
     public string? Token { get; set; }
+
+    /// <summary>Script compiles that may run at once; further requests wait in a bounded queue.</summary>
+    public int CompileConcurrency { get; set; } = 2;
+
+    /// <summary>Script compiles that may wait for a free slot before new ones are refused.</summary>
+    public int CompileQueueCapacity { get; set; } = 16;
+
+    /// <summary>Compile deadline (queueing included) when the request sets no timeout.</summary>
+    public TimeSpan CompileTimeout { get; set; } = TimeSpan.FromSeconds(60);
+
+    public int CompileMaxSourceChars { get; set; } = 5 * 1024 * 1024;
+
+    public int CompileMaxReferences { get; set; } = 2000;
 }

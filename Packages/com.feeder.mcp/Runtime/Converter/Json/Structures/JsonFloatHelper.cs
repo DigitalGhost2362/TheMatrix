@@ -1,7 +1,7 @@
 #nullable enable
 using System.Globalization;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using Feeder.Json;
+using Feeder.Json.Serialization;
 using UnityEngine;
 
 namespace Feeder.MCP.JsonConverters

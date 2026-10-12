@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Model;
-using Microsoft.Extensions.Logging;
+using Feeder.Reflect;
+using Feeder.Reflect.Model;
+using Feeder.Logging;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     public class SceneData : SceneDataShallow
     {

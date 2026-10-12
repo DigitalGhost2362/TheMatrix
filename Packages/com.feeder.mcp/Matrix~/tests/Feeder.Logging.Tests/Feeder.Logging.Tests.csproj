@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <!-- The library under test is compared with the packages it replaces, in the exact builds the Unity package shipped
+       (Abstractions 8.0.3 netstandard2.0, Logging 8.0.1 netstandard2.1). The net8.0 builds are not used: they format a
+       template that has arguments but no hole differently. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.1" GeneratePathProperty="true" ExcludeAssets="compile;runtime" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" GeneratePathProperty="true" ExcludeAssets="compile;runtime" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.2" />
+    <Reference Include="Microsoft.Extensions.Logging">
+      <HintPath>$(PkgMicrosoft_Extensions_Logging)/lib/netstandard2.1/Microsoft.Extensions.Logging.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Logging.Abstractions">
+      <HintPath>$(PkgMicrosoft_Extensions_Logging_Abstractions)/lib/netstandard2.0/Microsoft.Extensions.Logging.Abstractions.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\..\Runtime\Lib\Feeder.Logging\**\*.cs" />
+  </ItemGroup>
+
+  <!-- Differential\Scenarios.cs is written against the NuGet packages; the same text is compiled again against Feeder.Logging -->
+  <Target Name="MirrorScenarios" BeforeTargets="CoreCompile">
+    <ReadLinesFromFile File="Differential\Scenarios.cs">
+      <Output TaskParameter="Lines" ItemName="ScenarioLine" />
+    </ReadLinesFromFile>
+    <WriteLinesToFile File="$(IntermediateOutputPath)Scenarios.Mine.g.cs" Overwrite="true" WriteOnlyWhenDifferent="true"
+                      Lines="@(ScenarioLine->Replace('Microsoft.Extensions.Logging.Abstractions', 'Feeder.Logging')->Replace('Microsoft.Extensions.Logging', 'Feeder.Logging')->Replace('Differential.Real', 'Differential.Mine'))" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)Scenarios.Mine.g.cs" />
+      <FileWrites Include="$(IntermediateOutputPath)Scenarios.Mine.g.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

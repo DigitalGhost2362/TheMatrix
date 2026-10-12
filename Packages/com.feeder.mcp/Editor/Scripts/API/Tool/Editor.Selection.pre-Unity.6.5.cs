@@ -2,8 +2,8 @@
 #if !UNITY_6000_5_OR_NEWER
 using System.ComponentModel;
 using System.Linq;
-using Feeder.McpPlugin;
-using AIGD;
+using Feeder.ToolHost;
+using Feeder.MCP.Data;
 using UnityEditor;
 
 namespace Feeder.MCP.Editor.API

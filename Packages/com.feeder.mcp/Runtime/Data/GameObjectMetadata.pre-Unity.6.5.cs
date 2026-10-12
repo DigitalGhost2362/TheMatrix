@@ -2,11 +2,11 @@
 #if !UNITY_6000_5_OR_NEWER
 using System.Collections.Generic;
 using System.Text;
-using Feeder.ReflectorNet.Utils;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Runtime.Utils;
 using UnityEngine;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     public class GameObjectMetadata
     {
@@ -19,7 +19,7 @@ namespace AIGD
         public bool activeInHierarchy;
         public List<GameObjectMetadata> children = new();
 
-        public string Print(int limit = global::Feeder.McpPlugin.Common.Consts.MCP.Plugin.LinesLimit)
+        public string Print(int limit = global::Feeder.ToolHost.Common.Consts.MCP.Plugin.LinesLimit)
         {
             var sb = new StringBuilder();
 

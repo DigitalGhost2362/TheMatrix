@@ -1,12 +1,12 @@
 #nullable enable
 using System.ComponentModel;
-using Feeder.ReflectorNet.Model;
+using Feeder.Reflect.Model;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     /// <summary>
     /// A single path-scoped modification routed through
-    /// <see cref="Feeder.ReflectorNet.Reflector.TryModifyAt(ref object?, string, SerializedMember, System.Type?, int, Feeder.ReflectorNet.Model.Logs?, System.Reflection.BindingFlags, Microsoft.Extensions.Logging.ILogger?)"/>.
+    /// <see cref="Feeder.Reflect.Reflector.TryModifyAt(ref object?, string, SerializedMember, System.Type?, int, Feeder.Reflect.Model.Logs?, System.Reflection.BindingFlags, Feeder.Logging.ILogger?)"/>.
     /// Each entry targets one field, array element, or dictionary entry by path.
     /// </summary>
     public class PathPatch

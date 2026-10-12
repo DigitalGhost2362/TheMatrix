@@ -5,11 +5,11 @@ using System.Linq;
 using Feeder.MCP.Editor.UI;
 using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Utils;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
+using ILogger = Feeder.Logging.ILogger;
 
 namespace Feeder.MCP.Editor.MatrixSpace
 {

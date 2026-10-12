@@ -1,7 +1,7 @@
 #nullable enable
-using AIGD;
+using Feeder.MCP.Data;
 using System.ComponentModel;
-using Feeder.McpPlugin;
+using Feeder.ToolHost;
 using UnityEditor;
 
 namespace Feeder.MCP.Editor.API

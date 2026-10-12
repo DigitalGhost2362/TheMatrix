@@ -1,10 +1,10 @@
 #nullable enable
 using System;
-using System.Text.Json;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Model;
+using Feeder.Json;
+using Feeder.Reflect;
+using Feeder.Reflect.Model;
 using UnityEngine;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
+using ILogger = Feeder.Logging.ILogger;
 
 namespace Feeder.MCP.Reflection.Converter
 {

@@ -3,11 +3,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet;
-using AIGD;
+using Feeder.ToolHost;
+using Feeder.Reflect;
+using Feeder.MCP.Data;
 using Feeder.MCP.Utils;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -18,7 +18,7 @@ namespace Feeder.MCP.Editor.API
         {
             public static string NotFoundComponent(UnityEngine.EntityId componentEntityID, IEnumerable<UnityEngine.Component> allComponents)
             {
-                var reflector = UnityMcpPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
+                var reflector = MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
                 var availableComponentsPreview = allComponents
                     .Select((c, i) => reflector.Serialize(
                         c,
@@ -36,7 +36,7 @@ namespace Feeder.MCP.Editor.API
             }
             public static string NotFoundComponents(ComponentRefList componentRefs, IEnumerable<UnityEngine.Component> allComponents)
             {
-                var reflector = UnityMcpPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
+                var reflector = MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
                 var componentInstanceIDsString = string.Join(", ", componentRefs.Select(cr => cr.ToString()));
                 var availableComponentsPreview = allComponents
                     .Select((c, i) => reflector.Serialize(

@@ -1,8 +1,8 @@
 #nullable enable
 using System.ComponentModel;
-using Feeder.McpPlugin;
-using Feeder.McpPlugin.Common.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.ToolHost.Common.Model;
+using Feeder.Reflect.Utils;
 using UnityEditor;
 using UnityEngine;
 
@@ -88,7 +88,7 @@ namespace Feeder.MCP.Editor.API
                         Object.DestroyImmediate(tex);
                 }
 
-                return ResponseCallTool.Image(pngBytes, Feeder.McpPlugin.Common.Consts.MimeType.ImagePng,
+                return ResponseCallTool.Image(pngBytes, Feeder.ToolHost.Common.Consts.MimeType.ImagePng,
                     $"Screenshot from Scene View ({width}x{height})");
             });
         }

@@ -28,7 +28,7 @@ và **4 nhóm polish** cần xử lý trước khi commit.
 | `IconName = ""` không làm vỡ UI | `AiAgentConfiguratorView.SetAgentIcon()` ẩn slot khi rỗng |
 | Stdio args khớp semantics của `AgentConfigBuilders.StdioArgs` | `AuthOption` enum vốn đã lowercase → `ToLowerInvariant()` là no-op vô hại |
 | Troubleshooting nói đúng sự thật "DSH does not read .mcp.json" | `dsh-mcp-client` chỉ đọc config plugin từ `cordis.yml` — verified |
-| `Feeder.Source` compile sạch | `Library/ScriptAssemblies/Feeder.McpPlugin.dll` (325 KB) build từ source |
+| `Feeder.Source` compile sạch | `Library/ScriptAssemblies/Feeder.ToolHost.dll` (325 KB) build từ source |
 
 ---
 
@@ -80,7 +80,7 @@ Hệ quả: khi user đổi transport, entry `Feeder-MCP` trong `.mcp.json` còn
 → entry lai (vừa `command`/`args` vừa `type`/`url`), client MCP có thể từ chối.
 
 **Fix**: thêm 4 lời gọi `SetPropertyToRemove` tương ứng. (`AgentConfigBuilders` là `internal`
-trong `Feeder.McpPlugin` nên không tái sử dụng trực tiếp được từ assembly Editor.)
+trong `Feeder.ToolHost` nên không tái sử dụng trực tiếp được từ assembly Editor.)
 
 ---
 
@@ -88,7 +88,7 @@ trong `Feeder.McpPlugin` nên không tái sử dụng trực tiếp được t�
 
 ### P1-1. Hai agent cùng sở hữu một file `.mcp.json` — và DSH không đọc file đó
 
-`Runtime/UnityMcpPlugin.Config.cs:121,145` đặt `AgentAutoConfigure["deepseek"] = true`. Nhưng:
+`Runtime/MatrixPlugin.Config.cs:121,145` đặt `AgentAutoConfigure["deepseek"] = true`. Nhưng:
 
 - DeepSeek ghi **đúng file, đúng entry** mà Claude Code đã ghi (`ExpectedFileContent` hard-code
   server key `"Feeder-MCP"`), nên đây là ghi trùng: mỗi session Editor ghi 2 lần, thứ tự phụ thuộc
@@ -104,11 +104,11 @@ trong `Feeder.McpPlugin` nên không tái sử dụng trực tiếp được t�
 
 ```csharp
 var agent = AiAgentCatalog.GetByAgentId(savedAgentId);   // savedAgentId, không phải toàn bộ flag
-if (agent?.SupportsSkills == true && UnityMcpPluginEditor.IsAutoGenerateSkills(agent.AgentId))
+if (agent?.SupportsSkills == true && MatrixPluginEditor.IsAutoGenerateSkills(agent.AgentId))
 ```
 
 Nên flag `deepseek=true` không bao giờ kích hoạt trừ khi DeepSeek là agent được chọn — và khi
-kích hoạt thì nó **ghi đè `UnityMcpPluginEditor.SkillsPath` toàn cục** sang `.agents/skills`
+kích hoạt thì nó **ghi đè `MatrixPluginEditor.SkillsPath` toàn cục** sang `.agents/skills`
 mà không khôi phục.
 
 **Chọn 1 trong 2** (cần The Architect quyết):
@@ -122,14 +122,14 @@ mà không khôi phục.
 ### P1-3. Lý do tồn tại của `AiAgentCatalog` đã hết hiệu lực
 
 Doc comment của `AiAgentCatalog` / `DeepSeekAiAgentConfigurator` viết: *"the shared registry compiled
-into Feeder.McpPlugin.dll has no runtime registration API"*. Nhưng cùng đợt thay đổi này đã **đưa
+into Feeder.ToolHost.dll has no runtime registration API"*. Nhưng cùng đợt thay đổi này đã **đưa
 registry vào source** (`Runtime/Plugins/Feeder.Source/`), nên registry giờ là file source sửa được:
-`.../Feeder.McpPlugin.AgentConfig/AiAgentConfiguratorRegistry.cs`.
+`.../Feeder.ToolHost.AgentConfig/AiAgentConfiguratorRegistry.cs`.
 
 **Chọn 1 trong 2**:
 
 - **(a) Đăng ký thẳng** `new DeepSeekAiAgentConfigurator()` vào mảng registry — nhưng phải chuyển
-  configurator xuống assembly `Feeder.McpPlugin`, mất tính "package-side extension" và làm
+  configurator xuống assembly `Feeder.ToolHost`, mất tính "package-side extension" và làm
   registry dùng chung phình to hơn.
 - **(b) Giữ `AiAgentCatalog`** (khuyến nghị — cô lập phần thêm khỏi registry dùng chung) nhưng **sửa lại
   doc comment** cho đúng sự thật: giữ ngoài registry *có chủ đích* để registry dùng chung không bị sửa.
@@ -172,15 +172,6 @@ sẽ nuốt hết vào repo.
   (chính là chỗ file này đang nằm).
 - Commit 5 skill mới `.agents/skills/ui-inspect-*` cùng đợt.
 
-### P1-8. Licensing của source đóng gói
-
-`Feeder.Source/` (293 file, ~22.7k LOC) được biên dịch trực tiếp trong package. `LICENSE.md` của package
-là MIT "Copyright (c) 2026 Feeder".
-
-**Fix (bắt buộc trước khi publish)**: rà soát nguồn và giấy phép của mọi source đóng gói, thêm
-`THIRD-PARTY-NOTICES.md` (hoặc header per-folder) nếu cần. Đây là quyết định pháp lý — cần The
-Architect chốt, không tự làm.
-
 ### P1-9. `.mcp.json` bị thêm BOM
 
 Diff duy nhất của `.mcp.json` là thêm `\ufeff` ở đầu file. Package ghi file bằng `File.WriteAllText`
@@ -203,14 +194,13 @@ Diff duy nhất của `.mcp.json` là thêm `\ufeff` ở đầu file. Package gh
 
 ## 5. Thứ tự thi công đề xuất
 
-1. **Quyết định cần chốt trước** (chặn P1-2, P1-3, P1-8): (a) skills auto-generate cho *mọi* agent
-   bật flag hay chỉ agent đang chọn; (b) giữ `AiAgentCatalog` hay đăng ký thẳng vào registry;
-   (c) hướng xử lý license cho `Feeder.Source`.
+1. **Quyết định cần chốt trước** (chặn P1-2, P1-3): (a) skills auto-generate cho *mọi* agent
+   bật flag hay chỉ agent đang chọn; (b) giữ `AiAgentCatalog` hay đăng ký thẳng vào registry.
 2. **Lô 1 — P0** (3 sửa, không cần quyết định gì): `AgentSetupBase` → catalog; `--profile headless`;
    4 lời gọi `SetPropertyToRemove`.
-3. **Lô 2 — P1 code**: defaults trong `UnityMcpPlugin.Config.cs`, thứ tự dropdown, doc comment, icon.
+3. **Lô 2 — P1 code**: defaults trong `MatrixPlugin.Config.cs`, thứ tự dropdown, doc comment, icon.
 4. **Lô 3 — P1 hygiene**: `.gitignore` cho `research/`, xóa PLAN ở root, bỏ BOM `.mcp.json`,
-   CHANGELOG + bump `0.86.0`, THIRD-PARTY-NOTICES.
+   CHANGELOG + bump `0.86.0`.
 5. **Lô 4 — P2**: preset polish + `DeepSeekSetup`.
 
 ## 6. Kiểm chứng sau mỗi lô
@@ -226,6 +216,6 @@ Diff duy nhất của `.mcp.json` là thêm `\ufeff` ở đầu file. Package gh
 ## 7. Rollback
 
 - Code DeepSeek: xóa 2 file trong `Editor/Scripts/UI/AiAgentConfigurators/`, revert
-  `MainWindowEditor.AiAgents.cs`, `Startup*.cs`, `UnityMcpPlugin.Config.cs`, `AgentBackendCatalog.cs`.
+  `MainWindowEditor.AiAgents.cs`, `Startup*.cs`, `MatrixPlugin.Config.cs`, `AgentBackendCatalog.cs`.
 - Source plugin: `git checkout -- Packages/com.feeder.mcp/Runtime/Plugins/Feeder/` (khôi phục plugin trước đó),
   xóa `Runtime/Plugins/Feeder.Source/`, revert 2 asmdef.

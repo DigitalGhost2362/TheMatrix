@@ -2,9 +2,9 @@
 #if !UNITY_6000_5_OR_NEWER
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Text.Json.Serialization;
+using Feeder.Json.Serialization;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     [Description("Scene reference. " +
         "Used to find a Scene.")]

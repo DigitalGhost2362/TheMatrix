@@ -1,11 +1,11 @@
 #nullable enable
-using AIGD;
+using Feeder.MCP.Data;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using Feeder.McpPlugin;
-using Feeder.ReflectorNet.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.Reflect.Model;
+using Feeder.Reflect.Utils;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -60,7 +60,7 @@ namespace Feeder.MCP.Editor.API
                 => "Tools array is null or empty. Please provide at least one tool to enable or disable.";
 
             public static string ToolManagerNotAvailable()
-                => "Tool manager is not available. UnityMcpPluginEditor may not be initialized.";
+                => "Tool manager is not available. MatrixPluginEditor may not be initialized.";
         }
     }
 }

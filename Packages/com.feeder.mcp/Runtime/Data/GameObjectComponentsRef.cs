@@ -1,9 +1,9 @@
 #nullable enable
 using System.ComponentModel;
-using System.Text.Json.Serialization;
-using Feeder.ReflectorNet.Model;
+using Feeder.Json.Serialization;
+using Feeder.Reflect.Model;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     [System.Serializable]
     [Description("GameObject reference. " +

@@ -1,8 +1,8 @@
 #nullable enable
 using System.Collections.Generic;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Model;
-using Microsoft.Extensions.Logging;
+using Feeder.Reflect;
+using Feeder.Reflect.Model;
+using Feeder.Logging;
 
 namespace Feeder.MCP.Editor.API
 {

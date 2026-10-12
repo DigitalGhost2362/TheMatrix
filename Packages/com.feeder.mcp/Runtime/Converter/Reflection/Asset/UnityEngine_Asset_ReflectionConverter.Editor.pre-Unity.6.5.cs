@@ -2,13 +2,13 @@
 #nullable enable
 using System;
 using System.Reflection;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.Reflect;
+using Feeder.Reflect.Model;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Runtime.Extensions;
-using Microsoft.Extensions.Logging;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
-using LogLevel = Microsoft.Extensions.Logging.LogLevel;
+using Feeder.Logging;
+using ILogger = Feeder.Logging.ILogger;
+using LogLevel = Feeder.Logging.LogLevel;
 
 namespace Feeder.MCP.Reflection.Converter
 {

@@ -163,7 +163,7 @@ namespace Feeder.MCP.Editor.HyperTesting
 
         static void ApplyToolSet()
         {
-            var manager = UnityMcpPluginEditor.Instance.Tools;
+            var manager = MatrixPluginEditor.Instance.Tools;
             if (manager == null)
                 return;
             foreach (var tool in manager.GetAllTools().Where(t => t.Name != null))
@@ -173,7 +173,7 @@ namespace Feeder.MCP.Editor.HyperTesting
                 else if (BlockedTools.Contains(tool.Name!))
                     manager.SetToolEnabled(tool.Name!, false);
             }
-            UnityMcpPluginEditor.Instance.Save();
+            MatrixPluginEditor.Instance.Save();
             _toolSetPending = false;
             SessionState.SetBool(ToolSetDoneKey, true);
         }

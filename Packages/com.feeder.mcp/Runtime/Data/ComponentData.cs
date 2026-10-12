@@ -1,9 +1,9 @@
 #nullable enable
 using System.Collections.Generic;
-using Feeder.ReflectorNet.Model;
+using Feeder.Reflect.Model;
 using UnityEngine;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     [System.Serializable]
     public class ComponentData : ComponentDataShallow
@@ -26,7 +26,7 @@ namespace AIGD
 
     //         if (includeData)
     //         {
-    //             var reflector = Feeder.McpPlugin.McpPlugin.Instance!.McpManager.Reflector;
+    //             var reflector = Feeder.ToolHost.ToolHost.Instance!.McpManager.Reflector;
     //             response.Data = reflector.Serialize(
     //                 obj: go,
     //                 name: go.name,

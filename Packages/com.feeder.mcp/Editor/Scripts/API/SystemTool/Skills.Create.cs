@@ -2,9 +2,9 @@
 using System.ComponentModel;
 using System.IO;
 using System.Threading.Tasks;
-using Feeder.McpPlugin;
-using Feeder.McpPlugin.Common.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.ToolHost.Common.Model;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Editor.Utils;
 using UnityEditor;
 
@@ -25,7 +25,7 @@ namespace Feeder.MCP.Editor.API
             "that Unity compiles into the project. After compilation the new tool becomes callable through MCP. " +
             "The file must be a partial class decorated with [AiToolType], each tool method must be " +
             "decorated with [AiTool], the class name should match the file name, all Unity API calls must " +
-            "run via Feeder.ReflectorNet.Utils.MainThread.Instance.Run(), and the method should either " +
+            "run via Feeder.Reflect.Utils.MainThread.Instance.Run(), and the method should either " +
             "return a structured data model (for parseable output) or void (for side-effect-only operations). " +
             "See the body of this skill for a full sample and best-practice notes.")]
         [AiSkillBody(SkillsCreateSkillBody)]
@@ -35,17 +35,17 @@ namespace Feeder.MCP.Editor.API
             "\n" +
             "It must be a partial class decorated with [AiToolType]. Each tool method must be decorated with [AiTool]. " +
             "The class name should match the file name. " +
-            "All Unity API calls must use Feeder.ReflectorNet.Utils.MainThread.Instance.Run(). " +
+            "All Unity API calls must use Feeder.Reflect.Utils.MainThread.Instance.Run(). " +
             "Return a data model for structured output, or void for side-effect-only operations. " +
             "\n\nFull sample:\n" +
             "```csharp\n" +
             "#nullable enable\n" +
             "using System;\n" +
             "using System.ComponentModel;\n" +
-            "using Feeder.McpPlugin;\n" +
-            "using Feeder.ReflectorNet.Utils;\n" +
+            "using Feeder.ToolHost;\n" +
+            "using Feeder.Reflect.Utils;\n" +
             "using Feeder.MCP.Editor.Utils;\n" +
-            "using AIGD;\n" +
+            "using Feeder.MCP.Data;\n" +
             "using UnityEditor;\n" +
             "using UnityEngine;\n" +
             "\n" +
@@ -125,7 +125,7 @@ namespace Feeder.MCP.Editor.API
             "3. Schedule the actual work asynchronously via `MainThread.Instance.RunAsync(async () => { await Task.Yield(); ... })`.\n" +
             "4. When the operation finishes, send the final result by calling:\n" +
             "```csharp\n" +
-            "_ = UnityMcpPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData\n" +
+            "_ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData\n" +
             "{\n" +
             "    RequestId = requestId,\n" +
             "    Result = ResponseCallTool.Success(\"Operation completed.\").SetRequestID(requestId)\n" +
@@ -140,13 +140,13 @@ namespace Feeder.MCP.Editor.API
             "\n" +
             "### Return structured data with a typed response\n" +
             "Prefer returning a structured data model over a plain string so the AI can parse individual fields. " +
-            "Data models for MCP tools MUST be declared as TOP-LEVEL types in the `AIGD` namespace - " +
+            "Data models for MCP tools MUST be declared as TOP-LEVEL types in the `Feeder.MCP.Data` namespace - " +
             "never nested inside the tool class. Place each data model in its own `.cs` file (one type per file) " +
-            "and use `ResponseCallValueTool<T>` as the return type. The flat `AIGD` namespace keeps the " +
+            "and use `ResponseCallValueTool<T>` as the return type. The flat `Feeder.MCP.Data` namespace keeps the " +
             "auto-generated JSON Schema `$defs` keys short and intuitive for AI agents.\n" +
             "```csharp\n" +
-            "// Tool file (Tool/MyTool.cs) - references the data model from AIGD:\n" +
-            "using AIGD;\n" +
+            "// Tool file (Tool/MyTool.cs) - references the data model from Feeder.MCP.Data:\n" +
+            "using Feeder.MCP.Data;\n" +
             "\n" +
             "namespace Feeder.MCP.Editor.API\n" +
             "{\n" +
@@ -164,8 +164,8 @@ namespace Feeder.MCP.Editor.API
             "    }\n" +
             "}\n" +
             "\n" +
-            "// Data model (Tool/Data/MyResult.cs) - top-level, in AIGD namespace, NOT nested:\n" +
-            "namespace AIGD\n" +
+            "// Data model (Tool/Data/MyResult.cs) - top-level, in Feeder.MCP.Data namespace, NOT nested:\n" +
+            "namespace Feeder.MCP.Data\n" +
             "{\n" +
             "    public class MyResult\n" +
             "    {\n" +
@@ -179,7 +179,7 @@ namespace Feeder.MCP.Editor.API
             "```\n" +
             "For simpler cases that do not need async/processing, you may return the model directly " +
             "(without `ResponseCallValueTool<T>`) and Feeder MCP will wrap it automatically. " +
-            "The data model itself MUST still live as a top-level type in the `AIGD` namespace.\n" +
+            "The data model itself MUST still live as a top-level type in the `Feeder.MCP.Data` namespace.\n" +
             "\n" +
             "### Validate inputs early and throw clearly\n" +
             "Always validate required parameters at the top of the method before any Unity API calls. " +
@@ -199,7 +199,7 @@ namespace Feeder.MCP.Editor.API
             [Description("Path for the C# (.cs) file to be created. Sample: \"Assets/Skills/MySkill.cs\".\n" +
                 "CRITICAL — Assembly Definition placement: If the project uses Assembly Definition files (.asmdef), " +
                 "you MUST place the script inside a folder that belongs to an assembly definition which already references " +
-                "all required dependencies (e.g. Feeder.McpPlugin, UnityEditor, UnityEngine). " +
+                "all required dependencies (e.g. Feeder.ToolHost, UnityEditor, UnityEngine). " +
                 "Placing the file in the wrong assembly will cause compile errors due to missing type references. " +
                 "Before choosing a path, inspect existing .asmdef files with the assets-find tool to identify the correct assembly folder.")]
             string path,

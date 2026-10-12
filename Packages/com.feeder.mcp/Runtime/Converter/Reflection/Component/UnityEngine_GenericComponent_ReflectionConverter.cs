@@ -2,10 +2,10 @@
 
 using System;
 using System.Collections.Generic;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Model;
+using Feeder.Reflect;
+using Feeder.Reflect.Model;
 using Feeder.MCP.Runtime.Extensions;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 
 namespace Feeder.MCP.Reflection.Converter
 {

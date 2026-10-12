@@ -1,6 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
-using Feeder.McpPlugin.Common.Model;
+using Feeder.ToolHost.Common.Model;
 
 namespace Feeder.MCP.Runtime.Extensions
 {

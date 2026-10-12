@@ -1,7 +1,7 @@
 #nullable enable
 using System.Collections.Generic;
 using System.Linq;
-using Feeder.McpPlugin.Common.Model;
+using Feeder.ToolHost.Common.Model;
 using UnityEditor;
 
 namespace Feeder.MCP.Editor.Utils
@@ -13,7 +13,7 @@ namespace Feeder.MCP.Editor.Utils
     public static class PackageUtils
     {
         private const string PendingNotificationKeysKey = "Feeder_MCP_PendingPackageNotificationKeys";
-        private const string NotificationDataSeparator = "<MCP_PKG_SEP>";
+        private const string NotificationDataSeparator = "<FEEDER_PKG_SEP>";
 
         private static bool _processPendingScheduled = false;
 
@@ -131,7 +131,7 @@ namespace Feeder.MCP.Editor.Utils
                 }
 
                 // Send notification and mark for cleanup
-                _ = UnityMcpPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
+                _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
                 {
                     RequestId = requestId,
                     Result = response

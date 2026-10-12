@@ -1,8 +1,8 @@
 #nullable enable
 using System.Collections.Generic;
-using System.Text.Json;
-using Feeder.McpPlugin.Common.Model;
-using Feeder.ReflectorNet;
+using Feeder.Json;
+using Feeder.ToolHost.Common.Model;
+using Feeder.Reflect;
 
 namespace Feeder.MCP.Runtime.Extensions
 {
@@ -17,7 +17,7 @@ namespace Feeder.MCP.Runtime.Extensions
         {
             data.Arguments ??= value == null
                 ? new Dictionary<string, JsonElement>()
-                : new Dictionary<string, JsonElement>() { [name] = value.ToJsonElement(UnityMcpPluginRuntime.Instance.McpPluginInstance?.McpManager.Reflector) };
+                : new Dictionary<string, JsonElement>() { [name] = value.ToJsonElement(MatrixPluginRuntime.Instance.ToolHostInstance?.McpManager.Reflector) };
             return data;
         }
         // public static IRequestData BuildRequest(this IRequestTool data)

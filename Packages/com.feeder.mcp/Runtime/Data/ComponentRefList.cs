@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     [Description("Component reference array. " +
         "Used to find Component at GameObject.")]

@@ -6,20 +6,20 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
+using Feeder.Json;
+using Feeder.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using Feeder.McpPlugin;
-using Feeder.McpPlugin.Common.Model;
+using Feeder.ToolHost;
+using Feeder.ToolHost.Common.Model;
 using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Utils;
-using Microsoft.AspNetCore.SignalR.Client;
-using Microsoft.Extensions.Logging;
-using R3;
+using Feeder.Fmp;
+using Feeder.Logging;
+using Feeder.Rx;
 using UnityEditor;
 using UnityEngine;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
+using ILogger = Feeder.Logging.ILogger;
 
 namespace Feeder.MCP.Editor.Matrix
 {
@@ -33,12 +33,13 @@ namespace Feeder.MCP.Editor.Matrix
         const string ProtocolVersion = "1";
         const string InstanceSessionKey = "Feeder.MCP.Matrix.UnityInstanceId";
 
-        readonly UnityMcpPluginEditor _owner;
+        readonly MatrixPluginEditor _owner;
         readonly ILogger _logger;
         readonly SemaphoreSlim _connectionGate = new(1, 1);
         readonly ConcurrentDictionary<string, CancellationTokenSource> _operations = new();
+        readonly ConcurrentDictionary<string, byte> _cancelledEarly = new();
 
-        HubConnection? _connection;
+        FmpConnection? _connection;
         IDisposable? _toolsUpdatedSubscription;
         CancellationTokenSource _lifetime = new();
         string _projectId = string.Empty;
@@ -48,7 +49,7 @@ namespace Feeder.MCP.Editor.Matrix
         FmpEditorState _lastEditorState = FmpEditorState.Ready;
         bool _disposed;
 
-        public FeederMatrixAdapter(UnityMcpPluginEditor owner)
+        public FeederMatrixAdapter(MatrixPluginEditor owner)
         {
             _owner = owner;
             _logger = UnityLoggerFactory.LoggerFactory.CreateLogger<FeederMatrixAdapter>();
@@ -66,20 +67,20 @@ namespace Feeder.MCP.Editor.Matrix
             await _connectionGate.WaitAsync();
             try
             {
-                if (_connection?.State == HubConnectionState.Connected)
+                if (_connection?.State == FmpState.Connected)
                     return true;
 
-                _owner.SetMatrixConnectionState(HubConnectionState.Connecting);
+                _owner.SetMatrixConnectionState(FmpState.Connecting);
                 if (!await McpServerManager.InstallServerBinaryIfNeeded(unattended: true))
                 {
-                    _owner.SetMatrixConnectionState(HubConnectionState.Disconnected);
+                    _owner.SetMatrixConnectionState(FmpState.Disconnected);
                     return false;
                 }
 
                 // only ever register with this project's own server, never whatever happens to answer on the port
                 if (!await McpServerManager.StartOwnServerAsync())
                 {
-                    _owner.SetMatrixConnectionState(HubConnectionState.Disconnected);
+                    _owner.SetMatrixConnectionState(FmpState.Disconnected);
                     ScheduleReconnect();
                     return false;
                 }
@@ -96,7 +97,7 @@ namespace Feeder.MCP.Editor.Matrix
                         await RegisterAsync(_lifetime.Token);
                         SubscribeToRegistryChanges();
                         CancelReconnect();
-                        _owner.SetMatrixConnectionState(HubConnectionState.Connected);
+                        _owner.SetMatrixConnectionState(FmpState.Connected);
                         _logger.LogInformation("Connected Unity editor to Feeder Local Matrix at {url}", MatrixHubUrl);
                         return true;
                     }
@@ -105,7 +106,7 @@ namespace Feeder.MCP.Editor.Matrix
                         lastError = e;
                         try
                         {
-                            if (_connection.State != HubConnectionState.Disconnected)
+                            if (_connection.State != FmpState.Disconnected)
                                 await _connection.StopAsync();
                         }
                         catch { }
@@ -114,13 +115,13 @@ namespace Feeder.MCP.Editor.Matrix
                 }
 
                 _logger.LogError(lastError, "Unable to connect Unity editor to Feeder Local Matrix at {url}", MatrixHubUrl);
-                _owner.SetMatrixConnectionState(HubConnectionState.Disconnected);
+                _owner.SetMatrixConnectionState(FmpState.Disconnected);
                 ScheduleReconnect();
                 return false;
             }
             catch (OperationCanceledException)
             {
-                _owner.SetMatrixConnectionState(HubConnectionState.Disconnected);
+                _owner.SetMatrixConnectionState(FmpState.Disconnected);
                 return false;
             }
             finally
@@ -147,7 +148,7 @@ namespace Feeder.MCP.Editor.Matrix
         {
             if (_disposed || _lifetime.IsCancellationRequested)
                 return;
-            if (!UnityMcpPluginEditor.KeepConnected || !MatrixActivation.IsEnabled)
+            if (!MatrixPluginEditor.KeepConnected || !MatrixActivation.IsEnabled)
                 return;
             if (McpServerManager.ServerFault.CurrentValue != null)
                 return;
@@ -155,7 +156,7 @@ namespace Feeder.MCP.Editor.Matrix
             if (_reconnectAttempt >= ReconnectBackoff.Length)
             {
                 McpServerManager.SetPendingNote(null);
-                McpServerManager.SetServerFault($"Cannot reach this project's MCP server on :{UnityMcpPluginEditor.Port} after {ReconnectBackoff.Length} retries - see logs, then Retry.");
+                McpServerManager.SetServerFault($"Cannot reach this project's MCP server on :{MatrixPluginEditor.Port} after {ReconnectBackoff.Length} retries - see logs, then Retry.");
                 _reconnectAttempt = 0;
                 return;
             }
@@ -167,9 +168,9 @@ namespace Feeder.MCP.Editor.Matrix
             {
                 if (task.IsCanceled || generation != Volatile.Read(ref _reconnectGeneration))
                     return;
-                Feeder.ReflectorNet.Utils.MainThread.Instance.Run(() =>
+                Feeder.Reflect.Utils.MainThread.Instance.Run(() =>
                 {
-                    if (_disposed || !UnityMcpPluginEditor.KeepConnected || !MatrixActivation.IsEnabled)
+                    if (_disposed || !MatrixPluginEditor.KeepConnected || !MatrixActivation.IsEnabled)
                     {
                         McpServerManager.SetPendingNote(null);
                         return;
@@ -194,13 +195,13 @@ namespace Feeder.MCP.Editor.Matrix
             {
                 _toolsUpdatedSubscription?.Dispose();
                 _toolsUpdatedSubscription = null;
-                if (_connection?.State == HubConnectionState.Connected)
+                if (_connection?.State == FmpState.Connected)
                 {
-                    try { await _connection.SendAsync("Unregister", _projectId, _unityInstanceId); }
+                    try { await _connection.SendAsync("Unregister", FmpJson.Arguments(_projectId, _unityInstanceId)); }
                     catch { }
                 }
                 await DisposeConnectionAsync();
-                _owner.SetMatrixConnectionState(HubConnectionState.Disconnected);
+                _owner.SetMatrixConnectionState(FmpState.Disconnected);
             }
             finally
             {
@@ -213,66 +214,123 @@ namespace Feeder.MCP.Editor.Matrix
             if (request == null || string.IsNullOrWhiteSpace(request.RequestId) || request.Result == null)
                 return;
 
-            if (_connection?.State != HubConnectionState.Connected && !await ConnectAsync())
+            if (_connection?.State != FmpState.Connected && !await ConnectAsync())
                 throw new InvalidOperationException("Feeder Local Matrix is not connected.");
 
             await SendCompletedResultAsync(request.RequestId, request.Result, cancellationToken);
             RemoveOperation(request.RequestId);
         }
 
-        HubConnection BuildConnection()
-        {
-            var connection = new HubConnectionBuilder()
-                .WithUrl(MatrixHubUrl)
-                .WithAutomaticReconnect(new[]
-                {
-                    TimeSpan.Zero,
-                    TimeSpan.FromMilliseconds(250),
-                    TimeSpan.FromSeconds(1),
-                    TimeSpan.FromSeconds(2),
-                })
-                .Build();
+        // null until Register answers on the current link, so a reconnect never reuses the old server's answer
+        string[]? _serverCapabilities;
 
-            connection.On<ToolInvoke>("InvokeTool", invoke => InvokeToolAsync(invoke));
-            connection.On<string>("CancelTool", operationId =>
+        public async Task<CompileResponse> CompileAsync(CompileRequest request, CancellationToken cancellationToken)
+        {
+            var connection = _connection;
+            var capabilities = _serverCapabilities;
+            if (connection?.State != FmpState.Connected || capabilities == null)
+                throw new InvalidOperationException("Feeder Local Matrix is not connected, so C# cannot be compiled.");
+            if (!capabilities.Contains("compile"))
+                throw new InvalidOperationException("This Feeder Local Matrix server cannot compile C#. Reinstall the server from the Tools > Feeder menu.");
+            // callers block on this, so the continuation must not need the main thread
+            return FmpJson.Parse<CompileResponse>(await connection.InvokeAsync("Compile", FmpJson.Arguments(request), cancellationToken).ConfigureAwait(false));
+        }
+
+        FmpConnection BuildConnection()
+        {
+            var connection = new FmpConnection(new Uri(MatrixHubUrl));
+            var previous = FmpState.Disconnected;
+
+            connection.On("InvokeTool", arguments => InvokeToolAsync(FmpJson.First<ToolInvoke>(arguments)));
+            connection.On("CancelTool", arguments =>
             {
-                if (_operations.TryGetValue(operationId, out var cts))
-                    cts.Cancel();
-            });
-            connection.On<McpClientInfo[]>("McpClientsChanged", clients => PublishMcpClients(clients));
-            connection.Reconnecting += _ =>
-            {
-                _owner.SetMatrixConnectionState(HubConnectionState.Reconnecting);
+                CancelOperation(FmpJson.First<string>(arguments));
                 return Task.CompletedTask;
-            };
-            connection.Reconnected += async _ =>
+            });
+            connection.On("McpClientsChanged", arguments =>
             {
-                try
-                {
-                    await RegisterAsync(_lifetime.Token);
-                    _owner.SetMatrixConnectionState(HubConnectionState.Connected);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e, "Failed to re-register Unity with Feeder Local Matrix");
-                }
+                PublishMcpClients(FmpJson.First<McpClientInfo[]>(arguments));
+                return Task.CompletedTask;
+            });
+            connection.HandlerFailed += (target, error) =>
+                _logger.LogError(error, "Feeder Local Matrix call {target} failed", target);
+            connection.StateChanged += state =>
+            {
+                var wasReconnecting = previous == FmpState.Reconnecting;
+                previous = state;
+                if (!ReferenceEquals(connection, _connection))
+                    return;
+                if (state != FmpState.Connected)
+                    _serverCapabilities = null;
+                if (state == FmpState.Reconnecting)
+                    _owner.SetMatrixConnectionState(FmpState.Reconnecting);
+                else if (state == FmpState.Connected && wasReconnecting)
+                    _ = ReregisterAsync(connection);
             };
             connection.Closed += _ =>
             {
-                _owner.SetMatrixConnectionState(HubConnectionState.Disconnected);
+                _owner.SetMatrixConnectionState(FmpState.Disconnected);
                 PublishMcpClients(Array.Empty<McpClientInfo>());
                 if (ReferenceEquals(connection, _connection))
                     ScheduleReconnect();
-                return Task.CompletedTask;
             };
             return connection;
+        }
+
+        async Task ReregisterAsync(FmpConnection connection)
+        {
+            try
+            {
+                await RegisterAsync(_lifetime.Token);
+                _owner.SetMatrixConnectionState(FmpState.Connected);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to re-register Unity with Feeder Local Matrix");
+                // a link the server does not know never receives a tool call, so start over instead of idling on it
+                if (_disposed || _lifetime.IsCancellationRequested)
+                    return;
+                try
+                {
+                    await _connectionGate.WaitAsync(_lifetime.Token);
+                    try
+                    {
+                        if (!ReferenceEquals(connection, _connection))
+                            return;
+                        await DisposeConnectionAsync();
+                        _owner.SetMatrixConnectionState(FmpState.Disconnected);
+                    }
+                    finally
+                    {
+                        _connectionGate.Release();
+                    }
+                    ScheduleReconnect();
+                }
+                catch (OperationCanceledException) { }
+                catch (ObjectDisposedException) { }
+            }
+        }
+
+        // the client may deliver CancelTool before InvokeTool has registered its operation
+        void CancelOperation(string operationId)
+        {
+            if (!_operations.TryGetValue(operationId, out var cts))
+            {
+                _cancelledEarly[operationId] = 0;
+                _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ => _cancelledEarly.TryRemove(operationId, out var removed));
+                // InvokeTool may have registered between the lookup and the mark
+                if (!_operations.TryGetValue(operationId, out cts))
+                    return;
+            }
+            try { cts.Cancel(); }
+            catch (ObjectDisposedException) { }
         }
 
         async Task RegisterAsync(CancellationToken cancellationToken)
         {
             EnsureIdentity();
             var snapshot = BuildRegistrySnapshot();
-            var response = await _connection!.InvokeAsync<UnityRegisterResponse>("Register", new UnityRegisterRequest
+            var response = FmpJson.Parse<UnityRegisterResponse>(await _connection!.InvokeAsync("Register", FmpJson.Arguments(new UnityRegisterRequest
             {
                 ProtocolVersion = ProtocolVersion,
                 SupportedProtocolVersions = new[] { ProtocolVersion },
@@ -280,19 +338,20 @@ namespace Feeder.MCP.Editor.Matrix
                 UnityInstanceId = _unityInstanceId,
                 ProjectPathHash = _projectPathHash,
                 UnityVersion = _unityVersion,
-                PluginVersion = UnityMcpPlugin.Version,
+                PluginVersion = MatrixPlugin.Version,
                 ToolRegistryHash = snapshot.RegistryHash,
-                AuthToken = UnityMcpPluginEditor.Token ?? string.Empty,
+                AuthToken = MatrixPluginEditor.Token ?? string.Empty,
                 EditorState = _lastEditorState,
                 PendingOperations = _operations.Keys.ToArray(),
-            }, cancellationToken);
+            }), cancellationToken));
 
             if (response.Error != null)
                 throw new InvalidOperationException($"[{response.Error.Code}] {response.Error.Message}");
             if (response.ChosenProtocolVersion != ProtocolVersion)
                 throw new InvalidOperationException($"Unsupported FMP protocol '{response.ChosenProtocolVersion}'.");
+            _serverCapabilities = response.Capabilities ?? Array.Empty<string>();
             if (!response.RegistryUpToDate)
-                await _connection!.SendAsync("PublishRegistry", snapshot, cancellationToken);
+                await _connection!.SendAsync("PublishRegistry", FmpJson.Arguments(snapshot), cancellationToken);
         }
 
         void SubscribeToRegistryChanges()
@@ -307,8 +366,8 @@ namespace Feeder.MCP.Editor.Matrix
         {
             try
             {
-                if (_connection?.State == HubConnectionState.Connected)
-                    await _connection.SendAsync("PublishRegistry", BuildRegistrySnapshot(), _lifetime.Token);
+                if (_connection?.State == FmpState.Connected)
+                    await _connection.SendAsync("PublishRegistry", FmpJson.Arguments(BuildRegistrySnapshot()), _lifetime.Token);
             }
             catch (Exception e)
             {
@@ -351,6 +410,8 @@ namespace Feeder.MCP.Editor.Matrix
             var deferred = false;
             var cts = CreateOperationCancellation(invoke);
             _operations[invoke.OperationId] = cts;
+            if (_cancelledEarly.TryRemove(invoke.OperationId, out _))
+                cts.Cancel();
             try
             {
                 var manager = _owner.Tools ?? throw new InvalidOperationException("Tool manager is not available.");
@@ -371,7 +432,8 @@ namespace Feeder.MCP.Editor.Matrix
                     return;
                 }
 
-                await SendCompletedResultAsync(invoke.OperationId, response, cts.Token);
+                // the tool already ran, so a cancel that lands now must not replace its real result
+                await SendCompletedResultAsync(invoke.OperationId, response, CancellationToken.None);
             }
             catch (OperationCanceledException)
             {
@@ -393,24 +455,24 @@ namespace Feeder.MCP.Editor.Matrix
         {
             var success = !IsStatus(response, "Error");
             var payload = SerializeCallToolResult(response, !success);
-            await _connection!.SendAsync("CompleteTool", new ToolResult
+            await _connection!.SendAsync("CompleteTool", FmpJson.Arguments(new ToolResult
             {
                 OperationId = operationId,
                 Success = true,
                 ContentJsonUtf8 = payload,
-            }, cancellationToken);
+            }), cancellationToken);
         }
 
         async Task SendErrorAsync(string operationId, string code, string message)
         {
-            if (_connection?.State != HubConnectionState.Connected)
+            if (_connection?.State != FmpState.Connected)
                 return;
-            await _connection.SendAsync("CompleteTool", new ToolResult
+            await _connection.SendAsync("CompleteTool", FmpJson.Arguments(new ToolResult
             {
                 OperationId = operationId,
                 Success = false,
                 Error = new FmpError { Code = code, Message = message },
-            });
+            }));
         }
 
         static byte[] SerializeCallToolResult(ResponseCallTool response, bool isError)
@@ -485,7 +547,7 @@ namespace Feeder.MCP.Editor.Matrix
         {
             try
             {
-                var manager = _owner.McpPluginInstance?.McpManager as McpManager;
+                var manager = _owner.ToolHostInstance?.McpManager as McpManager;
                 if (manager == null)
                     return;
 
@@ -543,7 +605,7 @@ namespace Feeder.MCP.Editor.Matrix
             if (!string.IsNullOrEmpty(_projectId))
                 return;
 
-            var projectRoot = UnityMcpPluginEditor.ProjectRootPath.Replace('\\', '/').TrimEnd('/');
+            var projectRoot = MatrixPluginEditor.ProjectRootPath.Replace('\\', '/').TrimEnd('/');
             _projectPathHash = Sha256(projectRoot.ToLowerInvariant());
             var projectName = System.IO.Path.GetFileName(projectRoot);
             _projectId = $"{projectName}-{_projectPathHash.Substring(0, 12)}";
@@ -573,7 +635,7 @@ namespace Feeder.MCP.Editor.Matrix
             else _lastEditorState = FmpEditorState.Ready;
         }
 
-        static string MatrixHubUrl => $"http://127.0.0.1:{UnityMcpPluginEditor.Port}/fmp";
+        static string MatrixHubUrl => $"http://127.0.0.1:{MatrixPluginEditor.Port}/fmp";
 
         async Task DisposeConnectionAsync()
         {
@@ -581,7 +643,7 @@ namespace Feeder.MCP.Editor.Matrix
             if (connection == null)
                 return;
             _connection = null;
-            try { await connection.DisposeAsync(); }
+            try { await connection.StopAsync(); connection.Dispose(); }
             catch { }
         }
 
@@ -596,7 +658,7 @@ namespace Feeder.MCP.Editor.Matrix
             _toolsUpdatedSubscription?.Dispose();
             foreach (var operation in _operations.Keys.ToArray())
                 RemoveOperation(operation);
-            try { _connection?.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
+            try { _connection?.Dispose(); }
             catch { }
             _connection = null;
             _lifetime.Dispose();

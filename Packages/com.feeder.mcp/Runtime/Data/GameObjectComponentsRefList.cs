@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     [System.Serializable]
     [Description("GameObject references array. " +

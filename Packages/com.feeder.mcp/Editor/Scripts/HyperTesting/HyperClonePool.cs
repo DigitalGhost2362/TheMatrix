@@ -11,7 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
-using Feeder.ReflectorNet.Utils;
+using Feeder.Reflect.Utils;
 using Debug = UnityEngine.Debug;
 
 namespace Feeder.MCP.Editor.HyperTesting
@@ -369,13 +369,19 @@ namespace Feeder.MCP.Editor.HyperTesting
             File.WriteAllText(Path.Combine(userSettings, "Feeder-MCP-Config.json"), json);
         }
 
+        // any tool's MCP variables would steer the clone's bridge to the main editor's server
+        internal static bool IsMcpEnvironmentKey(string key)
+            => key.StartsWith(Feeder.MCP.Runtime.Utils.EnvironmentUtils.EnvPrefix, StringComparison.OrdinalIgnoreCase)
+               || key.StartsWith("MCP_", StringComparison.OrdinalIgnoreCase)
+               || key.IndexOf("_MCP_", StringComparison.OrdinalIgnoreCase) >= 0;
+
         static int Launch(Context ctx, string root)
         {
             var args = $"-projectPath \"{root}\" -logFile \"{Path.Combine(root, "Logs", "hyper-editor.log")}\" -silent-crashes";
             if (ctx.Config.jobWorkerCount > 0)
                 args += $" -job-worker-count {ctx.Config.jobWorkerCount}";
             var info = new ProcessStartInfo(ctx.UnityPath, args) { UseShellExecute = false, WorkingDirectory = root };
-            foreach (var key in info.Environment.Keys.Where(k => k.StartsWith("UNITY_MCP_", StringComparison.OrdinalIgnoreCase)).ToList())
+            foreach (var key in info.Environment.Keys.Where(IsMcpEnvironmentKey).ToList())
                 info.Environment.Remove(key);
             var process = Process.Start(info) ?? throw new IOException("Unity.exe did not start");
             if (ctx.Config.belowNormalPriority)

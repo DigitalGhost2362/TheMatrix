@@ -12,10 +12,10 @@ In Unity 2022.3 or newer, open **Window > Package Manager**, choose
 https://github.com/BingoBoiz/TheMatrix.git?path=/Packages/com.feeder.mcp
 ```
 
-The package includes its managed dependencies and compressed self-contained local server. On first
-use, the editor extracts the server into the consuming project's `Library/mcp-server` cache. It does
-not require Git LFS or a separate .NET runtime. Unity resolves the
-official Unity Test Framework dependency from its standard registry.
+The package is plain source: it contains no precompiled `.dll`. It ships a
+compressed self-contained local server. On first use, the editor extracts the server into the
+consuming project's `Library/feeder-matrix` cache. It does not require Git LFS or a separate .NET
+runtime. Unity resolves the official Unity Test Framework dependency from its standard registry.
 
 For reproducible installs, use a released tag:
 
@@ -40,7 +40,7 @@ Once Matrix is on, the package does this each time the editor loads:
 1. Extracts and starts the bundled local MCP server.
 2. Writes the project-root `.mcp.json` with the correct server URL (Claude Code picks it up on
    the next session in that folder).
-3. Generates skill files into `.claude/skills`.
+3. Generates skill files into `.claude/skills`, one `matrix-<tool>` folder for each enabled tool.
 
 For other AI clients, open **Tools > Feeder > Bridge** and click the client name at the
 bottom of the window to wire or unwire it. To turn Matrix off again, click the state word while it
@@ -126,11 +126,23 @@ The package currently includes the local server binary for Windows x64. The Unit
 can be imported on other platforms, but starting the bundled server requires a matching payload
 under `Server~/<platform>-<architecture>`.
 
-The Windows payload is the Feeder MCP Server, installed as `Library/mcp-server/win-x64/matrix-server.exe`
+The Windows payload is the Feeder MCP Server, installed as `Library/feeder-matrix/win-x64/matrix-server.exe`
 and reachable only on `127.0.0.1`. The Git package stores this payload as `server-payload.zip` to
 remain below GitHub's per-file limit; installation and updates are handled automatically by the
-editor package. Updating from 0.87 or earlier stops the old `gamedev-mcp-server.exe` of the project,
-replaces it, and rewrites the config of every wired agent; restart the agent session afterwards.
+editor package. Updating from 0.87 or earlier stops the project's old Matrix server, removes the files
+it left in `Library` (only when they are Matrix's own), and rewrites the config of every wired agent;
+restart the agent session afterwards.
+
+## Names Matrix uses
+
+Matrix only creates, edits and deletes things under names of its own:
+
+- the server lives in `Library/feeder-matrix` and the log in `Temp/feeder-matrix`;
+- its entry in `.mcp.json` and the other client configs is `Feeder-MCP`, and its environment
+  variables start with `FEEDER_MATRIX_`;
+- its skill folders are `matrix-<tool>`;
+- its data types are in the `Feeder.MCP.Data` namespace;
+- it never edits or deletes a server, skill or config entry that it did not write.
 
 ## License
 

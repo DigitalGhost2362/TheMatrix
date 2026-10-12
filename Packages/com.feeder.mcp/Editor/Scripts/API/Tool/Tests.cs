@@ -2,8 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Feeder.McpPlugin;
-using Feeder.McpPlugin.Common.Model;
+using Feeder.ToolHost;
+using Feeder.ToolHost.Common.Model;
 using Feeder.MCP.Editor.API.TestRunner;
 using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Runtime.Utils;
@@ -45,7 +45,7 @@ namespace Feeder.MCP.Editor.API
         }
         public static TestRunnerApi CreateInstance()
         {
-            if (UnityMcpPlugin.IsLogEnabled(LogLevel.Trace))
+            if (MatrixPlugin.IsLogEnabled(LogLevel.Trace))
                 Debug.Log($"[{nameof(TestRunnerApi)}] Creating new instance. Existing API: {_testRunnerApi != null}, Existing Collector: {_resultCollector != null}, Callbacks Registered: {_callbacksRegistered}");
 
             _resultCollector ??= new TestResultCollector();
@@ -55,7 +55,7 @@ namespace Feeder.MCP.Editor.API
             // Unity's TestRunnerApi maintains a static callback list, so multiple RegisterCallbacks calls add duplicates
             if (!_callbacksRegistered)
             {
-                if (UnityMcpPlugin.IsLogEnabled(LogLevel.Trace))
+                if (MatrixPlugin.IsLogEnabled(LogLevel.Trace))
                     Debug.Log($"[{nameof(TestRunnerApi)}] Registering callbacks for the first (and only) time.");
 
                 testRunnerApi.RegisterCallbacks(_resultCollector);
@@ -63,7 +63,7 @@ namespace Feeder.MCP.Editor.API
             }
             else
             {
-                if (UnityMcpPlugin.IsLogEnabled(LogLevel.Trace))
+                if (MatrixPlugin.IsLogEnabled(LogLevel.Trace))
                     Debug.LogWarning($"[{nameof(TestRunnerApi)}] Callbacks already registered globally - skipping registration.");
             }
 
@@ -124,7 +124,7 @@ namespace Feeder.MCP.Editor.API
                     .Error($"Cannot run tests: compilation errors after script recompilation.\n\n{errorDetails}")
                     .SetRequestID(requestId);
 
-                _ = UnityMcpPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
+                _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
                 {
                     RequestId = requestId,
                     Result = response
@@ -149,7 +149,7 @@ namespace Feeder.MCP.Editor.API
 
             var filterParams = new TestFilterParameters(testAssembly, testNamespace, testClass, testMethod);
 
-            if (UnityMcpPlugin.IsLogEnabled(LogLevel.Info))
+            if (MatrixPlugin.IsLogEnabled(LogLevel.Info))
                 Debug.Log($"[TestRunner] Resuming test run after recompilation. Mode: {testMode}, Filters: {filterParams}");
 
             var filter = CreateTestFilter(testMode, filterParams);

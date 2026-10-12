@@ -1,11 +1,11 @@
 #nullable enable
 using System;
-using Microsoft.Extensions.Logging;
+using Feeder.Logging;
 
 namespace Feeder.MCP.Utils
 {
     using LogLevel = Runtime.Utils.LogLevel;
-    using LogLevelMicrosoft = Microsoft.Extensions.Logging.LogLevel;
+    using LogLevelMicrosoft = Feeder.Logging.LogLevel;
 
     public class UnityLogger : ILogger
     {
@@ -47,14 +47,14 @@ namespace Feeder.MCP.Utils
 
         public bool IsEnabled(LogLevelMicrosoft logLevel)
         {
-            // Prevent infinite loop during UnityMcpPlugin initialization by checking if any instance exists
-            if (!UnityMcpPlugin.HasAnyInstance)
+            // Prevent infinite loop during MatrixPlugin initialization by checking if any instance exists
+            if (!MatrixPlugin.HasAnyInstance)
             {
                 // During initialization, allow all log levels
                 return true;
             }
 
-            return UnityMcpPlugin.IsLogEnabled(logLevel switch
+            return MatrixPlugin.IsLogEnabled(logLevel switch
             {
                 LogLevelMicrosoft.Critical => LogLevel.Exception,
                 LogLevelMicrosoft.Error => LogLevel.Error,

@@ -1,6 +1,6 @@
 #nullable enable
 #if UNITY_6000_5_OR_NEWER
-using AIGD;
+using Feeder.MCP.Data;
 
 namespace Feeder.MCP.Runtime.Extensions
 {

@@ -3,10 +3,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Converter;
+using Feeder.Reflect;
+using Feeder.Reflect.Converter;
 using UnityEngine;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
+using ILogger = Feeder.Logging.ILogger;
 
 namespace Feeder.MCP.Reflection.Converter
 {

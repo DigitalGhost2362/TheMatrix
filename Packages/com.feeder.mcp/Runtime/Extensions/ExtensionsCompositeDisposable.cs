@@ -1,6 +1,6 @@
 #nullable enable
 using System.Threading;
-using R3;
+using Feeder.Rx;
 
 namespace Feeder.MCP.Runtime.Extensions
 {

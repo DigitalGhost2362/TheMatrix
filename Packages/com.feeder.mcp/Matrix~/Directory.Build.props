@@ -10,5 +10,8 @@
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Keeps the build machine's folders out of the shipped binaries (source and pdb paths). -->
+    <PathMap>$(MSBuildThisFileDirectory)=/_/</PathMap>
+    <PathMap Condition="'$(ArtifactsPath)' != ''">$(PathMap),$([System.IO.Path]::GetFullPath('$(ArtifactsPath)'))=/_artifacts/</PathMap>
   </PropertyGroup>
 </Project>

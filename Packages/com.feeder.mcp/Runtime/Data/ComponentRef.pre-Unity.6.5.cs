@@ -3,10 +3,10 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using System.Text.Json.Serialization;
-using Feeder.ReflectorNet;
+using Feeder.Json.Serialization;
+using Feeder.Reflect;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     [Description("Component reference. " +
         "Used to find a Component at GameObject.")]

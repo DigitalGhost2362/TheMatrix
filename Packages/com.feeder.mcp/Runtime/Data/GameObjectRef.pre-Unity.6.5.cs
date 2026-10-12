@@ -3,12 +3,12 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using System.Text.Json.Serialization;
-using Feeder.McpPlugin;
+using Feeder.Json.Serialization;
+using Feeder.ToolHost;
 using Feeder.MCP.Runtime.Utils;
 using UnityEngine;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     [Description("Find GameObject in opened Prefab or in the active Scene.")]
     public class GameObjectRef : AssetObjectRef

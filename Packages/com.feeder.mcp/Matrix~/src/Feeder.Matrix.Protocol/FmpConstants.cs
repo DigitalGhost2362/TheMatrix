@@ -14,6 +14,14 @@ public static class FmpConstants
     public const int DefaultQueueCapacity = 32;
     public const int HeartbeatIntervalSeconds = 5;
     public const int LinkResumeTtlSeconds = 120;
+    public const string DefaultCompileAssemblyName = "DynamicAssembly";
+}
+
+/// <summary>Optional matrix features listed in <see cref="UnityRegisterResponse.Capabilities"/>.</summary>
+public static class FmpCapabilities
+{
+    /// <summary>The hub serves <c>Compile</c> to a registered Unity link.</summary>
+    public const string Compile = "compile";
 }
 
 /// <summary>Editor state reported in handshake and heartbeats.</summary>

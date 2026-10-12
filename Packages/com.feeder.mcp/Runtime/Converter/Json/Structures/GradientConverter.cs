@@ -1,9 +1,9 @@
 #nullable enable
 using System;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using Feeder.ReflectorNet.Json;
-using Feeder.ReflectorNet.Utils;
+using Feeder.Json;
+using Feeder.Json.Nodes;
+using Feeder.Reflect.Json;
+using Feeder.Reflect.Utils;
 using UnityEngine;
 
 namespace Feeder.MCP.JsonConverters
@@ -78,10 +78,10 @@ namespace Feeder.MCP.JsonConverters
                     switch (propertyName)
                     {
                         case "colorKeys":
-                            colorKeys = System.Text.Json.JsonSerializer.Deserialize<GradientColorKey[]>(ref reader, options);
+                            colorKeys = Feeder.Json.JsonSerializer.Deserialize<GradientColorKey[]>(ref reader, options);
                             break;
                         case "alphaKeys":
-                            alphaKeys = System.Text.Json.JsonSerializer.Deserialize<GradientAlphaKey[]>(ref reader, options);
+                            alphaKeys = Feeder.Json.JsonSerializer.Deserialize<GradientAlphaKey[]>(ref reader, options);
                             break;
                         case "mode":
                             if (reader.TokenType == JsonTokenType.String)
@@ -117,10 +117,10 @@ namespace Feeder.MCP.JsonConverters
             writer.WriteStartObject();
 
             writer.WritePropertyName("colorKeys");
-            System.Text.Json.JsonSerializer.Serialize(writer, value.colorKeys, options);
+            Feeder.Json.JsonSerializer.Serialize(writer, value.colorKeys, options);
 
             writer.WritePropertyName("alphaKeys");
-            System.Text.Json.JsonSerializer.Serialize(writer, value.alphaKeys, options);
+            Feeder.Json.JsonSerializer.Serialize(writer, value.alphaKeys, options);
 
             writer.WriteString("mode", value.mode.ToString());
 

@@ -5,12 +5,12 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Text;
-using System.Text.Json.Serialization;
-using Feeder.ReflectorNet;
-using Feeder.ReflectorNet.Utils;
+using Feeder.Json.Serialization;
+using Feeder.Reflect;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Runtime.Extensions;
 
-namespace AIGD
+namespace Feeder.MCP.Data
 {
     [Serializable]
     [Description("Reference to UnityEngine.Object asset instance. " +

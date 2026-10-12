@@ -1,9 +1,9 @@
 #nullable enable
 using System.ComponentModel;
 using System.Threading.Tasks;
-using Feeder.McpPlugin;
-using Feeder.McpPlugin.Common.Model;
-using Feeder.ReflectorNet.Utils;
+using Feeder.ToolHost;
+using Feeder.ToolHost.Common.Model;
+using Feeder.Reflect.Utils;
 using Feeder.MCP.Editor.Utils;
 using UnityEditor.PackageManager;
 
@@ -77,7 +77,7 @@ namespace Feeder.MCP.Editor.API
                 {
                     // If the operation failed immediately, send error response
                     var errorMessage = Error.PackageOperationFailed("add", packageId, addRequest.Error?.message ?? "Unknown error");
-                    _ = UnityMcpPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
+                    _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
                     {
                         RequestId = requestId,
                         Result = ResponseCallTool.Error(errorMessage).SetRequestID(requestId)

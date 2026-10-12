@@ -1,7 +1,6 @@
 # MCP compatibility matrix — baseline vs Feeder Local Matrix
 
-Baseline measured 2026-07-10 against the previous server 8.0.1.0 ("previous local"), Unity connected, machine DESKTOP-1KKLGO1.
-Machine-readable data: [baseline-previous-local.json](../benchmarks/baseline-previous-local.json), raw definitions in [benchmarks/exports/previous-local/](../benchmarks/exports/previous-local/).
+Baseline measured 2026-07-10 against the earlier server ("previous local"), Unity connected.
 
 > Cloud baseline (`baseline-cloud.json`) is pending: no remote endpoint is reachable from this dev machine. The ≥50% control-plane SLO comparison will be run when cloud credentials are available; all other gates use previous-local numbers.
 
@@ -9,7 +8,7 @@ Machine-readable data: [baseline-previous-local.json](../benchmarks/baseline-pre
 
 | MCP feature | Previous server local behavior (measured) | Matrix target |
 |---|---|---|
-| `initialize` | protocolVersion `2025-06-18`, capabilities: logging, prompts+listChanged, resources+listChanged, tools+listChanged; serverInfo `previous-server/8.0.1.0` | Same capability set; serverInfo `feeder-matrix`; negotiate `2025-03-26`…`2025-11-25` |
+| `initialize` | protocolVersion `2025-06-18`, capabilities: logging, prompts+listChanged, resources+listChanged, tools+listChanged; serverInfo `previous-server` | Same capability set; serverInfo `feeder-matrix`; negotiate `2025-03-26`…`2025-11-25` |
 | Transport | Streamable HTTP (`Mcp-Session-Id` header, SSE responses), Kestrel, **binds 0.0.0.0** | Streamable HTTP + stdio shim, **127.0.0.1 only** |
 | `ping` | Supported, p50 1.84 ms / p95 3.47 ms / p99 5.35 ms (10 000 iter, 0 errors) | ≤ same, SLO p95 ≤ 15 ms e2e incl. Unity |
 | `tools/list` | 38 tools, 144 896 B response, **p50 118 ms / p95 173 ms** (no caching — regenerated per call) | Cached by registry hash: p95 ≤ 10 ms |
