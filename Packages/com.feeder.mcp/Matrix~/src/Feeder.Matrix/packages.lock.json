@@ -21,6 +21,12 @@
           "Microsoft.CodeAnalysis.Common": "[5.6.0]"
         }
       },
+      "Microsoft.NET.ILLink.Tasks": {
+        "type": "Direct",
+        "requested": "[10.0.4, )",
+        "resolved": "10.0.4",
+        "contentHash": "CCx8ojW3mOL150/LnP0DK7qpMrJEt6xxNCmJFKoX89v1h0FwpsEHqennowGPYDxp6zIkIO4f9PxynjOeLF+1zw=="
+      },
       "ModelContextProtocol.AspNetCore": {
         "type": "Direct",
         "requested": "[1.4.1, )",
@@ -178,6 +184,7 @@
           "MessagePack": "[3.1.8, )"
         }
       }
-    }
+    },
+    "net10.0/win-x64": {}
   }
 }

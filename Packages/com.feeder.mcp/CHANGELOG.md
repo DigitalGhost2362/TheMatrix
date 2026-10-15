@@ -111,6 +111,11 @@ All notable changes to this package are documented here.
   15 minutes). Every timeout ends with the editor health summary.
 - `editor-application-set-state` answers once play mode is entered or left, domain reload included.
 - The editor sends a heartbeat from a background thread; the server version is 0.4.0.
+- A tool failure caused by the caller (bad input, or code passed to `script-execute` that does not compile
+  or throws) logs one `[Matrix tool]` warning line instead of a red error with a stack trace; the caller
+  still gets the whole message. Tools throw `ToolCallerException` for this. Faults of the tools themselves
+  stay errors.
+- `script-execute` reports the exception type, its message and only the frames of the caller's script.
 
 ### Fixed
 

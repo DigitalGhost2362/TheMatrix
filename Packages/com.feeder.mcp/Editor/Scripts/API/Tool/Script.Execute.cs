@@ -89,13 +89,13 @@ namespace Feeder.MCP.Editor.API
         )
         {
             if (string.IsNullOrEmpty(csharpCode))
-                throw new Exception($"'{nameof(csharpCode)}' is null or empty. Please provide valid C# code to execute.");
+                throw new ToolCallerException($"'{nameof(csharpCode)}' is null or empty. Please provide valid C# code to execute.");
 
             if (string.IsNullOrEmpty(className))
-                throw new Exception($"'{nameof(className)}' cannot be null or empty.");
+                throw new ToolCallerException($"'{nameof(className)}' cannot be null or empty.");
 
             if (string.IsNullOrEmpty(methodName))
-                throw new Exception($"'{nameof(methodName)}' cannot be null or empty.");
+                throw new ToolCallerException($"'{nameof(methodName)}' cannot be null or empty.");
 
             if (HyperTesting.HyperTestingActivation.LooksLikeActivationAttempt(csharpCode))
                 throw new Exception(HyperTesting.HyperTestingActivation.ActivationRefusal);
@@ -108,10 +108,10 @@ namespace Feeder.MCP.Editor.API
             else
             {
                 if (csharpCode.Contains(className) == false)
-                    throw new Exception($"'{nameof(csharpCode)}' does not contain class '{className}'. Please ensure the class is defined in the provided code.");
+                    throw new ToolCallerException($"'{nameof(csharpCode)}' does not contain class '{className}'. Please ensure the class is defined in the provided code.");
 
                 if (csharpCode.Contains(methodName) == false)
-                    throw new Exception($"'{nameof(csharpCode)}' does not contain method '{methodName}'. Please ensure the method is defined in the provided code.");
+                    throw new ToolCallerException($"'{nameof(csharpCode)}' does not contain method '{methodName}'. Please ensure the method is defined in the provided code.");
 
                 codeToCompile = csharpCode;
             }
@@ -136,7 +136,7 @@ namespace Feeder.MCP.Editor.API
                     error: out var error,
                     logger: logger))
                 {
-                    throw new Exception(error);
+                    throw new ToolCallerException(error ?? "Execution failed.");
                 }
 
                 if (result is null)
@@ -245,7 +245,7 @@ namespace Feeder.MCP.Editor.API
             if (!string.IsNullOrEmpty(response.Error))
                 throw new Exception($"Compile service failed: {response.Error}");
             if (!response.Success)
-                throw new Exception($"Compilation failed:\n{string.Join("\n", response.Diagnostics ?? Array.Empty<string>())}");
+                throw new ToolCallerException($"Compilation failed:\n{string.Join("\n", response.Diagnostics ?? Array.Empty<string>())}");
             return response.Assembly ?? throw new Exception("Compile service returned no assembly.");
         }
 
@@ -306,20 +306,32 @@ namespace Feeder.MCP.Editor.API
                 error = null;
                 return true;
             }
-            catch (TargetInvocationException ex)
-            {
-                error = $"Execution failed. TargetInvocationException: {ex.InnerException?.Message ?? ex.Message}\n{ex.InnerException?.StackTrace ?? ex.StackTrace}";
-                returnValue = null;
-                returnType = null;
-                return false;
-            }
             catch (Exception ex)
             {
-                error = $"Execution failed: {ex.InnerException?.Message ?? ex.Message}\n{ex.InnerException?.StackTrace ?? ex.StackTrace}";
+                var inner = ex is TargetInvocationException && ex.InnerException != null ? ex.InnerException : ex;
+                error = $"Execution failed: {inner.GetType().Name}: {inner.Message}\n{ScriptFrames(inner, assembly)}";
                 returnValue = null;
                 returnType = null;
                 return false;
             }
+        }
+
+        // only the frames of the caller's own script; the tool's and Unity's frames say nothing to the caller
+        static string ScriptFrames(Exception exception, Assembly script)
+        {
+            var frames = new System.Diagnostics.StackTrace(exception, true).GetFrames() ?? Array.Empty<System.Diagnostics.StackFrame>();
+            var lines = frames
+                .Where(frame => frame.GetMethod()?.DeclaringType?.Assembly == script)
+                .Select(frame =>
+                {
+                    var method = frame.GetMethod()!;
+                    var line = frame.GetFileLineNumber();
+                    return $"  at {method.DeclaringType!.FullName}.{method.Name}{(line > 0 ? $" (line {line})" : string.Empty)}";
+                })
+                .ToArray();
+            return lines.Length > 0
+                ? string.Join("\n", lines)
+                : string.Join("\n", (exception.StackTrace ?? string.Empty).Split('\n').Take(3).Select(l => l.TrimEnd()));
         }
     }
 }

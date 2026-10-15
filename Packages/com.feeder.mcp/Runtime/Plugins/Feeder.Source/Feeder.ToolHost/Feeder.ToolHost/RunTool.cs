@@ -162,6 +162,8 @@ public class RunTool : MethodWrapper, IRunTool, IEnabled
 		}
 		catch (Exception ex2)
 		{
+			if (CallerFault(ex2) is Exception caller)
+				return CallerError(requestId, caller);
 			string text = "Tool execution failed for '" + (Title ?? Method?.Name) + "': " + (ex2.InnerException ?? ex2).Message;
 			_logger?.LogError(ex2, text + "\n" + ex2.StackTrace);
 			return ResponseCallTool.Error(text).SetRequestID(requestId);
@@ -195,10 +197,34 @@ public class RunTool : MethodWrapper, IRunTool, IEnabled
 		}
 		catch (Exception ex3)
 		{
+			if (CallerFault(ex3) is Exception caller)
+				return CallerError(requestId, caller);
 			string text = "Tool execution failed for '" + (Title ?? Method?.Name) + "': " + (ex3.InnerException ?? ex3).Message;
 			_logger?.LogError(ex3, text + "\n" + ex3.StackTrace);
 			return ResponseCallTool.Error(text).SetRequestID(requestId);
 		}
+	}
+
+	// The caller's own mistake (ToolCallerException) or a domain reload (ThreadAbortException), however deeply wrapped.
+	private static Exception? CallerFault(Exception exception)
+	{
+		for (Exception? current = exception; current != null; current = current.InnerException)
+		{
+			if (current is ToolCallerException || current is ThreadAbortException)
+				return current;
+		}
+		return null;
+	}
+
+	// One console line, no stack: the caller still gets the whole message.
+	private ResponseCallTool CallerError(string requestId, Exception fault)
+	{
+		string message = fault is ThreadAbortException
+			? "It was cut off by a Unity domain reload before it finished. Its code may have run in part: check the editor state before running it again."
+			: fault.Message;
+		string firstLine = message.Split('\n')[0].Trim();
+		UnityEngine.Debug.LogWarning("[Matrix tool] " + (Title ?? Name) + " (" + requestId + "): " + firstLine);
+		return ResponseCallTool.Error("Tool execution failed for '" + (Title ?? Method?.Name) + "': " + message).SetRequestID(requestId);
 	}
 
 	private ResponseCallTool? ValidateRunParameters(string requestId, object? parameters = null)
