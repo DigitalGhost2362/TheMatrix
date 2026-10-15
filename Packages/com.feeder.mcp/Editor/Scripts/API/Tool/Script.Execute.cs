@@ -40,7 +40,30 @@ namespace Feeder.MCP.Editor.API
             "## Long runs\n\n" +
             "A call that runs longer than the project's tool timeout fails with a timeout. For code that is slow on purpose " +
             "(a bake, a long simulation) pass `timeoutSeconds`; the server caps it (30 minutes by default). " +
-            "A domain reload cuts the call off: the error says so, and the code may have run in part.")]
+            "A domain reload cuts the call off: the error says so, and the code may have run in part.\n\n" +
+            "## Keeping data between calls\n\n" +
+            "Each call loads a fresh copy of your code, so its `static` fields start empty every time. To keep a value " +
+            "until the next call, store it in the domain: `AppDomain.CurrentDomain.SetData(\"my-key\", value)` and " +
+            "`AppDomain.CurrentDomain.GetData(\"my-key\")`. A domain reload (compile, entering play mode) clears it.\n\n" +
+            "## Watching something change over time\n\n" +
+            "The time between two calls includes your own thinking, often seconds, so polling from outside misses fast " +
+            "changes. Record inside Unity instead: register a callback that samples every frame, removes itself after N " +
+            "seconds, and keeps the samples in the domain; read them in a later call.\n\n" +
+            "```csharp\n" +
+            "var samples = new System.Collections.Generic.List<string>();\n" +
+            "AppDomain.CurrentDomain.SetData(\"samples\", samples);\n" +
+            "var until = EditorApplication.timeSinceStartup + 5;\n" +
+            "EditorApplication.CallbackFunction sample = null;\n" +
+            "sample = () =>\n" +
+            "{\n" +
+            "    if (EditorApplication.timeSinceStartup > until) { EditorApplication.update -= sample; return; }\n" +
+            "    samples.Add($\"{Time.time:0.000} {Time.frameCount}\");   // what you want to watch\n" +
+            "};\n" +
+            "EditorApplication.update += sample;\n" +
+            "```\n\n" +
+            "`EditorApplication.update` also runs while the editor window is in the background; in play mode " +
+            "`Application.onBeforeRender` runs once per rendered frame. Several agents can share one editor, so use keys " +
+            "of your own and never leave a callback registered.")]
         [Description("Compiles and executes C# code dynamically using Roslyn. " +
             "Supports two modes: full code mode (default) requires a complete class definition, " +
             "while body-only mode (isMethodBody=true) auto-generates the boilerplate so you only " +
@@ -119,11 +142,15 @@ namespace Feeder.MCP.Editor.API
             if (timeoutSeconds > 0)
                 MatrixPluginEditor.RequestMoreTime(requestId, TimeSpan.FromSeconds(timeoutSeconds));
 
-            var assemblyBytes = CompileOnServer(codeToCompile);
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            var assemblyBytes = CompileOnServer(codeToCompile, out var cached);
+            var compileMs = timer.ElapsedMilliseconds;
 
             return MainThread.Instance.Run(() =>
             {
                 var logger = UnityLoggerFactory.LoggerFactory.CreateLogger("Tool_Script.Execute");
+                var waitMs = timer.ElapsedMilliseconds - compileMs;
+                using var timing = new Timing(logger, compileMs, cached, waitMs, timer);
 
                 // load the assembly the server compiled and execute it immediately
                 if (!ExecuteCSharpCode(
@@ -237,16 +264,77 @@ namespace Feeder.MCP.Editor.API
             return cachedReferencePaths;
         }
 
-        static byte[] CompileOnServer(string code)
+        // Compiled images by source and reference set, newest last. Static, so a domain reload empties it. The image is
+        // still loaded fresh on every call, so the script's static fields start empty each time as before.
+        const int CompileCacheSize = 32;
+        static readonly System.Collections.Generic.List<(string Key, byte[] Image)> compileCache = new();
+
+        static byte[] CompileOnServer(string code, out bool cached)
         {
+            var references = GetReferencePaths();
+            var key = CompileKey(code, references);
+            lock (compileCache)
+            {
+                var hit = compileCache.FindIndex(entry => entry.Key == key);
+                if (hit >= 0)
+                {
+                    var entry = compileCache[hit];
+                    compileCache.RemoveAt(hit);
+                    compileCache.Add(entry);
+                    cached = true;
+                    return entry.Image;
+                }
+            }
+
             var response = MatrixPluginEditor.Instance
-                .CompileOnServerAsync(new CompileRequest { Source = code, ReferencePaths = GetReferencePaths() }, CancellationToken.None)
+                .CompileOnServerAsync(new CompileRequest { Source = code, ReferencePaths = references }, CancellationToken.None)
                 .GetAwaiter().GetResult();
             if (!string.IsNullOrEmpty(response.Error))
                 throw new Exception($"Compile service failed: {response.Error}");
             if (!response.Success)
                 throw new ToolCallerException($"Compilation failed:\n{string.Join("\n", response.Diagnostics ?? Array.Empty<string>())}");
-            return response.Assembly ?? throw new Exception("Compile service returned no assembly.");
+            var image = response.Assembly ?? throw new Exception("Compile service returned no assembly.");
+
+            lock (compileCache)
+            {
+                compileCache.Add((key, image));
+                if (compileCache.Count > CompileCacheSize)
+                    compileCache.RemoveAt(0);
+            }
+            cached = false;
+            return image;
+        }
+
+        static string CompileKey(string code, string[] references)
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var bytes = Encoding.UTF8.GetBytes(code + "\n\0" + string.Join("\n", references));
+            return Convert.ToBase64String(sha.ComputeHash(bytes));
+        }
+
+        // Debug-level timing of each stage, to show where the time of a call goes before optimizing further
+        sealed class Timing : IDisposable
+        {
+            readonly ILogger _logger;
+            readonly long _compileMs;
+            readonly bool _cached;
+            readonly long _waitMs;
+            readonly System.Diagnostics.Stopwatch _timer;
+            readonly long _runStartMs;
+
+            public Timing(ILogger logger, long compileMs, bool cached, long waitMs, System.Diagnostics.Stopwatch timer)
+            {
+                _logger = logger;
+                _compileMs = compileMs;
+                _cached = cached;
+                _waitMs = waitMs;
+                _timer = timer;
+                _runStartMs = timer.ElapsedMilliseconds;
+            }
+
+            public void Dispose()
+                => _logger.LogDebug("script-execute timing: compile {compileMs} ms{cache}, main thread wait {waitMs} ms, run {runMs} ms",
+                    _compileMs, _cached ? " (cached, skipped)" : string.Empty, _waitMs, _timer.ElapsedMilliseconds - _runStartMs);
         }
 
         static bool ExecuteCSharpCode(

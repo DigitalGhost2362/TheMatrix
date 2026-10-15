@@ -119,6 +119,10 @@ All notable changes to this package are documented here.
   still gets the whole message. Tools throw `ToolCallerException` for this. Faults of the tools themselves
   stay errors.
 - `script-execute` reports the exception type, its message and only the frames of the caller's script.
+- `script-execute` keeps the last 32 compiled images by source and reference set, so running the same
+  code again skips the compile. Each run still loads a fresh copy, so static fields start empty as before.
+  The time of each stage is logged at Debug level, and the skill body shows how to keep data between calls
+  and how to sample something every frame from inside Unity.
 
 ### Fixed
 
