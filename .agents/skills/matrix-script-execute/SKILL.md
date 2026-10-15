@@ -20,6 +20,33 @@ Unity objects (`GameObject`, `Component`, etc.) can be passed as parameters usin
 - `Feeder.MCP.Data.ComponentRef` — passes a `ComponentRef` POCO.
 - `Feeder.MCP.Data.ObjectRef` — passes a base `ObjectRef` POCO.
 
+## Long runs
+
+A call that runs longer than the project's tool timeout fails with a timeout. For code that is slow on purpose (a bake, a long simulation) pass `timeoutSeconds`; the server caps it (30 minutes by default). A domain reload cuts the call off: the error says so, and the code may have run in part.
+
+## Keeping data between calls
+
+Each call loads a fresh copy of your code, so its `static` fields start empty every time. To keep a value until the next call, store it in the domain: `AppDomain.CurrentDomain.SetData("my-key", value)` and `AppDomain.CurrentDomain.GetData("my-key")`. A domain reload (compile, entering play mode) clears it.
+
+## Watching something change over time
+
+The time between two calls includes your own thinking, often seconds, so polling from outside misses fast changes. Record inside Unity instead: register a callback that samples every frame, removes itself after N seconds, and keeps the samples in the domain; read them in a later call.
+
+```csharp
+var samples = new System.Collections.Generic.List<string>();
+AppDomain.CurrentDomain.SetData("samples", samples);
+var until = EditorApplication.timeSinceStartup + 5;
+EditorApplication.CallbackFunction sample = null;
+sample = () =>
+{
+    if (EditorApplication.timeSinceStartup > until) { EditorApplication.update -= sample; return; }
+    samples.Add($"{Time.time:0.000} {Time.frameCount}");   // what you want to watch
+};
+EditorApplication.update += sample;
+```
+
+`EditorApplication.update` also runs while the editor window is in the background; in play mode `Application.onBeforeRender` runs once per rendered frame. Several agents can share one editor, so use keys of your own and never leave a callback registered.
+
 ## How to Call
 
 Call this tool through the MCP client connected to the local Matrix Bridge server.
@@ -31,7 +58,8 @@ Example input:
   "className": "value",
   "methodName": "value",
   "parameters": {},
-  "isMethodBody": false
+  "isMethodBody": false,
+  "timeoutSeconds": 0
 }
 ```
 
@@ -48,6 +76,7 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
 | `methodName` | `string` | No | The name of the method to execute. Must be a static method. In body-only mode this becomes the generated method name. |
 | `parameters` | `any` | No | Serialized parameters to pass to the method. Each entry must specify 'name' and 'typeName'. Supported parameter types include primitives, strings, and Unity object references: - 'UnityEngine.GameObject': resolves an actual GameObject from value '{"instanceID": N}', '{"name": "..."}', or '{"path": "..."}'. - 'UnityEngine.Component' (or any component subtype): resolves from '{"instanceID": N}'. - 'Feeder.MCP.Data.GameObjectRef': passes a GameObjectRef POCO directly;   the method body calls goRef.FindGameObject() to resolve it. - 'Feeder.MCP.Data.ComponentRef': passes a ComponentRef POCO. - 'Feeder.MCP.Data.ObjectRef': passes a base ObjectRef POCO. If the method does not require parameters, leave this empty. |
 | `isMethodBody` | `boolean` | No | When true, 'csharpCode' is treated as just the method body. The tool auto-generates standard using directives (System, UnityEngine, Feeder.MCP.Data, Feeder.MCP.Runtime.Extensions, UnityEditor), the class definition, and the method signature (void return type). Parameters from the 'parameters' list are automatically added to the method signature using their typeName and name. When false (default), 'csharpCode' must be a complete C# compilation unit with class and method definitions. |
+| `timeoutSeconds` | `integer` | No | Seconds this call may run before it times out. 0 (default) keeps the project's tool timeout. Set it for code that runs long on purpose; the server caps it (30 minutes by default). |
 
 ### Input JSON Schema
 
@@ -69,6 +98,9 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
     },
     "isMethodBody": {
       "type": "boolean"
+    },
+    "timeoutSeconds": {
+      "type": "integer"
     }
   },
   "$defs": {

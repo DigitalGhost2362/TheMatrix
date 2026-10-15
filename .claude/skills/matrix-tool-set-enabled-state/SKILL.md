@@ -16,6 +16,10 @@ Enable or disable MCP tools by name. Allows controlling which tools are availabl
 
 Each entry is resolved against the tool manager's exact-name and case-insensitive lookups. Already-correct state short-circuits as success without writing. The plugin's config is saved once at the end iff at least one tool actually changed state.
 
+## After enabling
+
+The server tells the client its tool list changed, and the client re-lists. If a tool you just enabled is still not in your tool list, call it through the server tool `tool-call` with `name` and `arguments`.
+
 ## How to Call
 
 Call this tool through the MCP client connected to the local Matrix Bridge server.

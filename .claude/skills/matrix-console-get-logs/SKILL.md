@@ -13,6 +13,12 @@ Retrieves Unity Editor logs. Useful for debugging and monitoring Unity Editor ac
 - `logTypeFilter` — Unity `LogType` filter; `null` returns all severities.
 - `includeStackTrace` (default `false`) — include stack-trace strings in each entry.
 - `lastMinutes` (default 0) — when non-zero, only logs from the last N minutes are returned.
+- `logTypes` — several types at once, for example `["Error","Exception"]`; replaces `logTypeFilter`.
+- `sinceUtc` — ISO 8601 time; only logs from then on. Note the time before your step and pass it to see only what the step logged.
+- `include` / `exclude` — regular expressions on the message; `exclude: "^\\[Matrix"` hides Matrix's own lines.
+- `groupDuplicates` — one entry per identical message with its `Count`.
+
+Entries come oldest first. Without the new inputs the result holds the same entries as before.
 
 ## How to Call
 
@@ -24,7 +30,12 @@ Example input:
   "maxEntries": 0,
   "logTypeFilter": {},
   "includeStackTrace": false,
-  "lastMinutes": 0
+  "lastMinutes": 0,
+  "logTypes": {},
+  "sinceUtc": "value",
+  "include": "value",
+  "exclude": "value",
+  "groupDuplicates": false
 }
 ```
 
@@ -40,6 +51,11 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
 | `logTypeFilter` | `any` | No | Filter by log type. 'null' means All. |
 | `includeStackTrace` | `boolean` | No | Include stack traces in the output. Default: false |
 | `lastMinutes` | `integer` | No | Return logs from the last N minutes. If 0, returns all available logs. Default: 0 |
+| `logTypes` | `any` | No | Only these log types; replaces 'logTypeFilter' when given. |
+| `sinceUtc` | `string` | No | ISO 8601 time; only logs from that moment on. |
+| `include` | `string` | No | Regular expression the message must match. |
+| `exclude` | `string` | No | Regular expression the message must not match. |
+| `groupDuplicates` | `boolean` | No | Return one entry per identical message, with 'Count'. Default: false |
 
 ### Input JSON Schema
 
@@ -58,6 +74,21 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
     },
     "lastMinutes": {
       "type": "integer"
+    },
+    "logTypes": {
+      "$ref": "#/$defs/UnityEngine.LogType-1"
+    },
+    "sinceUtc": {
+      "type": "string"
+    },
+    "include": {
+      "type": "string"
+    },
+    "exclude": {
+      "type": "string"
+    },
+    "groupDuplicates": {
+      "type": "boolean"
     }
   },
   "$defs": {
@@ -70,6 +101,19 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
         "Log",
         "Exception"
       ]
+    },
+    "UnityEngine.LogType-1": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "Error",
+          "Assert",
+          "Warning",
+          "Log",
+          "Exception"
+        ]
+      }
     }
   }
 }
@@ -110,6 +154,9 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
         },
         "StackTrace": {
           "type": "string"
+        },
+        "Count": {
+          "type": "integer"
         }
       },
       "required": [

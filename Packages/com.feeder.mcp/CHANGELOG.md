@@ -2,7 +2,7 @@
 
 All notable changes to this package are documented here.
 
-## [Unreleased]
+## [0.88.0] - 2026-10-15
 
 ### Added
 
@@ -176,6 +176,7 @@ All notable changes to this package are documented here.
   guide folder is removed only when it holds that old guide, never a file the tool skill generator wrote.
 - The `.gitignore` line Hyper Testing adds for its guide follows the skills folders actually in use
   instead of a fixed `.claude/skills` path.
+- The version the editor reports to the server (`MatrixPlugin.Version`) matches the package again.
 
 ### Removed
 

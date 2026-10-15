@@ -58,34 +58,79 @@ Inside it, `lock.json`:
 `owner` is `<agent>-<task-slug>-<HHmm>` - unique enough to recognize yourself. `heartbeat` is Unix
 seconds. **TTL is 20 minutes**: a lock whose heartbeat is older than 1200 s is stale.
 
-Acquire (bash / Git Bash):
+Run the lock scripts from the project root. Set `OWNER` and `TASK` first (plain words, no quotes).
+
+POSIX shell (Git Bash on Windows, macOS, Linux):
 
 ```sh
-cd "<project>" && mkdir Temp/agent-editor-lock 2>/dev/null \
-  && printf '{"owner":"%s","task":"%s","acquired":"%s","heartbeat":%s}\n' \
-       "$OWNER" "$TASK" "$(date +%Y-%m-%dT%H:%M:%S%z)" "$(date +%s)" > Temp/agent-editor-lock/lock.json \
-  && echo acquired || cat Temp/agent-editor-lock/lock.json
+lock=Temp/agent-editor-lock
+lock_acquire() {
+  [ -d Temp ] || { echo "no Temp/: the Editor is closed"; return 1; }
+  if mkdir "$lock" 2>/dev/null; then
+    printf '{"owner":"%s","task":"%s","acquired":"%s","heartbeat":%s}\n' \
+      "$OWNER" "$TASK" "$(date +%Y-%m-%dT%H:%M:%S%z)" "$(date +%s)" > "$lock/lock.json"
+    echo acquired
+  else
+    cat "$lock/lock.json" 2>/dev/null; echo busy; return 1
+  fi
+}
+lock_heartbeat() {
+  grep -q "\"owner\":\"$OWNER\"" "$lock/lock.json" 2>/dev/null || { echo "lost the lock"; return 1; }
+  sed -i.bak "s/\"heartbeat\":[0-9]*/\"heartbeat\":$(date +%s)/" "$lock/lock.json" && rm -f "$lock/lock.json.bak"
+  echo beat
+}
+lock_release() {
+  grep -q "\"owner\":\"$OWNER\"" "$lock/lock.json" 2>/dev/null || { echo "not mine, left alone"; return 1; }
+  rm -rf "$lock" && echo released
+}
+lock_break_stale() {
+  beat=$(sed -n 's/.*"heartbeat":\([0-9]*\).*/\1/p' "$lock/lock.json" 2>/dev/null)
+  [ -n "$beat" ] && [ $(( $(date +%s) - beat )) -gt 1200 ] || { echo "not stale"; return 1; }
+  # delete only if nobody beat in between
+  [ "$(sed -n 's/.*"heartbeat":\([0-9]*\).*/\1/p' "$lock/lock.json")" = "$beat" ] && rm -rf "$lock" && echo "stale lock removed"
+}
 ```
 
-Acquire (PowerShell - no `-Force`, so it fails when the directory exists):
+PowerShell (Windows PowerShell 5.1 and later):
 
 ```powershell
-$l = "<project>\Temp\agent-editor-lock"
-try {
-  New-Item -ItemType Directory $l -ErrorAction Stop | Out-Null
-  @{ owner=$owner; task=$task; acquired=(Get-Date -Format o); heartbeat=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds() } |
-    ConvertTo-Json -Compress | Set-Content "$l\lock.json" -Encoding utf8
+$lock = 'Temp\agent-editor-lock'
+function Write-Lock($data) { [IO.File]::WriteAllText((Join-Path (Get-Location) "$lock\lock.json"), ($data | ConvertTo-Json -Compress)) }
+function Read-Lock { try { Get-Content "$lock\lock.json" -Raw -ErrorAction Stop | ConvertFrom-Json } catch { $null } }
+function Lock-Acquire {
+  if (-not (Test-Path Temp)) { 'no Temp/: the Editor is closed'; return }
+  try { New-Item -ItemType Directory $lock -ErrorAction Stop | Out-Null } catch { Read-Lock; 'busy'; return }
+  Write-Lock ([ordered]@{ owner = $owner; task = $task; acquired = (Get-Date -Format o); heartbeat = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() })
   'acquired'
-} catch { Get-Content "$l\lock.json" -ErrorAction SilentlyContinue }
+}
+function Lock-Heartbeat {
+  $data = Read-Lock
+  if ($null -eq $data -or $data.owner -ne $owner) { 'lost the lock'; return }
+  $data.heartbeat = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Write-Lock $data; 'beat'
+}
+function Lock-Release {
+  $data = Read-Lock
+  if ($null -eq $data -or $data.owner -ne $owner) { 'not mine, left alone'; return }
+  Remove-Item $lock -Recurse -Force; 'released'
+}
+function Lock-BreakStale {
+  $data = Read-Lock
+  if ($null -eq $data -or [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - $data.heartbeat -le 1200) { 'not stale'; return }
+  # delete only if nobody beat in between
+  if ((Read-Lock).heartbeat -eq $data.heartbeat) { Remove-Item $lock -Recurse -Force; 'stale lock removed' }
+}
 ```
 
-- **Busy** (the directory exists): read `lock.json`. Live → the Editor is taken, go to Rule 4.
+`New-Item` without `-Force` fails when the directory exists, which is what makes the claim atomic.
+
+- **Busy** (the directory exists): read `lock.json`. Live -> the Editor is taken, go to Rule 4.
 - **Stale** (`now - heartbeat > 1200`): re-read `lock.json` immediately before deleting and delete only
   if `heartbeat` is unchanged from what you judged stale; then acquire once. A lock directory with no
   `lock.json` is live (its owner is between `mkdir` and the write) unless the directory itself is older
   than 20 minutes. Never delete a live lock.
-- **Heartbeat**: before every step that can take minutes (a compile, a play session, the next test
-  case), re-read `lock.json`; if `owner` is still you, rewrite it with a fresh `heartbeat`. If `owner` is
+- **Heartbeat** (`lock_heartbeat` / `Lock-Heartbeat`): before every step that can take minutes (a
+  compile, a play session, the next test case), re-read `lock.json`; if `owner` is still you, rewrite it
+  with a fresh `heartbeat`. If `owner` is
   someone else, you lost the lock by going stale - stop all Editor-exclusive work and report.
 - **Release**: exit play mode, restore what you changed (Rule 6), confirm `scene-list-opened` reports
   no scene dirtied by you, then delete the directory - only if `owner` is still you.
@@ -95,9 +140,9 @@ try {
 The lock only binds sessions that follow this skill. Humans do not. Right after acquiring, call
 `editor-application-get-state` and `scene-list-opened`:
 
-- `isPlaying`, `isPaused` or `isCompiling` true while you hold the lock → a human (or a rogue session)
+- `isPlaying`, `isPaused` or `isCompiling` true while you hold the lock -> a human (or a rogue session)
   is using the Editor. Release and hand off (Rule 4).
-- A dirty scene you did not touch → someone has unsaved work. Do not `scene-open` in Single mode or
+- A dirty scene you did not touch -> someone has unsaved work. Do not `scene-open` in Single mode or
   enter play mode over it; release and hand off.
 
 A check one call earlier is not enough. Every mutating edit-mode `script-execute` still starts with:
@@ -110,9 +155,9 @@ if (EditorApplication.isPlayingOrWillChangePlaymode) return "abort: play mode";
 
 When the task needs play-mode proof, try to acquire the lock.
 
-- **Acquired and the Editor is clean** → verify normally (compile, read the
+- **Acquired and the Editor is clean** -> verify normally (compile, read the
   console, play, collect evidence), release, report.
-- **Busy, human in the Editor, or verification cut short** (focus trap, lost lock) → write the handoff
+- **Busy, human in the Editor, or verification cut short** (focus trap, lost lock) -> write the handoff
   and stop:
   1. Create `TestCases/` at the project root if missing, and make sure `.gitignore` ignores `/TestCases/`.
      Never put test cases under `Assets/` - a new file there triggers an import in the shared Editor.
@@ -134,22 +179,22 @@ Triggered by a request like "run the pending test cases".
 
 1. List `TestCases/*.md` with `Status: pending`, oldest first. A `running` case whose owner holds no
    live lock was abandoned - treat it as `pending` and note that in its run log.
-2. Acquire the lock (Rule 2) and check the Editor (Rule 3). Busy → report and stop.
+2. Acquire the lock (Rule 2) and check the Editor (Rule 3). Busy -> report and stop.
 3. Snapshot the tree: `git status --porcelain` and `git hash-object` of every touched file.
 4. For each case:
    - Set `Status: running (<owner>, <time>)`. Heartbeat the lock.
-   - Compare the recorded hashes with the current ones. Different → the code moved after the case was
+   - Compare the recorded hashes with the current ones. Different -> the code moved after the case was
      written: read the diff and adapt the steps before running them, and note it in the run log.
    - Compile and read the console. Filter `console-get-logs` by your own start
      time; do not clear the console.
    - Set the preconditions, run the steps, collect the evidence, then, when a panel changed, repeat it: open it twice in a row, leave a serialized reference empty, and invoke a callback that was never assigned.
-   - **FAIL** → fix and re-run, at most **3 fix rounds**, then `Status: blocked`. Fix a file only if
+   - **FAIL** -> fix and re-run, at most **3 fix rounds**, then `Status: blocked`. Fix a file only if
      it is unchanged since your snapshot in step 3 **and** was not modified in the 10 minutes before
      it - otherwise another session may still be editing it: record the failure and the evidence,
      leave the code alone. Every fix follows the project's coding standard, is logged in the run log
      (file + reason) and gets its hash updated in the case header. Do not commit.
    - Before writing **PASS**, compare `git status --porcelain` with the step-3 snapshot plus your own
-     fixes. Anything else changed during the run → the result is suspect; re-run the case once.
+     fixes. Anything else changed during the run -> the result is suspect; re-run the case once.
    - Clean up (Rule 6) and set `Status: pass`, `fail` or `blocked`, with the evidence.
 5. Release the lock. Report per case: status, the evidence lines, the fixes made, anything not verified.
 
@@ -168,6 +213,34 @@ Triggered by a request like "run the pending test cases".
 
 A test case written is not a test run. Say "written, NOT verified" for a handoff, and for a verifier run
 list exactly which cases ran, what proved each one, and which were skipped and why.
+
+## Rule 8 - A stuck Editor
+
+When a tool times out, or the Editor stops answering, do not guess. Call `editor-health`: the server
+answers it itself, even while the Editor is hung or reloading. Read its first line and the window list.
+
+- **Reloading** or **Busy: compiling / importing** -> wait and call it again; the Editor comes back.
+- **Ticking slowly, Editor not focused** -> not a hang; calls are only slower.
+- **Main thread stalled ... in flight: none** -> something outside Matrix holds the Editor: a dialog, an
+  import, another package. The window list names it. Tell the user what it says and wait for them; do
+  not switch off or remove packages of the project, and do not answer a dialog you did not open.
+- **Main thread stalled ... Likely cause: <tool>** -> your own call holds it (a long or endless
+  `script-execute`). Wait for it, or ask the user before going further.
+- **Not linked** -> the Editor is closed or Matrix is off; report the task as not verified.
+
+## Rule 9 - Long jobs
+
+A tool call ends at the project's tool timeout. For work that takes longer:
+
+- `script-execute` with `timeoutSeconds` for code that runs long on purpose (the server caps it, 30
+  minutes by default).
+- Or start the job inside Unity and come back for the result. Schedule it from `EditorApplication.update`
+  (it runs while the Editor is in the background; `EditorApplication.delayCall` does not), remove the
+  callback when it ran, and write a marker file under `Temp/` with the job's name and state
+  (`started`, `done`, `failed`). Poll the marker, not the connection.
+- Before you schedule a job again, read its marker and `editor-application-get-state`. A dropped
+  connection or a domain reload does not mean the job did not run: never schedule it a second time
+  because the link went away.
 
 ## Test case template
 
