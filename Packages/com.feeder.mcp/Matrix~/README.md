@@ -41,7 +41,7 @@ version. Change that version in `src/Feeder.Matrix/Feeder.Matrix.csproj`, in `sr
 and in `McpServerManager.ServerVersion` together.
 
 Shipped payload 0.4.0, `matrix-server.exe` SHA-256:
-`cb62bd06ca0f000726196418cf639eb354a9ec442b45b7d41bf10097c7d2d270`
+`b26d08d5be341c81dd9a9e49821774139b7e4022751089ba06439b73b8e9385b`
 
 ## Run (matrix-only, mock backend)
 

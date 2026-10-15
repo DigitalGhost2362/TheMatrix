@@ -139,29 +139,29 @@ public sealed class ServerTools(
         return split < 0 ? name : name[(split + 2)..];
     }
 
-    /// <summary>Every name the agents may know this matrix by: the one Unity reports plus project MCP entries on this port.</summary>
+    /// <summary>
+    /// Every name the agents may know this matrix by: the one Unity reports, plus every MCP entry that points
+    /// at this port in the project's <c>.mcp.json</c> and in Claude Code's own <c>.claude.json</c> (user and
+    /// local scope entries).
+    /// </summary>
     IReadOnlyList<string> EntryNames(UnityLink? link)
     {
         var names = new List<string> { string.IsNullOrWhiteSpace(link?.McpEntryName) ? "Feeder-MCP" : link!.McpEntryName! };
-        var port = options.Value.Port;
         var configs = new List<string>();
         if (!string.IsNullOrEmpty(link?.ProjectRoot))
             configs.Add(Path.Combine(link.ProjectRoot, ".mcp.json"));
-        foreach (var path in configs)
+        var configDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        if (!string.IsNullOrWhiteSpace(configDir))
+            configs.Add(Path.Combine(configDir, ".claude.json"));
+        configs.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude.json"));
+        foreach (var path in configs.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             try
             {
                 if (!File.Exists(path))
                     continue;
                 using var document = JsonDocument.Parse(File.ReadAllText(path));
-                if (!document.RootElement.TryGetProperty("mcpServers", out var servers) || servers.ValueKind != JsonValueKind.Object)
-                    continue;
-                foreach (var server in servers.EnumerateObject())
-                {
-                    var raw = server.Value.GetRawText();
-                    if (raw.Contains($":{port}/", StringComparison.Ordinal) || raw.Contains($"port={port}", StringComparison.Ordinal))
-                        names.Add(server.Name);
-                }
+                CollectEntries(document.RootElement, options.Value.Port, names, depth: 0);
             }
             catch (Exception e)
             {
@@ -169,6 +169,29 @@ public sealed class ServerTools(
             }
         }
         return names.Distinct(StringComparer.Ordinal).ToArray();
+    }
+
+    // "mcpServers" sits at the top of .mcp.json and of .claude.json, and under each project in .claude.json
+    internal static void CollectEntries(JsonElement element, int port, List<string> names, int depth)
+    {
+        if (element.ValueKind != JsonValueKind.Object || depth > 3)
+            return;
+        foreach (var property in element.EnumerateObject())
+        {
+            if (property.Name == "mcpServers" && property.Value.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var server in property.Value.EnumerateObject())
+                {
+                    var raw = server.Value.GetRawText();
+                    if (raw.Contains($":{port}/", StringComparison.Ordinal) || raw.Contains($"port={port}", StringComparison.Ordinal))
+                        names.Add(server.Name);
+                }
+            }
+            else if (property.Value.ValueKind == JsonValueKind.Object)
+            {
+                CollectEntries(property.Value, port, names, depth + 1);
+            }
+        }
     }
 
     static CallToolResult Refuse(string message) => new() { IsError = true, Content = [Block(message)] };

@@ -110,7 +110,8 @@ The server answers two tools of its own, listed even while the editor is hung, r
 - a tool the calling session already has in its list (call it by its real name instead);
 - a tool covered by a Claude Code `deny` or `ask` rule, or by a `PreToolUse` hook whose matcher picks
   the tool but not `tool-call` itself, in the managed settings, the project's `.claude/settings.json`
-  and `.claude/settings.local.json`, or the user's `settings.json`;
+  and `.claude/settings.local.json`, or the user's `settings.json`. Rules are matched under every name
+  the server is registered by in the project's `.mcp.json` and in Claude Code's `.claude.json`;
 - every call while one of those files cannot be read or parsed (it names the file).
 
 The server cannot see rules passed on the command line (`--disallowedTools`, `--settings`), rules

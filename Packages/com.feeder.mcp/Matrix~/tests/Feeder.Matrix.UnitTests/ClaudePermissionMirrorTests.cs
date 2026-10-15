@@ -129,4 +129,17 @@ public class ClaudePermissionMirrorTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    [Fact]
+    public void Entry_names_come_from_every_mcp_config_pointing_at_the_port()
+    {
+        using var document = System.Text.Json.JsonDocument.Parse("""
+            {"mcpServers":{"unity":{"type":"http","url":"http://localhost:25213/mcp"},"other":{"url":"http://localhost:1/mcp"}},
+             "projects":{"D:/Game":{"mcpServers":{"Matrix Local":{"command":"x.exe","args":["port=25213"]}}}}}
+            """);
+        var names = new List<string>();
+        Feeder.Matrix.Tools.ServerTools.CollectEntries(document.RootElement, 25213, names, 0);
+        Assert.Equal(new[] { "unity", "Matrix Local" }, names);
+        Assert.Equal("mcp__Matrix_Local__scene-open", ClaudePermissionMirror.FullName("Matrix Local", "scene-open"));
+    }
 }
