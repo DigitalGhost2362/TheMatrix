@@ -272,7 +272,9 @@ namespace Feeder.MCP
             int maxEntries = 100,
             LogType? logTypeFilter = null,
             bool includeStackTrace = false,
-            int lastMinutes = 0)
+            int lastMinutes = 0,
+            DateTime? since = null,
+            Func<LogEntry, bool>? filter = null)
         {
             if (_isDisposed.Value)
             {
@@ -280,14 +282,16 @@ namespace Feeder.MCP
                     nameof(QueryAsync));
                 return Task.FromResult(Array.Empty<LogEntry>());
             }
-            return Task.Run(() => Query(maxEntries, logTypeFilter, includeStackTrace, lastMinutes));
+            return Task.Run(() => Query(maxEntries, logTypeFilter, includeStackTrace, lastMinutes, since, filter));
         }
 
         public virtual LogEntry[] Query(
             int maxEntries = 100,
             LogType? logTypeFilter = null,
             bool includeStackTrace = false,
-            int lastMinutes = 0)
+            int lastMinutes = 0,
+            DateTime? since = null,
+            Func<LogEntry, bool>? filter = null)
         {
             if (_isDisposed.Value)
             {
@@ -297,7 +301,7 @@ namespace Feeder.MCP
             }
             lock (_fileMutex)
             {
-                return QueryInternal(maxEntries, logTypeFilter, includeStackTrace, lastMinutes);
+                return QueryInternal(maxEntries, logTypeFilter, includeStackTrace, lastMinutes, since, filter);
             }
         }
 
@@ -305,16 +309,16 @@ namespace Feeder.MCP
             int maxEntries = 100,
             LogType? logTypeFilter = null,
             bool includeStackTrace = false,
-            int lastMinutes = 0)
+            int lastMinutes = 0,
+            DateTime? since = null,
+            Func<LogEntry, bool>? filter = null)
         {
             if (!File.Exists(filePath))
                 return Array.Empty<LogEntry>();
 
             using (var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
-                var cutoffTime = lastMinutes > 0
-                    ? DateTime.Now.AddMinutes(-lastMinutes)
-                    : (DateTime?)null;
+                var cutoffTime = Cutoff(lastMinutes, since);
 
                 var allLogs = ReadLogEntriesFromLinesInReverse(fileStream, cutoffTime);
 
@@ -325,6 +329,9 @@ namespace Feeder.MCP
                         .Where(log => log.LogType == logTypeFilter.Value);
                 }
 
+                if (filter != null)
+                    allLogs = allLogs.Where(filter);
+
                 // Take the most recent entries (up to maxEntries)
                 var filteredLogs = allLogs
                     .Take(maxEntries)
@@ -333,6 +340,15 @@ namespace Feeder.MCP
 
                 return filteredLogs;
             }
+        }
+
+        /// <summary>The later of "last N minutes" and <paramref name="since"/> (local time), or null for no limit.</summary>
+        protected static DateTime? Cutoff(int lastMinutes, DateTime? since)
+        {
+            DateTime? cutoff = lastMinutes > 0 ? DateTime.Now.AddMinutes(-lastMinutes) : (DateTime?)null;
+            if (since.HasValue && (!cutoff.HasValue || since.Value > cutoff.Value))
+                cutoff = since.Value;
+            return cutoff;
         }
 
         protected virtual IEnumerable<LogEntry> ReadLogEntriesFromLinesInReverse(FileStream fileStream, DateTime? cutoffTime = null)

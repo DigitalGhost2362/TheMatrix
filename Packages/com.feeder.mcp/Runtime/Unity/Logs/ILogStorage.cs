@@ -16,12 +16,16 @@ namespace Feeder.MCP
             int maxEntries = 100,
             UnityEngine.LogType? logTypeFilter = null,
             bool includeStackTrace = false,
-            int lastMinutes = 0);
+            int lastMinutes = 0,
+            DateTime? since = null,
+            Func<LogEntry, bool>? filter = null);
         LogEntry[] Query(
             int maxEntries = 100,
             UnityEngine.LogType? logTypeFilter = null,
             bool includeStackTrace = false,
-            int lastMinutes = 0);
+            int lastMinutes = 0,
+            DateTime? since = null,
+            Func<LogEntry, bool>? filter = null);
 
         void Clear();
     }

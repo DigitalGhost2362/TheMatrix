@@ -64,18 +64,22 @@ namespace Feeder.MCP
             int maxEntries = 100,
             LogType? logTypeFilter = null,
             bool includeStackTrace = false,
-            int lastMinutes = 0)
+            int lastMinutes = 0,
+            DateTime? since = null,
+            Func<LogEntry, bool>? filter = null)
         {
-            return _logStorage.QueryAsync(maxEntries, logTypeFilter, includeStackTrace, lastMinutes);
+            return _logStorage.QueryAsync(maxEntries, logTypeFilter, includeStackTrace, lastMinutes, since, filter);
         }
 
         public LogEntry[] Query(
             int maxEntries = 100,
             LogType? logTypeFilter = null,
             bool includeStackTrace = false,
-            int lastMinutes = 0)
+            int lastMinutes = 0,
+            DateTime? since = null,
+            Func<LogEntry, bool>? filter = null)
         {
-            return _logStorage.Query(maxEntries, logTypeFilter, includeStackTrace, lastMinutes);
+            return _logStorage.Query(maxEntries, logTypeFilter, includeStackTrace, lastMinutes, since, filter);
         }
 
         void OnLogMessageReceived(string message, string stackTrace, LogType type)

@@ -60,6 +60,9 @@ All notable changes to this package are documented here.
   tools the session already lists, and tools that Claude Code deny or ask rules or PreToolUse hooks cover;
   it refuses everything while a settings file cannot be read. `enableToolCallProxy: false` turns it off.
 - `script-execute` takes `timeoutSeconds` for code that runs long on purpose.
+- `console-get-logs` takes `logTypes`, `sinceUtc`, `include` and `exclude` (regular expressions on the
+  message) and `groupDuplicates` (one entry per identical message, with `Count`). Without them it returns
+  the same entries as before.
 
 ### Changed
 
@@ -158,6 +161,8 @@ All notable changes to this package are documented here.
 - A call cut off by a domain reload fails at once with a clear message instead of waiting for its
   deadline.
 - Without a linked editor, `tools/list` returns the server's own tools instead of an error.
+- `console-get-logs` returns entries oldest first; entries still in the write buffer used to come before
+  older ones read from the file.
 
 ### Removed
 

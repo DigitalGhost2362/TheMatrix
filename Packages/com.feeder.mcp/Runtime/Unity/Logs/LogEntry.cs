@@ -11,6 +11,9 @@ namespace Feeder.MCP
         public DateTime Timestamp { get; set; }
         public string? StackTrace { get; set; }
 
+        /// <summary>How many identical entries this one stands for; set only when duplicates are grouped.</summary>
+        public int? Count { get; set; }
+
         public LogEntry()
         {
             LogType = LogType.Log;

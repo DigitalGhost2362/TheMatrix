@@ -135,7 +135,9 @@ namespace Feeder.MCP
             int maxEntries = 100,
             LogType? logTypeFilter = null,
             bool includeStackTrace = false,
-            int lastMinutes = 0)
+            int lastMinutes = 0,
+            DateTime? since = null,
+            Func<LogEntry, bool>? filter = null)
         {
             if (_isDisposed.Value)
             {
@@ -145,7 +147,7 @@ namespace Feeder.MCP
             }
             lock (_fileMutex)
             {
-                return QueryInternal(maxEntries, logTypeFilter, includeStackTrace, lastMinutes);
+                return QueryInternal(maxEntries, logTypeFilter, includeStackTrace, lastMinutes, since, filter);
             }
         }
 
@@ -153,27 +155,25 @@ namespace Feeder.MCP
             int maxEntries = 100,
             LogType? logTypeFilter = null,
             bool includeStackTrace = false,
-            int lastMinutes = 0)
+            int lastMinutes = 0,
+            DateTime? since = null,
+            Func<LogEntry, bool>? filter = null)
         {
             var result = new List<LogEntry>();
-            var cutoffTime = lastMinutes > 0
-                ? System.DateTime.Now.AddMinutes(-lastMinutes)
-                : System.DateTime.MinValue;
+            var cutoffTime = Cutoff(lastMinutes, since);
 
             // 1. Get from buffer (Newest are at the end of buffer)
             for (int i = _logEntriesBufferLength - 1; i >= 0; i--)
             {
                 var entry = _logEntriesBuffer[i];
+                if (cutoffTime.HasValue && entry.Timestamp < cutoffTime.Value)
+                    return result.AsEnumerable().Reverse().ToArray();
+
                 if (logTypeFilter.HasValue && entry.LogType != logTypeFilter.Value)
                     continue;
 
-                if (lastMinutes > 0)
-                {
-                    if (entry.Timestamp < cutoffTime)
-                    {
-                        return result.AsEnumerable().Reverse().ToArray();
-                    }
-                }
+                if (filter != null && !filter(entry))
+                    continue;
 
                 result.Add(entry);
                 if (result.Count >= maxEntries)
@@ -187,11 +187,9 @@ namespace Feeder.MCP
 
             result.Reverse();
 
-            // 3. Get from file
-            var fileEntries = base.QueryInternal(neededLogsCount, logTypeFilter, includeStackTrace, lastMinutes);
-            result.AddRange(fileEntries);
-
-            return result.ToArray();
+            // 3. Get from file: older than everything in the buffer, so it goes first
+            var fileEntries = base.QueryInternal(neededLogsCount, logTypeFilter, includeStackTrace, lastMinutes, since, filter);
+            return fileEntries.Concat(result).ToArray();
         }
 
         ~BufferedFileLogStorage() => Dispose();
