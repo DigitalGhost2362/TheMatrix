@@ -123,6 +123,10 @@ All notable changes to this package are documented here.
   code again skips the compile. Each run still loads a fresh copy, so static fields start empty as before.
   The time of each stage is logged at Debug level, and the skill body shows how to keep data between calls
   and how to sample something every frame from inside Unity.
+- The `matrix-shared-editor` skill has ready lock scripts (acquire, heartbeat, release, stale break) for
+  POSIX shell and PowerShell, a rule for a stuck Editor (read `editor-health` first, do not guess), and a
+  rule for long jobs (`timeoutSeconds`, or a job started from `EditorApplication.update` with a marker file
+  under `Temp/` that is read before anything is scheduled again).
 
 ### Fixed
 
