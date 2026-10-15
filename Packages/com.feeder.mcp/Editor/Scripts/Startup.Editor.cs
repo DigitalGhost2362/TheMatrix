@@ -22,7 +22,12 @@ namespace Feeder.MCP.Editor
         }
         static void OnApplicationUnloading() => TryDisconnectAndCleanup(nameof(OnApplicationUnloading));
         static void OnApplicationQuitting() => TryDisconnectAndCleanup(nameof(OnApplicationQuitting));
-        static void OnBeforeAssemblyReload() => TryDisconnectAndCleanup(nameof(OnBeforeAssemblyReload), onlyIfConnected: true);
+        static void OnBeforeAssemblyReload()
+        {
+            if (MatrixPluginEditor.HasInstance)
+                MatrixPluginEditor.Instance.AnnounceReload();
+            TryDisconnectAndCleanup(nameof(OnBeforeAssemblyReload), onlyIfConnected: true);
+        }
 
         /// <summary>
         /// Safely disconnects and cleans up the MCP plugin instance.

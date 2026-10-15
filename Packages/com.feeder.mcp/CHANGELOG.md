@@ -53,6 +53,13 @@ All notable changes to this package are documented here.
   and **Enable all** ask first, since enabling everything costs about 50k tokens per request. Switching a
   tool rewrites the skill files after a second; reconnect the AI client afterwards.
 - The Matrix Bridge tab icon dims while the editor is not linked.
+- `editor-health`, a tool the server answers itself, even while the editor is hung, reloading or closed:
+  whether the editor is responsive, busy, reloading, stalled or not linked, and what holds it (open editor
+  windows and dialogs, Matrix calls in flight, last lines of the editor log).
+- `tool-call`, a server tool that calls a just-enabled Unity tool before the client lists it. It refuses
+  tools the session already lists, and tools that Claude Code deny or ask rules or PreToolUse hooks cover;
+  it refuses everything while a settings file cannot be read. `enableToolCallProxy: false` turns it off.
+- `script-execute` takes `timeoutSeconds` for code that runs long on purpose.
 
 ### Changed
 
@@ -96,6 +103,14 @@ All notable changes to this package are documented here.
 - When another project's server, or any other process, already listens on this project's port, the
   bridge moves to a free port in 20000-29999, rewrites the config of every wired agent, and says so on the
   Bridge window. Restart the agent session to pick up the new port.
+- The server tells MCP clients when the tool set changes (`tools/list_changed`), so a tool switched on or
+  off mid-session shows up or disappears without reconnecting.
+- A tool call waits for an editor that is reloading (`reconnectGraceMs`, default 180 s) instead of
+  failing with "No Unity editor is connected", and the time the link is down does not count against its
+  deadline. Tools that finish after a compile or domain reload get `deferredToolTimeoutMs` (default
+  15 minutes). Every timeout ends with the editor health summary.
+- `editor-application-set-state` answers once play mode is entered or left, domain reload included.
+- The editor sends a heartbeat from a background thread; the server version is 0.4.0.
 
 ### Fixed
 
@@ -135,6 +150,9 @@ All notable changes to this package are documented here.
 - `up` no longer reports "process exited" for a clone that is still starting, and `down` no longer has to
   kill a clone that was asked to quit: the quit runs from the update loop, which keeps running while the
   editor is in the background.
+- A call cut off by a domain reload fails at once with a clear message instead of waiting for its
+  deadline.
+- Without a linked editor, `tools/list` returns the server's own tools instead of an error.
 
 ### Removed
 

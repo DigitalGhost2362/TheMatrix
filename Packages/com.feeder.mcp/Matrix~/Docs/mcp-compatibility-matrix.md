@@ -13,11 +13,11 @@ Baseline measured 2026-07-10 against the earlier server ("previous local"), Unit
 | `ping` | Supported, p50 1.84 ms / p95 3.47 ms / p99 5.35 ms (10 000 iter, 0 errors) | ≤ same, SLO p95 ≤ 15 ms e2e incl. Unity |
 | `tools/list` | 38 tools, 144 896 B response, **p50 118 ms / p95 173 ms** (no caching — regenerated per call) | Cached by registry hash: p95 ≤ 10 ms |
 | `tools/call` | End-to-end Unity `ping` tool: p50 10.4 ms / p95 15.1 ms / p99 43.9 ms (500 iter, 0 errors) | Matrix routing overhead p95 ≤ 2 ms on top of Unity |
-| `notifications/tools/list_changed` | Advertised | Emit on registry hash change only (delta-driven) |
+| `notifications/tools/list_changed` | Advertised | Advertised (`tools.listChanged`). Sent to every live session when the registry hash changes, when a link registers again after its tools were dropped, on unregister, and when a link stays down past `ReconnectGrace` |
 | `prompts/list`, `prompts/get` | Advertised; currently returns empty list | Implement; empty list parity today |
 | `resources/list`, `resources/read`, templates | Advertised; currently returns empty lists | Implement; empty list parity today |
 | Session init | p50 4.0 ms / p95 8.3 ms (new session per iter) | ≤ baseline |
-| Long-running tools | `script-update-or-create`, `package-add/remove`, `tests-run`, `assets-refresh` return Processing and complete after compile/domain reload (100 ms polling loop in the previous server) | Event-driven PendingOperationStore (Phase 7), no polling |
+| Long-running tools | `script-update-or-create`, `package-add/remove`, `tests-run`, `assets-refresh` return Processing and complete after compile/domain reload (100 ms polling loop in the previous server) | Processing is reported as deferred and gets `DeferredToolTimeout`; time with the link down does not count; a tool may ask for more time (FMP section 8) |
 | Error format | JSON-RPC error objects; tool failures as `isError: true` results | Byte-compatible mapping (FMP §4) |
 
 ## Tool inventory (38 exposed via `tools/list`)

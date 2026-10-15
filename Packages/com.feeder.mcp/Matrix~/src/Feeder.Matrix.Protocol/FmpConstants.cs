@@ -44,6 +44,7 @@ public static class FmpErrorCodes
     public const string Cancelled = "FMP_CANCELLED";
     public const string ToolNotFound = "FMP_TOOL_NOT_FOUND";
     public const string ToolFailed = "FMP_TOOL_FAILED";
+    public const string Interrupted = "FMP_INTERRUPTED";
     public const string UnityUnavailable = "FMP_UNITY_UNAVAILABLE";
     public const string Internal = "FMP_INTERNAL";
 }

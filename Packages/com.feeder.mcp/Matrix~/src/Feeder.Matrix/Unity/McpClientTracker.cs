@@ -19,6 +19,8 @@ public sealed class McpClientTracker(
     public static readonly TimeSpan ActiveWindow = TimeSpan.FromMinutes(10);
 
     private readonly ConcurrentDictionary<string, Entry> _sessions = new();
+    // tool names each session received in its last tools/list; tool-call only serves names outside it
+    private readonly ConcurrentDictionary<string, HashSet<string>> _listedTools = new();
     private int _lastBroadcastActiveCount;
 
     /// <summary>Runs one MCP session while keeping the tracker (and Unity) informed of its lifetime.</summary>
@@ -26,7 +28,7 @@ public sealed class McpClientTracker(
     {
         // Matches the Mcp-Session-Id header on streamable HTTP; null only for transports without one.
         var sessionId = server.SessionId ?? Guid.NewGuid().ToString("N");
-        var entry = Register(sessionId, () => server.ClientInfo);
+        var entry = Register(sessionId, () => server.ClientInfo, server);
         try
         {
             var run = server.RunAsync(cancellationToken);
@@ -36,12 +38,44 @@ public sealed class McpClientTracker(
         finally
         {
             _sessions.TryRemove(new KeyValuePair<string, Entry>(sessionId, entry));
+            _listedTools.TryRemove(sessionId, out _);
             await BroadcastAsync();
         }
     }
 
-    internal Entry Register(string sessionId, Func<Implementation?> clientInfo)
-        => _sessions[sessionId] = new Entry(clientInfo, time.GetUtcNow().UtcTicks);
+    internal Entry Register(string sessionId, Func<Implementation?> clientInfo, McpServer? server = null)
+        => _sessions[sessionId] = new Entry(clientInfo, time.GetUtcNow().UtcTicks, server);
+
+    /// <summary>Remembers the tool names a session was just given by tools/list.</summary>
+    public void RecordListed(string? sessionId, IEnumerable<string> toolNames)
+    {
+        if (!string.IsNullOrEmpty(sessionId))
+            _listedTools[sessionId] = new HashSet<string>(toolNames, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>True when the session's last tools/list already held this tool, in any letter case.</summary>
+    public bool WasListed(string? sessionId, string toolName)
+        => !string.IsNullOrEmpty(sessionId) &&
+           _listedTools.TryGetValue(sessionId, out var names) &&
+           names.Contains(toolName);
+
+    /// <summary>Tells every live MCP session to fetch tools/list again.</summary>
+    public async Task NotifyToolListChangedAsync()
+    {
+        foreach (var (sessionId, entry) in _sessions.ToArray())
+        {
+            if (entry.Server is null)
+                continue;
+            try
+            {
+                await entry.Server.SendNotificationAsync(NotificationMethods.ToolListChangedNotification);
+            }
+            catch (Exception e)
+            {
+                logger.LogDebug(e, "Failed to send tools/list_changed to MCP session {SessionId}", sessionId);
+            }
+        }
+    }
 
     /// <summary>Marks a session active; returns true when it was idle (or never seen active) before.</summary>
     public bool Touch(string sessionId)
@@ -115,9 +149,10 @@ public sealed class McpClientTracker(
             await BroadcastAsync();
     }
 
-    internal sealed class Entry(Func<Implementation?> clientInfo, long lastActivityTicks)
+    internal sealed class Entry(Func<Implementation?> clientInfo, long lastActivityTicks, McpServer? server = null)
     {
         public readonly Func<Implementation?> ClientInfo = clientInfo;
+        public readonly McpServer? Server = server;
         public long LastActivityTicks = lastActivityTicks;
     }
 }

@@ -41,6 +41,16 @@ namespace Feeder.MCP
             => _matrixAdapter?.CompileAsync(request, cancellationToken)
                ?? throw new System.InvalidOperationException("Feeder Local Matrix is not connected, so C# cannot be compiled.");
 
+        /// <summary>
+        /// Asks for more time for a running tool call (requestId = the tool's [RequestID] value). Safe from any
+        /// thread; false when the call did not come through the matrix or has already finished.
+        /// </summary>
+        public static bool RequestMoreTime(string? requestId, System.TimeSpan extra)
+            => HasInstance && !string.IsNullOrEmpty(requestId) &&
+               Instance._matrixAdapter?.ExtendDeadline(requestId!, extra) == true;
+
+        internal void AnnounceReload() => _matrixAdapter?.AnnounceReload();
+
         void DisposeMatrixAdapter()
         {
             _matrixAdapter?.Dispose();

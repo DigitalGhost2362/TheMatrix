@@ -28,6 +28,10 @@ public sealed record UnityRegisterRequest
     [Key(8)] public required string AuthToken { get; init; }
     [Key(9)] public FmpEditorState EditorState { get; init; }
     [Key(10)] public string[] PendingOperations { get; set; } = [];
+    // Project folder, so the matrix can read the project's agent settings next to it.
+    [Key(11)] public string? ProjectRoot { get; init; }
+    // Name of the matrix's entry in the agents' MCP config (tool names are mcp__<entry>__<tool>).
+    [Key(12)] public string? McpEntryName { get; init; }
 }
 
 [MessagePackObject]
@@ -90,6 +94,10 @@ public sealed record ToolProgress
     [Key(0)] public required string OperationId { get; init; }
     [Key(1)] public double? Progress { get; init; }
     [Key(2)] public string? Message { get; init; }
+    // The tool answered Processing and completes later (after a compile or domain reload).
+    [Key(3)] public bool Deferred { get; init; }
+    // The tool asks for this much more time, counted from now (capped by the matrix).
+    [Key(4)] public long ExtendDeadlineMs { get; init; }
 }
 
 [MessagePackObject]
@@ -97,6 +105,21 @@ public sealed record HeartbeatMessage
 {
     [Key(0)] public required string UnityInstanceId { get; init; }
     [Key(1)] public FmpEditorState EditorState { get; init; }
+    // Sent from a background thread, so the fields below still arrive while the main thread is held.
+    [Key(2)] public long LastMainTickUnixMs { get; init; }
+    [Key(3)] public bool Updating { get; init; }
+    [Key(4)] public bool Focused { get; init; }
+    [Key(5)] public InFlightOperation[] InFlight { get; set; } = [];
+    [Key(6)] public int ProcessId { get; init; }
+    [Key(7)] public string? ConsoleLogPath { get; init; }
+}
+
+[MessagePackObject]
+public sealed record InFlightOperation
+{
+    [Key(0)] public string OperationId { get; set; } = string.Empty;
+    [Key(1)] public string ToolName { get; set; } = string.Empty;
+    [Key(2)] public long StartedUnixMs { get; init; }
 }
 
 [MessagePackObject]

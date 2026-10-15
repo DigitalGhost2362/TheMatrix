@@ -36,7 +36,11 @@ namespace Feeder.MCP.Editor.API
             "- `UnityEngine.Component` (or any component subtype) — resolves from `{\"instanceID\": N}`.\n" +
             "- `Feeder.MCP.Data.GameObjectRef` — passes a `GameObjectRef` POCO directly; the method body calls `goRef.FindGameObject()` to resolve it.\n" +
             "- `Feeder.MCP.Data.ComponentRef` — passes a `ComponentRef` POCO.\n" +
-            "- `Feeder.MCP.Data.ObjectRef` — passes a base `ObjectRef` POCO.")]
+            "- `Feeder.MCP.Data.ObjectRef` — passes a base `ObjectRef` POCO.\n\n" +
+            "## Long runs\n\n" +
+            "A call that runs longer than the project's tool timeout fails with a timeout. For code that is slow on purpose " +
+            "(a bake, a long simulation) pass `timeoutSeconds`; the server caps it (30 minutes by default). " +
+            "A domain reload cuts the call off: the error says so, and the code may have run in part.")]
         [Description("Compiles and executes C# code dynamically using Roslyn. " +
             "Supports two modes: full code mode (default) requires a complete class definition, " +
             "while body-only mode (isMethodBody=true) auto-generates the boilerplate so you only " +
@@ -76,7 +80,12 @@ namespace Feeder.MCP.Editor.API
                 "the class definition, and the method signature (void return type). " +
                 "Parameters from the 'parameters' list are automatically added to the method signature using their typeName and name. " +
                 "When false (default), 'csharpCode' must be a complete C# compilation unit with class and method definitions.")]
-            bool isMethodBody = false
+            bool isMethodBody = false,
+            [Description("Seconds this call may run before it times out. 0 (default) keeps the project's tool timeout. " +
+                "Set it for code that runs long on purpose; the server caps it (30 minutes by default).")]
+            int timeoutSeconds = 0,
+            [RequestID]
+            string? requestId = null
         )
         {
             if (string.IsNullOrEmpty(csharpCode))
@@ -106,6 +115,9 @@ namespace Feeder.MCP.Editor.API
 
                 codeToCompile = csharpCode;
             }
+
+            if (timeoutSeconds > 0)
+                MatrixPluginEditor.RequestMoreTime(requestId, TimeSpan.FromSeconds(timeoutSeconds));
 
             var assemblyBytes = CompileOnServer(codeToCompile);
 

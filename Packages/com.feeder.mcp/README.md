@@ -76,7 +76,8 @@ Open **Tools > Feeder > Skills**. It lists every MCP tool with its own switch.
   is off, the row says so; click the name to switch it on too.
 - The bar at the bottom adds up the tokens of everything that is on. **Core only** returns to the
   default set. **Enable all** asks first, because it costs about 50k tokens per request.
-- A change rewrites the skill files after a second. Reconnect the AI client so it lists the new set.
+- A change rewrites the skill files after a second. Clients that follow `tools/list_changed` (Claude
+  Code does) list the new set at once; reconnect the others.
 
 ## Matrix Setup
 
@@ -90,6 +91,37 @@ Run **Tools > Feeder > Setup...** once on each machine. It:
   `tool-set-enabled-state`;
 - writes the Claude Code MCP config, then installs or verifies the Claude Code CLI (Node.js is
   installed with winget if missing).
+
+## Editor health and tool-call
+
+The server answers two tools of its own, listed even while the editor is hung, reloading or closed:
+
+- `editor-health` says whether the editor is responsive, busy, reloading, stalled or not linked, and
+  what holds it: the editor's open windows and dialogs, the Matrix calls in flight, and the last lines
+  of the editor log. A tool that times out ends its error with the same summary.
+- `tool-call` calls a Unity tool by name when it was just switched on and the client has not listed it
+  yet. The server tells clients when the tool set changes (`tools/list_changed`), so this is only for
+  that gap. Turn it off with `enableToolCallProxy: false` in `UserSettings/Feeder-MCP-Config.json`,
+  then restart the server.
+
+`tool-call` refuses:
+
+- itself and `editor-health`;
+- a tool the calling session already has in its list (call it by its real name instead);
+- a tool covered by a Claude Code `deny` or `ask` rule, or by a `PreToolUse` hook whose matcher picks
+  the tool but not `tool-call` itself, in the managed settings, the project's `.claude/settings.json`
+  and `.claude/settings.local.json`, or the user's `settings.json`;
+- every call while one of those files cannot be read or parsed (it names the file).
+
+The server cannot see rules passed on the command line (`--disallowedTools`, `--settings`), rules
+added during a session, remote or MDM policy, or hooks from plugins, skills and agents. A hook that
+matches every tool also runs for `tool-call` itself, and sees the target only in its input. When those
+gaps matter, turn `tool-call` off.
+
+Deadlines, in the same config file and read when the server starts: `timeoutMs` (default 60 s) for a
+call; `reconnectGraceMs` (default 180 s) that a call waits for an editor that is reloading; and
+`deferredToolTimeoutMs` (default 15 minutes) for tools that finish after a compile or domain reload.
+`script-execute` takes `timeoutSeconds` for code that runs long on purpose.
 
 ## Hyper Testing Mode (Experimental)
 

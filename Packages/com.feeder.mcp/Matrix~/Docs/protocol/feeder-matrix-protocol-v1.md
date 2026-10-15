@@ -136,3 +136,28 @@ JSON payloads (hub protocol `json`, camelCase):
 {"success":true,"assembly":"TVqQAAMAAAAEAAAA...","diagnostics":[],"error":null}
 {"success":false,"assembly":null,"diagnostics":["(5,17): error CS0103: The name 'missing' does not exist in the current context"],"error":null}
 ```
+
+## 8. Editor health and deadlines (additive in v1)
+
+Added 2026-10-15. Every field below is a new key; a side that does not know it ignores it.
+
+**Heartbeat.** The editor sends `Heartbeat` every 2 s from a pool thread, so it keeps arriving while the editor's main thread is held. A matrix that sees no heartbeat from a link treats that plugin as older and reports its health as unknown.
+
+| Field | Key | Type | Notes |
+|---|---|---|---|
+| `lastMainTickUnixMs` | 2 | long | Last time the main thread ran an editor update. |
+| `updating` | 3 | bool | `EditorApplication.isUpdating` (asset import). |
+| `focused` | 4 | bool | The editor window has focus (an unfocused editor ticks slower, which is not a hang). |
+| `inFlight` | 5 | `InFlightOperation[]` | `operationId` (0), `toolName` (1), `startedUnixMs` (2) of every call the editor is running. |
+| `processId` | 6 | int | The editor process, read by the matrix for its windows and to tell a reload from an exit. |
+| `consoleLogPath` | 7 | string | `Application.consoleLogPath` of this editor. |
+
+Right before a domain reload the editor sends one more heartbeat with `editorState` = `reloading`, so a link that drops next reads as reloading rather than gone.
+
+**Register.** `UnityRegisterRequest` gains `projectRoot` (key 11, the project folder) and `mcpEntryName` (key 12, the name agents know the matrix by in their MCP config). A register that carries `projectRoot` also tells the matrix that the plugin reports deferral, so operations it lost in a reload are answered at once with `FMP_INTERRUPTED` instead of at their deadline.
+
+**Progress.** `ToolProgress` gains `deferred` (key 3) and `extendDeadlineMs` (key 4). `deferred` means the tool answered Processing and completes after a compile or domain reload; the matrix moves the call's deadline to `DeferredToolTimeout` (default 15 minutes). `extendDeadlineMs` asks for that much more time from now. Neither moves a deadline past `MaxToolTimeout` (default 30 minutes) after the call started.
+
+**Waiting for a link.** A call that finds the project's link down waits for it to come back for up to `ReconnectGrace` (default 180 s); time spent with the link down does not count against the call's deadline. A project that never linked, a link down longer than the grace, or an editor process that has exited fails the call at once. Every timeout and lost-link error ends with the matrix's editor health summary.
+
+**Error code.** `FMP_INTERRUPTED`: the operation was cut off by a domain reload before it finished; its code may have run in part.

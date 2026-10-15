@@ -183,7 +183,7 @@ namespace Feeder.MCP.Editor
         /// the two to decide whether the cached binary in <c>Library/feeder-matrix</c> is current. Bumping
         /// the server means replacing the whole <c>Server~/&lt;rid&gt;</c> payload AND this constant together.
         /// </summary>
-        public const string ServerVersion = "0.3.0";
+        public const string ServerVersion = "0.4.0";
 
         public const string ExecutableName = ServerOwnership.ExeName;
         public const string BundledServerArchiveName = "server-payload.zip";
@@ -1435,6 +1435,9 @@ namespace Feeder.MCP.Editor
             var args =
                 $"--FeederMatrix:Port={port} " +
                 $"--FeederMatrix:DefaultToolTimeout={TimeSpan.FromMilliseconds(timeout):c} " +
+                $"--FeederMatrix:ReconnectGrace={TimeSpan.FromMilliseconds(MatrixPluginEditor.ReconnectGraceMs):c} " +
+                $"--FeederMatrix:DeferredToolTimeout={TimeSpan.FromMilliseconds(MatrixPluginEditor.DeferredToolTimeoutMs):c} " +
+                $"--FeederMatrix:EnableToolCallProxy={MatrixPluginEditor.EnableToolCallProxy} " +
                 $"--FeederMatrix:RequireAuth={authOption == AuthOption.required}";
 
             if (authOption == AuthOption.required && !string.IsNullOrEmpty(token))

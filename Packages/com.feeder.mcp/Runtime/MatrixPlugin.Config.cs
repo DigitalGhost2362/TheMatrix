@@ -57,6 +57,18 @@ namespace Feeder.MCP
             public List<McpFeature> Tools { get; set; } = new();
             public Dictionary<string, bool> SkillAutoGenerate { get; set; } = new() { ["claude-code"] = true, ["deepseek"] = true };
 
+            /// <summary>How long a tool call waits for the editor to reconnect after a domain reload. Read when the server starts.</summary>
+            public int ReconnectGraceMs { get; set; } = DefaultReconnectGraceMs;
+
+            /// <summary>Deadline of a tool that answers later, after a compile or domain reload. Read when the server starts.</summary>
+            public int DeferredToolTimeoutMs { get; set; } = DefaultDeferredToolTimeoutMs;
+
+            /// <summary>Lists the server's <c>tool-call</c> proxy, which calls a just-enabled tool before the client re-lists. Read when the server starts.</summary>
+            public bool EnableToolCallProxy { get; set; } = true;
+
+            public const int DefaultReconnectGraceMs = 180_000;
+            public const int DefaultDeferredToolTimeoutMs = 900_000;
+
             /// <summary>
             /// Per-agent opt-in for writing the agent's MCP config file automatically on editor
             /// load (e.g. Claude Code's project-root <c>.mcp.json</c>). Keyed by agentId.
@@ -92,6 +104,9 @@ namespace Feeder.MCP
                 AuthOption = AuthOption.none;
                 LogLevel = LogLevel.Warning;
                 TimeoutMs = Consts.Hub.DefaultTimeoutMs;
+                ReconnectGraceMs = DefaultReconnectGraceMs;
+                DeferredToolTimeoutMs = DefaultDeferredToolTimeoutMs;
+                EnableToolCallProxy = true;
                 Tools = DefaultTools;
                 Token = GenerateToken();
                 return this;

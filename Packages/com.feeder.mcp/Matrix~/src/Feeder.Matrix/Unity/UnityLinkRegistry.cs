@@ -13,6 +13,44 @@ public sealed class UnityLink
     public RegistrySnapshot? Registry { get; set; }
     public DateTimeOffset LastSeen { get; set; } = DateTimeOffset.UtcNow;
     public bool Connected { get; set; } = true;
+    public string? ProjectRoot { get; set; }
+    public string? McpEntryName { get; set; }
+    public string? PluginVersion { get; set; }
+
+    /// <summary>Last background heartbeat; null for plugins that never send one.</summary>
+    public HeartbeatMessage? Heartbeat { get; set; }
+    public DateTimeOffset HeartbeatAt { get; set; }
+
+    /// <summary>Set once the link stayed down past the reconnect grace and clients were told its tools are gone.</summary>
+    public bool ListedAsGone { get; set; }
+}
+
+/// <summary>An MCP tool call waiting for Unity. Its deadline moves when Unity defers or asks for more time.</summary>
+public sealed class PendingOperation(string operationId, string toolName, string projectId, DateTimeOffset started, DateTimeOffset deadline)
+{
+    public string OperationId { get; } = operationId;
+    public string ToolName { get; } = toolName;
+    public string ProjectId { get; } = projectId;
+    public DateTimeOffset Started { get; } = started;
+    public TaskCompletionSource<ToolResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public string? SentOnConnectionId { get; set; }
+
+    private long _deadlineTicks = deadline.UtcTicks;
+    public DateTimeOffset Deadline => new(Interlocked.Read(ref _deadlineTicks), TimeSpan.Zero);
+
+    /// <summary>Moves the deadline later only; never earlier.</summary>
+    public void ExtendTo(DateTimeOffset deadline)
+    {
+        long next = deadline.UtcTicks, current;
+        do
+        {
+            current = Interlocked.Read(ref _deadlineTicks);
+            if (next <= current)
+                return;
+        } while (Interlocked.CompareExchange(ref _deadlineTicks, next, current) != current);
+    }
+
+    public volatile bool Deferred;
 }
 
 /// <summary>
@@ -23,7 +61,7 @@ public sealed class UnityLink
 public sealed class UnityLinkRegistry
 {
     private readonly ConcurrentDictionary<string, UnityLink> _linksByProject = new();
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<ToolResult>> _pendingOps = new();
+    private readonly ConcurrentDictionary<string, PendingOperation> _pendingOps = new();
 
     public UnityLink Register(UnityRegisterRequest request, string connectionId)
     {
@@ -34,6 +72,9 @@ public sealed class UnityLinkRegistry
             UnityInstanceId = request.UnityInstanceId,
             SessionId = Guid.NewGuid().ToString("N"),
             EditorState = request.EditorState,
+            ProjectRoot = request.ProjectRoot,
+            McpEntryName = request.McpEntryName,
+            PluginVersion = request.PluginVersion,
         };
         // Newest registration wins for a project (ADR-0003); resume keeps the instance id.
         _linksByProject.AddOrUpdate(request.ProjectId, link, (_, existing) =>
@@ -45,6 +86,11 @@ public sealed class UnityLinkRegistry
                 existing.EditorState = request.EditorState;
                 existing.Connected = true;
                 existing.LastSeen = DateTimeOffset.UtcNow;
+                existing.ProjectRoot = request.ProjectRoot;
+                existing.McpEntryName = request.McpEntryName;
+                existing.PluginVersion = request.PluginVersion;
+                // the beats before a reload describe the old domain; the new one starts its own
+                existing.Heartbeat = null;
                 return existing;
             }
             return link;
@@ -74,6 +120,10 @@ public sealed class UnityLinkRegistry
     public UnityLink? GetDefaultLink()
         => _linksByProject.Values.FirstOrDefault(l => l.Connected);
 
+    /// <summary>The connected link, else the most recently seen one (it may be reloading).</summary>
+    public UnityLink? GetLatestLink()
+        => GetDefaultLink() ?? _linksByProject.Values.OrderByDescending(l => l.LastSeen).FirstOrDefault();
+
     public UnityLink? GetLink(string projectId)
         => _linksByProject.TryGetValue(projectId, out var link) ? link : null;
 
@@ -82,19 +132,25 @@ public sealed class UnityLinkRegistry
     public bool IsRegistered(string connectionId)
         => _linksByProject.Values.Any(l => l.Connected && l.ConnectionId == connectionId);
 
-    public TaskCompletionSource<ToolResult> CreateOperation(string operationId)
+    public PendingOperation CreateOperation(string operationId, string toolName = "", string projectId = "", TimeSpan? timeout = null)
     {
-        var tcs = new TaskCompletionSource<ToolResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (!_pendingOps.TryAdd(operationId, tcs))
+        var now = DateTimeOffset.UtcNow;
+        var operation = new PendingOperation(operationId, toolName, projectId, now, now + (timeout ?? TimeSpan.FromSeconds(60)));
+        if (!_pendingOps.TryAdd(operationId, operation))
             throw new InvalidOperationException($"Duplicate operationId '{operationId}'.");
-        return tcs;
+        return operation;
     }
 
+    public PendingOperation? GetOperation(string operationId)
+        => _pendingOps.TryGetValue(operationId, out var operation) ? operation : null;
+
     public bool CompleteOperation(ToolResult result)
-        => _pendingOps.TryRemove(result.OperationId, out var tcs) && tcs.TrySetResult(result);
+        => _pendingOps.TryRemove(result.OperationId, out var operation) && operation.Completion.TrySetResult(result);
 
     public void AbandonOperation(string operationId)
         => _pendingOps.TryRemove(operationId, out _);
+
+    public IReadOnlyCollection<PendingOperation> Operations => _pendingOps.Values.ToArray();
 
     public string[] AwaitedOperationIds => _pendingOps.Keys.ToArray();
 }

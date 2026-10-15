@@ -13,6 +13,18 @@ public sealed class MatrixOptions
     /// <summary>Default per-request timeout when the client sets no deadline.</summary>
     public TimeSpan DefaultToolTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
+    /// <summary>How long a tool call waits for a Unity editor that dropped its link (domain reload) to come back.</summary>
+    public TimeSpan ReconnectGrace { get; set; } = TimeSpan.FromSeconds(180);
+
+    /// <summary>Deadline of a tool that answered Processing and completes after a compile or domain reload.</summary>
+    public TimeSpan DeferredToolTimeout { get; set; } = TimeSpan.FromMinutes(15);
+
+    /// <summary>Upper bound for any tool call, including the extra time a tool asks for.</summary>
+    public TimeSpan MaxToolTimeout { get; set; } = TimeSpan.FromMinutes(30);
+
+    /// <summary>Lists the <c>tool-call</c> proxy tool. Off removes it from the tool list.</summary>
+    public bool EnableToolCallProxy { get; set; } = true;
+
     public long MaxRequestBodyBytes { get; set; } = 16 * 1024 * 1024;
 
     /// <summary>Require a bearer token on MCP requests and the same token in the Unity FMP handshake.</summary>

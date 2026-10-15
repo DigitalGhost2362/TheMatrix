@@ -31,7 +31,10 @@ namespace Feeder.MCP.Editor.API
             "## Behavior\n\n" +
             "Each entry is resolved against the tool manager's exact-name and case-insensitive lookups. " +
             "Already-correct state short-circuits as success without writing. The plugin's config is saved once at the " +
-            "end iff at least one tool actually changed state.")]
+            "end iff at least one tool actually changed state.\n\n" +
+            "## After enabling\n\n" +
+            "The server tells the client its tool list changed, and the client re-lists. If a tool you just enabled " +
+            "is still not in your tool list, call it through the server tool `tool-call` with `name` and `arguments`.")]
         [Description("Enable or disable MCP tools by name. " +
             "Allows controlling which tools are available for the AI agent.")]
         public ToolToggleResult SetEnabledState

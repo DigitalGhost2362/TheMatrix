@@ -62,7 +62,7 @@ namespace Feeder.Fmp.Tests
         public bool HasExited => Process.HasExited;
 
         // port 0 asks the os for an ephemeral port, which is never in the 20000-29999 range the editor derives its own from
-        public static async Task<MatrixServer> StartAsync(int port = 0, TimeSpan? toolTimeout = null)
+        public static async Task<MatrixServer> StartAsync(int port = 0, TimeSpan? toolTimeout = null, string extraArguments = null)
         {
             if (port == 0)
                 port = FreePort();
@@ -73,7 +73,8 @@ namespace Feeder.Fmp.Tests
                 FileName = exe,
                 Arguments = "--FeederMatrix:Port=" + port +
                             " --FeederMatrix:DefaultToolTimeout=" + (toolTimeout ?? TimeSpan.FromSeconds(30)).ToString("c") +
-                            " --FeederMatrix:RequireAuth=false",
+                            " --FeederMatrix:RequireAuth=false" +
+                            (extraArguments == null ? string.Empty : " " + extraArguments),
                 WorkingDirectory = Path.GetDirectoryName(exe),
                 UseShellExecute = false,
                 CreateNoWindow = true,

@@ -25,9 +25,10 @@ namespace Feeder.Fmp.Tests
         readonly List<FmpState> _states = new List<FmpState>();
         readonly List<string> _clientLists = new List<string>();
 
-        public UnitySide(Uri url, FmpOptions options = null, string projectId = DefaultProjectId)
+        public UnitySide(Uri url, FmpOptions options = null, string projectId = DefaultProjectId, string instanceId = null)
         {
             ProjectId = projectId;
+            InstanceId = instanceId ?? Guid.NewGuid().ToString("N");
             Connection = new FmpConnection(url, options);
             Connection.StateChanged += state => { lock (_states) _states.Add(state); };
             Connection.On("McpClientsChanged", arguments => { lock (_clientLists) _clientLists.Add(arguments); return Task.CompletedTask; });
@@ -43,7 +44,7 @@ namespace Feeder.Fmp.Tests
 
         public long LastCompleteMs { get; private set; }
 
-        public string InstanceId { get; } = Guid.NewGuid().ToString("N");
+        public string InstanceId { get; }
 
         // returns the CallToolResult json that goes back to the AI client
         public Func<ToolCall, Task<string>> OnTool { get; set; }
@@ -70,12 +71,14 @@ namespace Feeder.Fmp.Tests
 
         public Task StartAsync() => Connection.StartAsync();
 
-        public Task<string> RegisterAsync(string registryHash = "none")
+        // projectRoot marks a plugin that reports deferral, so the matrix may fail its lost operations at once
+        public Task<string> RegisterAsync(string registryHash = "none", string projectRoot = null)
             => Connection.InvokeAsync("Register",
                 "[{\"protocolVersion\":\"1\",\"projectId\":\"" + ProjectId + "\",\"unityInstanceId\":\"" + InstanceId +
                 "\",\"projectPathHash\":\"h\",\"unityVersion\":\"2022.3.62f3\",\"pluginVersion\":\"0.0.0-test\"," +
                 "\"supportedProtocolVersions\":[\"1\"],\"toolRegistryHash\":\"" + registryHash +
-                "\",\"authToken\":\"\",\"editorState\":0,\"pendingOperations\":[]}]");
+                "\",\"authToken\":\"\",\"editorState\":0,\"pendingOperations\":[]" +
+                (projectRoot == null ? string.Empty : ",\"projectRoot\":" + JsonSerializer.Serialize(projectRoot)) + "}]");
 
         public Task PublishToolsAsync(params string[] names)
         {

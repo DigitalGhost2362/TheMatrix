@@ -1,6 +1,5 @@
 using Feeder.Matrix.Unity;
 using Microsoft.Extensions.Options;
-using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 
 namespace Feeder.Matrix.Backends;
@@ -15,14 +14,10 @@ public sealed class BackendRouter(
     MockUnityBackend mockBackend,
     IOptions<MatrixOptions> options) : IUnityBackend
 {
+    // the Unity backend also answers when no editor is linked: an empty tool list, and calls that
+    // wait out a reload or fail with the editor's health
     private IUnityBackend Resolve()
-    {
-        if (registry.GetDefaultLink() is not null)
-            return unityBackend;
-        if (options.Value.EnableMockBackend)
-            return mockBackend;
-        throw new McpProtocolException("No Unity editor is connected to the matrix.", McpErrorCode.InternalError);
-    }
+        => registry.GetLatestLink() is null && options.Value.EnableMockBackend ? mockBackend : unityBackend;
 
     public ValueTask<IReadOnlyList<Tool>> ListToolsAsync(CancellationToken ct) => Resolve().ListToolsAsync(ct);
 

@@ -136,6 +136,15 @@ namespace Feeder.MCP
                 NotifyChanged(Instance.unityConnectionConfig);
             }
         }
+        /// <summary>How long a tool call waits for an editor that dropped its link (domain reload) to come back.</summary>
+        public static int ReconnectGraceMs => Instance.unityConnectionConfig.ReconnectGraceMs;
+
+        /// <summary>Deadline of a tool that completes after a compile or domain reload.</summary>
+        public static int DeferredToolTimeoutMs => Instance.unityConnectionConfig.DeferredToolTimeoutMs;
+
+        /// <summary>Whether the server lists its <c>tool-call</c> proxy.</summary>
+        public static bool EnableToolCallProxy => Instance.unityConnectionConfig.EnableToolCallProxy;
+
         public static int Port
         {
             get

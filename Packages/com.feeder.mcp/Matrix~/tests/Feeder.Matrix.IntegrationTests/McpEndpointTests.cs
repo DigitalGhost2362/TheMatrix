@@ -161,4 +161,68 @@ public class McpEndpointTests : IClassFixture<MatrixFactory>
         Assert.True(session.GetProperty("isActive").GetBoolean());
         Assert.True(session.TryGetProperty("lastActivity", out _));
     }
+    [Fact]
+    public async Task ToolsList_has_matrix_tools_and_list_changed_capability()
+    {
+        var (client, sessionId) = await InitializeAsync();
+        var (doc, _) = await PostAsync(client, """{"jsonrpc":"2.0","id":2,"method":"tools/list"}""", sessionId);
+        using var _d = doc;
+        var names = doc.RootElement.GetProperty("result").GetProperty("tools").EnumerateArray()
+            .Select(t => t.GetProperty("name").GetString()).ToArray();
+        Assert.Contains("editor-health", names);
+        Assert.Contains("tool-call", names);
+
+        var (init, _) = await PostAsync(_factory.CreateClient(),
+            """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"tests","version":"0"}}}""");
+        using (init)
+            Assert.True(init.RootElement.GetProperty("result").GetProperty("capabilities").GetProperty("tools").GetProperty("listChanged").GetBoolean());
+    }
+
+    [Fact]
+    public async Task EditorHealth_answers_without_unity()
+    {
+        var (client, sessionId) = await InitializeAsync();
+        var (doc, _) = await PostAsync(client,
+            """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"editor-health","arguments":{}}}""", sessionId);
+        using var _d = doc;
+        Assert.StartsWith("Not linked", doc.RootElement.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString());
+    }
+
+    [Theory]
+    [InlineData("""{"name":"tool-call"}""", "matrix tool")]
+    [InlineData("""{"name":" EDITOR-HEALTH "}""", "matrix tool")]
+    [InlineData("""{"name":"mcp__Feeder-MCP__tool-call"}""", "matrix tool")]
+    [InlineData("""{"name":"ping","arguments":[1]}""", "JSON object")]
+    [InlineData("""{"name":42}""", "as a string")]
+    [InlineData("""{}""", "as a string")]
+    public async Task ToolCall_refuses_bad_requests(string arguments, string expected)
+    {
+        var (client, sessionId) = await InitializeAsync();
+        var (doc, _) = await PostAsync(client,
+            $$$"""{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"tool-call","arguments":{{{arguments}}}}}""", sessionId);
+        using var _d = doc;
+        var result = doc.RootElement.GetProperty("result");
+        Assert.True(result.GetProperty("isError").GetBoolean());
+        Assert.Contains(expected, result.GetProperty("content")[0].GetProperty("text").GetString());
+    }
+
+    [Fact]
+    public async Task ToolCall_serves_only_tools_the_session_has_not_listed()
+    {
+        var (client, sessionId) = await InitializeAsync();
+        var (gap, _) = await PostAsync(client,
+            """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"tool-call","arguments":{"name":"ping","arguments":{"message":"hi"}}}}""", sessionId);
+        using (gap)
+        {
+            var content = gap.RootElement.GetProperty("result").GetProperty("content");
+            Assert.Equal("via tool-call -> ping", content[0].GetProperty("text").GetString());
+            Assert.Equal("hi", content[1].GetProperty("text").GetString());
+        }
+
+        (await PostAsync(client, """{"jsonrpc":"2.0","id":4,"method":"tools/list"}""", sessionId)).doc.Dispose();
+        var (listed, _) = await PostAsync(client,
+            """{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"tool-call","arguments":{"name":"PING"}}}""", sessionId);
+        using (listed)
+            Assert.Contains("already in your tool list", listed.RootElement.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString());
+    }
 }

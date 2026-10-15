@@ -2,7 +2,9 @@ using System.Net;
 using Feeder.Matrix;
 using Feeder.Matrix.Backends;
 using Feeder.Matrix.Compile;
+using Feeder.Matrix.Health;
 using Feeder.Matrix.Protocol;
+using Feeder.Matrix.Tools;
 using Feeder.Matrix.Unity;
 using Microsoft.AspNetCore.Http.Connections;
 using ModelContextProtocol.Protocol;
@@ -54,6 +56,8 @@ try
     builder.Services.AddSingleton<UnityLinkBackend>();
     builder.Services.AddSingleton<IUnityBackend, BackendRouter>();
     builder.Services.AddSingleton<ScriptCompiler>();
+    builder.Services.AddSingleton<EditorHealth>();
+    builder.Services.AddSingleton<ServerTools>();
 
     builder.Services
         .AddSignalR(options => options.MaximumReceiveMessageSize = matrixOptions.MaxRequestBodyBytes)
@@ -63,6 +67,8 @@ try
         .AddMcpServer(options =>
         {
             options.ServerInfo = new Implementation { Name = "feeder-mcp-server", Version = MatrixVersion.Value };
+            // the Unity tool set changes at runtime (tools switched on or off, editor linked or gone)
+            options.Capabilities = new ServerCapabilities { Tools = new ToolsCapability { ListChanged = true } };
         })
         .WithHttpTransport(options =>
         {
@@ -75,12 +81,20 @@ try
         .WithListToolsHandler(async (context, ct) =>
         {
             var backend = context.Services!.GetRequiredService<IUnityBackend>();
-            var tools = await backend.ListToolsAsync(ct);
-            return new ListToolsResult { Tools = [.. tools] };
+            var serverTools = context.Services!.GetRequiredService<ServerTools>().List();
+            var unityTools = (await backend.ListToolsAsync(ct))
+                .Where(tool => serverTools.All(own => own.Name != tool.Name))
+                .ToArray();
+            context.Services!.GetRequiredService<McpClientTracker>()
+                .RecordListed(context.Server.SessionId, unityTools.Select(tool => tool.Name));
+            return new ListToolsResult { Tools = [.. serverTools, .. unityTools] };
         })
         .WithCallToolHandler(async (context, ct) =>
         {
             var backend = context.Services!.GetRequiredService<IUnityBackend>();
+            var serverTools = context.Services!.GetRequiredService<ServerTools>();
+            if (serverTools.Handles(context.Params?.Name))
+                return await serverTools.CallAsync(context.Params!, context.Server.SessionId, backend, ct);
             return await backend.CallToolAsync(context.Params!, ct);
         })
         .WithListPromptsHandler((_, _) => ValueTask.FromResult(new ListPromptsResult()))
@@ -173,7 +187,7 @@ static ReadResourceResult throwResourceNotFound(string? uri)
 
 public static class MatrixVersion
 {
-    public const string Value = "0.3.0";
+    public const string Value = "0.4.0";
 }
 
 // Exposes the entry point to WebApplicationFactory-based integration tests.

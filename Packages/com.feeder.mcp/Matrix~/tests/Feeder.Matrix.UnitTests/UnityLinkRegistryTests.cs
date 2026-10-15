@@ -66,7 +66,7 @@ public class UnityLinkRegistryTests
 
         var completed = registry.CompleteOperation(new ToolResult { OperationId = "op-1", Success = true });
         Assert.True(completed);
-        var result = await tcs.Task;
+        var result = await tcs.Completion.Task;
         Assert.True(result.Success);
     }
 

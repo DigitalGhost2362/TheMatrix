@@ -36,7 +36,7 @@ namespace Feeder.MCP.Editor.Matrix
         readonly MatrixPluginEditor _owner;
         readonly ILogger _logger;
         readonly SemaphoreSlim _connectionGate = new(1, 1);
-        readonly ConcurrentDictionary<string, CancellationTokenSource> _operations = new();
+        readonly ConcurrentDictionary<string, Operation> _operations = new();
         readonly ConcurrentDictionary<string, byte> _cancelledEarly = new();
 
         FmpConnection? _connection;
@@ -49,6 +49,30 @@ namespace Feeder.MCP.Editor.Matrix
         FmpEditorState _lastEditorState = FmpEditorState.Ready;
         bool _disposed;
 
+        // written on the main thread every editor tick, read by the heartbeat timer on a pool thread
+        long _lastMainTickUnixMs;
+        volatile bool _updating;
+        volatile bool _focused;
+        readonly int _processId = System.Diagnostics.Process.GetCurrentProcess().Id;
+        readonly string _consoleLogPath = Application.consoleLogPath;
+        readonly string _projectRoot = MatrixPluginEditor.ProjectRootPath;
+        Timer? _heartbeatTimer;
+        int _heartbeatBusy;
+        static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(2);
+
+        sealed class Operation
+        {
+            public readonly CancellationTokenSource Cancellation;
+            public readonly string ToolName;
+            public readonly long StartedUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            public Operation(CancellationTokenSource cancellation, string toolName)
+            {
+                Cancellation = cancellation;
+                ToolName = toolName;
+            }
+        }
+
         public FeederMatrixAdapter(MatrixPluginEditor owner)
         {
             _owner = owner;
@@ -57,6 +81,86 @@ namespace Feeder.MCP.Editor.Matrix
             EnsureIdentity();
             UpdateEditorState();
             EditorApplication.update += UpdateEditorState;
+            // a pool thread, so the matrix still hears from the editor while its main thread is held
+            _heartbeatTimer = new Timer(_ => _ = SendHeartbeat(), null, HeartbeatInterval, HeartbeatInterval);
+        }
+
+        Task SendHeartbeat(FmpEditorState? state = null)
+        {
+            var connection = _connection;
+            if (_disposed || connection?.State != FmpState.Connected || _serverCapabilities == null)
+                return Task.CompletedTask;
+            if (Interlocked.Exchange(ref _heartbeatBusy, 1) == 1)
+                return Task.CompletedTask;
+            try
+            {
+                var message = new HeartbeatMessage
+                {
+                    UnityInstanceId = _unityInstanceId,
+                    EditorState = state ?? _lastEditorState,
+                    LastMainTickUnixMs = Interlocked.Read(ref _lastMainTickUnixMs),
+                    Updating = _updating,
+                    Focused = _focused,
+                    InFlight = _operations.Select(pair => new InFlightOperation
+                    {
+                        OperationId = pair.Key,
+                        ToolName = pair.Value.ToolName,
+                        StartedUnixMs = pair.Value.StartedUnixMs,
+                    }).ToArray(),
+                    ProcessId = _processId,
+                    ConsoleLogPath = _consoleLogPath,
+                };
+                return connection.SendAsync("Heartbeat", FmpJson.Arguments(message)).ContinueWith(
+                    _ => Interlocked.Exchange(ref _heartbeatBusy, 0), TaskScheduler.Default);
+            }
+            catch
+            {
+                Interlocked.Exchange(ref _heartbeatBusy, 0);
+                return Task.CompletedTask;
+            }
+        }
+
+        /// <summary>Tells the matrix a domain reload starts, so a dropped link reads as reloading, not as gone.</summary>
+        public void AnnounceReload()
+        {
+            StopHeartbeat();
+            if (_connection?.State != FmpState.Connected)
+                return;
+            Interlocked.Exchange(ref _heartbeatBusy, 0);
+            _lastEditorState = FmpEditorState.Reloading;
+            // waits for the frame to leave: the connection is torn down right after this returns
+            try { Task.Run(() => SendHeartbeat(FmpEditorState.Reloading)).Wait(500); }
+            catch { }
+        }
+
+        void StopHeartbeat() => Interlocked.Exchange(ref _heartbeatTimer, null)?.Dispose();
+
+        /// <summary>
+        /// Moves the deadline of a running call, both Unity's own cancellation and the matrix's wait.
+        /// Thread-safe; false when the call is unknown (finished, or not routed through the matrix).
+        /// </summary>
+        public bool ExtendDeadline(string operationId, TimeSpan extra)
+        {
+            if (!_operations.TryGetValue(operationId, out var operation))
+                return false;
+            try { operation.Cancellation.CancelAfter(extra); }
+            catch (ObjectDisposedException) { return false; }
+            _ = ReportProgressAsync(new ToolProgress { OperationId = operationId, ExtendDeadlineMs = (long)extra.TotalMilliseconds });
+            return true;
+        }
+
+        async Task ReportProgressAsync(ToolProgress progress)
+        {
+            try
+            {
+                var connection = _connection;
+                if (connection?.State == FmpState.Connected)
+                    await connection.SendAsync("ReportProgress", FmpJson.Arguments(progress)).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                _logger.LogDebug(e, "Failed to report progress for {operationId}", progress.OperationId);
+            }
         }
 
         public async Task<bool> ConnectAsync()
@@ -97,6 +201,7 @@ namespace Feeder.MCP.Editor.Matrix
                         await RegisterAsync(_lifetime.Token);
                         SubscribeToRegistryChanges();
                         CancelReconnect();
+                        _ = SendHeartbeat();
                         _owner.SetMatrixConnectionState(FmpState.Connected);
                         _logger.LogInformation("Connected Unity editor to Feeder Local Matrix at {url}", MatrixHubUrl);
                         return true;
@@ -283,6 +388,7 @@ namespace Feeder.MCP.Editor.Matrix
             {
                 await RegisterAsync(_lifetime.Token);
                 _owner.SetMatrixConnectionState(FmpState.Connected);
+                _ = SendHeartbeat();
             }
             catch (Exception e)
             {
@@ -314,15 +420,15 @@ namespace Feeder.MCP.Editor.Matrix
         // the client may deliver CancelTool before InvokeTool has registered its operation
         void CancelOperation(string operationId)
         {
-            if (!_operations.TryGetValue(operationId, out var cts))
+            if (!_operations.TryGetValue(operationId, out var operation))
             {
                 _cancelledEarly[operationId] = 0;
                 _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ => _cancelledEarly.TryRemove(operationId, out var removed));
                 // InvokeTool may have registered between the lookup and the mark
-                if (!_operations.TryGetValue(operationId, out cts))
+                if (!_operations.TryGetValue(operationId, out operation))
                     return;
             }
-            try { cts.Cancel(); }
+            try { operation.Cancellation.Cancel(); }
             catch (ObjectDisposedException) { }
         }
 
@@ -343,6 +449,8 @@ namespace Feeder.MCP.Editor.Matrix
                 AuthToken = MatrixPluginEditor.Token ?? string.Empty,
                 EditorState = _lastEditorState,
                 PendingOperations = _operations.Keys.ToArray(),
+                ProjectRoot = _projectRoot,
+                McpEntryName = Feeder.ToolHost.AgentConfig.AiAgentConfig.DefaultMcpServerName,
             }), cancellationToken));
 
             if (response.Error != null)
@@ -409,7 +517,7 @@ namespace Feeder.MCP.Editor.Matrix
         {
             var deferred = false;
             var cts = CreateOperationCancellation(invoke);
-            _operations[invoke.OperationId] = cts;
+            _operations[invoke.OperationId] = new Operation(cts, invoke.ToolName);
             if (_cancelledEarly.TryRemove(invoke.OperationId, out _))
                 cts.Cancel();
             try
@@ -429,6 +537,8 @@ namespace Feeder.MCP.Editor.Matrix
                 if (IsStatus(response, "Processing"))
                 {
                     deferred = true;
+                    // the answer comes after a compile or domain reload, so the matrix gives the call its longer deadline
+                    await ReportProgressAsync(new ToolProgress { OperationId = invoke.OperationId, Deferred = true, Message = "deferred" });
                     return;
                 }
 
@@ -438,6 +548,11 @@ namespace Feeder.MCP.Editor.Matrix
             catch (OperationCanceledException)
             {
                 await SendErrorAsync(invoke.OperationId, "FMP_CANCELLED", $"Tool '{invoke.ToolName}' was cancelled.");
+            }
+            catch (ThreadAbortException)
+            {
+                await SendErrorAsync(invoke.OperationId, "FMP_INTERRUPTED",
+                    $"Tool '{invoke.ToolName}' was cut off by a Unity domain reload before it finished. Its code may have run in part: check the editor state before running it again.");
             }
             catch (Exception e)
             {
@@ -596,8 +711,8 @@ namespace Feeder.MCP.Editor.Matrix
 
         void RemoveOperation(string operationId)
         {
-            if (_operations.TryRemove(operationId, out var cts))
-                cts.Dispose();
+            if (_operations.TryRemove(operationId, out var operation))
+                operation.Cancellation.Dispose();
         }
 
         void EnsureIdentity()
@@ -629,6 +744,9 @@ namespace Feeder.MCP.Editor.Matrix
 
         void UpdateEditorState()
         {
+            Interlocked.Exchange(ref _lastMainTickUnixMs, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            _updating = EditorApplication.isUpdating;
+            _focused = UnityEditorInternal.InternalEditorUtility.isApplicationActive;
             if (EditorApplication.isCompiling) _lastEditorState = FmpEditorState.Compiling;
             else if (EditorApplication.isPaused) _lastEditorState = FmpEditorState.Paused;
             else if (EditorApplication.isPlaying) _lastEditorState = FmpEditorState.Playing;
@@ -654,6 +772,7 @@ namespace Feeder.MCP.Editor.Matrix
             _disposed = true;
             Interlocked.Increment(ref _reconnectGeneration);
             EditorApplication.update -= UpdateEditorState;
+            StopHeartbeat();
             _lifetime.Cancel();
             _toolsUpdatedSubscription?.Dispose();
             foreach (var operation in _operations.Keys.ToArray())

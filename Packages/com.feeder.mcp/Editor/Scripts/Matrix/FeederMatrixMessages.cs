@@ -28,6 +28,8 @@ namespace Feeder.MCP.Editor.Matrix
         public string AuthToken { get; set; } = string.Empty;
         public FmpEditorState EditorState { get; set; }
         public string[] PendingOperations { get; set; } = Array.Empty<string>();
+        public string? ProjectRoot { get; set; }
+        public string? McpEntryName { get; set; }
     }
 
     [Serializable]
@@ -117,6 +119,30 @@ namespace Feeder.MCP.Editor.Matrix
     {
         public string UnityInstanceId { get; set; } = string.Empty;
         public FmpEditorState EditorState { get; set; }
+        public long LastMainTickUnixMs { get; set; }
+        public bool Updating { get; set; }
+        public bool Focused { get; set; }
+        public InFlightOperation[] InFlight { get; set; } = Array.Empty<InFlightOperation>();
+        public int ProcessId { get; set; }
+        public string? ConsoleLogPath { get; set; }
+    }
+
+    [Serializable]
+    internal sealed class InFlightOperation
+    {
+        public string OperationId { get; set; } = string.Empty;
+        public string ToolName { get; set; } = string.Empty;
+        public long StartedUnixMs { get; set; }
+    }
+
+    [Serializable]
+    internal sealed class ToolProgress
+    {
+        public string OperationId { get; set; } = string.Empty;
+        public double? Progress { get; set; }
+        public string? Message { get; set; }
+        public bool Deferred { get; set; }
+        public long ExtendDeadlineMs { get; set; }
     }
 
     internal enum FmpEditorState
