@@ -1,6 +1,6 @@
 ---
 name: hyper-playtester-{{INDEX}}
-description: EXPERIMENTAL Hyper Testing play tester bound to clone Unity Editor hc{{INDEX}} (port {{PORT}}). Spawn only from a session following the matrix-hyper-testing skill, with a run id and test case paths.
+description: EXPERIMENTAL Hyper Testing play tester bound to clone Unity Editor hc{{INDEX}} (port {{PORT}}). Spawn only from a session following the matrix-hyper-testing-guide skill, with a run id and test case paths.
 mcpServers:
   - matrix-hc{{INDEX}}:
       type: http

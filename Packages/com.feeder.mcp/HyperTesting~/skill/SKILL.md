@@ -1,5 +1,5 @@
 ---
-name: matrix-hyper-testing
+name: matrix-hyper-testing-guide
 description: EXPERIMENTAL Hyper Testing Mode - play test one Unity project in parallel by sending several hyper-playtester-N subagents, each driving its own clone Unity Editor. Use only when the user asks for parallel / hyper play testing AND the hyper-testing tool reports the mode ON. Covers the clone pool (up, refresh, status, down), splitting test cases across clones, RAM watching, collecting results, and writing the experience journal that improves Matrix later.
 ---
 

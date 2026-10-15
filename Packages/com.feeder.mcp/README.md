@@ -143,7 +143,7 @@ again on every package update.
 - **Driving a clone by hand:** `HyperTesting/tools/` holds `hc.py`, `hx.sh`, `hxf.sh` and `shot.py`, which
   call a clone over HTTP when a play tester has no MCP tools for it.
 - **Refreshing:** after a code change, `refresh` recompiles the clones one at a time.
-- **Running cases:** the agent following the `matrix-hyper-testing` skill splits test cases over the
+- **Running cases:** the agent following the `matrix-hyper-testing-guide` skill splits test cases over the
   clones and spawns the play testers in parallel.
 - **Results and journal:** results go to `HyperTesting/Runs/`, and the journal goes to
   `HyperTesting/Journal/`.
@@ -164,6 +164,15 @@ remain below GitHub's per-file limit; installation and updates are handled autom
 editor package. Updating from 0.87 or earlier stops the project's old Matrix server, removes the files
 it left in `Library` (only when they are Matrix's own), and rewrites the config of every wired agent;
 restart the agent session afterwards.
+
+## Shared projects
+
+Matrix writes one `matrix-<tool>` skill folder per enabled tool into each agent's skills folder (for
+example `.claude/skills` or `.agents/skills`) and deletes it when the tool is switched off, so switching
+tools changes files in those folders. In a project shared through version control, either ignore
+`<skills folder>/matrix-*/` or accept those changes. Matrix does not edit the project's `.gitignore` for
+this. Hyper Testing keeps its guide in `matrix-hyper-testing-guide`, apart from the `matrix-hyper-testing`
+folder of the `hyper-testing` tool.
 
 ## Names Matrix uses
 

@@ -167,6 +167,11 @@ All notable changes to this package are documented here.
 - Without a linked editor, `tools/list` returns the server's own tools instead of an error.
 - `console-get-logs` returns entries oldest first; entries still in the write buffer used to come before
   older ones read from the file.
+- The Hyper Testing guide skill is now `matrix-hyper-testing-guide`. It shared `matrix-hyper-testing` with
+  the skill of the `hyper-testing` tool, so switching that tool overwrote or deleted the guide. The old
+  guide folder is removed only when it holds that old guide, never a file the tool skill generator wrote.
+- The `.gitignore` line Hyper Testing adds for its guide follows the skills folders actually in use
+  instead of a fixed `.claude/skills` path.
 
 ### Removed
 

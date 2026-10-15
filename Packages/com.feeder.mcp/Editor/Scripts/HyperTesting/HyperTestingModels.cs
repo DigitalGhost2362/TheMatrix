@@ -140,7 +140,9 @@ namespace Feeder.MCP.Editor.HyperTesting
     public static class HyperTestingPaths
     {
         public const string MarkerFileName = ".matrix-hyper-clone.json";
-        public const string SkillId = "matrix-hyper-testing";
+        // not "matrix-hyper-testing": that folder belongs to the skill of the hyper-testing tool
+        public const string SkillId = "matrix-hyper-testing-guide";
+        public const string OldSkillId = "matrix-hyper-testing";
         public const string AgentPrefix = "hyper-playtester-";
 
         // cached on the main thread: Application.dataPath cannot be read from pool worker threads

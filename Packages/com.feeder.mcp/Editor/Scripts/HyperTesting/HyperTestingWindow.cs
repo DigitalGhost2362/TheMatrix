@@ -93,7 +93,7 @@ namespace Feeder.MCP.Editor.HyperTesting
 
         void DrawEnabled()
         {
-            EditorGUILayout.HelpBox("ON for this project on this machine. Agents drive it through the hyper-testing tool and the matrix-hyper-testing skill. Restart Claude Code once after the first enable so it sees .claude/agents.", MessageType.None);
+            EditorGUILayout.HelpBox("ON for this project on this machine. Agents drive it through the hyper-testing tool and the matrix-hyper-testing-guide skill. Restart Claude Code once after the first enable so it sees .claude/agents.", MessageType.None);
 
             using (new EditorGUILayout.HorizontalScope())
             {
