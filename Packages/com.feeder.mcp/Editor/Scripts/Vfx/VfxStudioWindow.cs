@@ -13,7 +13,6 @@ namespace Feeder.MCP.Editor.Vfx
     {
         const float TabHeight = 20f;
         const float FrameSeconds = 1f / 60f;
-        const float MaxStepSeconds = 0.1f;
         const double ToastSeconds = 2.2;
 
         static readonly string[] Tabs = { "Effect", "Textures" };
@@ -219,16 +218,11 @@ namespace Feeder.MCP.Editor.Vfx
             var delta = (float)(now - lastTick);
             if (delta < FrameSeconds) return;
             lastTick = now;
-            delta = Mathf.Min(delta, MaxStepSeconds);
             bool keep;
             if (session != null)
             {
-                keep = session.Playing;
-                if (keep)
-                {
-                    session.Advance(delta);
-                    Repaint();
-                }
+                keep = session.Preview.Animating;
+                if (keep) Repaint();
             }
             else
             {

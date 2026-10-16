@@ -19,12 +19,9 @@ namespace Feeder.MCP.Editor.Vfx
         const float GroupHeight = 22f;
         const float SoloHeight = 260f;
         const float HintHeight = 52f;
-        const float ControlsHeight = 28f;
         const float ScrollbarWidth = 15f;
         const string EmittersGroup = "Emitter";
 
-        static readonly string[] SpeedLabels = { "0.25×", "0.5×", "1×" };
-        static readonly float[] SpeedValues = { 0.25f, 0.5f, 1f };
         static readonly List<ParamGroup> EmitterGroups = VfxParams.Groups(VfxParams.Emitter);
         static readonly List<ParamGroup> RootGroups = VfxParams.Groups(VfxParams.Root);
         static readonly Color BadgeFill = new Color(0.12f, 0.25f, 0.42f);
@@ -66,12 +63,13 @@ namespace Feeder.MCP.Editor.Vfx
             var hierarchy = new Rect(body.x, body.y, hierarchyWidth, body.height);
             var preview = new Rect(body.xMax - previewWidth, body.y, previewWidth, body.height);
             var middle = new Rect(hierarchy.xMax, body.y, preview.x - hierarchy.xMax, body.height);
-            if (Event.current.type == EventType.Repaint) s.Preview.Simulate(s.Clock);
+            if (Event.current.type == EventType.Repaint) s.Preview.Tick();
             DrawHierarchy(hierarchy, s);
             DrawMiddle(middle, s);
-            DrawPreview(preview, s);
+            VfxPreviewView.Draw(preview, s);
             VfxUi.RightLine(hierarchy);
             VfxUi.RightLine(middle);
+            if (s.Preview.Animating) OnPlay?.Invoke();
         }
 
         #region Bar
@@ -309,8 +307,7 @@ namespace Feeder.MCP.Editor.Vfx
         {
             var solo = node.System!;
             var preview = new Rect(0f, y, width, SoloHeight);
-            if (preview.yMax > middleScroll.y) s.Preview.Draw(preview, VfxEditSession.SoloSlot, ps => ps == solo);
-            VfxUi.Label(new Rect(preview.x + 6f, preview.y + 4f, preview.width - 12f, 16f), $"{node.Transform.name} · riêng", VfxUi.Mini, true);
+            if (preview.yMax > middleScroll.y) VfxPreviewView.DrawSolo(preview, s, solo);
             y += SoloHeight;
             foreach (var group in EmitterGroups) DrawParams(width, s, solo, VfxParams.Emitter, group, ref y);
         }
@@ -493,42 +490,6 @@ namespace Feeder.MCP.Editor.Vfx
             var box = new Rect(value.xMax - 22f, value.y + 1f, 22f, 22f);
             VfxUi.Fill(box, VfxUi.Backdrop);
             GUI.DrawTexture(box, texture, ScaleMode.ScaleToFit, true);
-        }
-
-        #endregion
-
-        #region Preview
-
-        void DrawPreview(Rect r, VfxEditSession s)
-        {
-            var head = new Rect(r.x, r.y, r.width, PaneHeader);
-            DrawPaneHeader(head, "Preview tổng thể");
-            VfxUi.Label(new Rect(head.x, head.y, head.width - 8f, head.height), $"t={Number(s.Clock)}s / {Number(s.Loop, "0.0")}s", VfxUi.MiniRight, true);
-            var view = new Rect(r.x, head.yMax, r.width, r.height - PaneHeader - ControlsHeight);
-            s.Preview.Draw(view, VfxEditSession.OverallSlot, s.IsShown);
-            VfxUi.Label(new Rect(view.x + 6f, view.y + 4f, view.width - 12f, 16f), $"{s.Name} · tất cả emitter đang bật", VfxUi.Mini, true);
-            DrawControls(new Rect(r.x, view.yMax, r.width, ControlsHeight), s);
-        }
-
-        void DrawControls(Rect r, VfxEditSession s)
-        {
-            VfxUi.Fill(r, VfxUi.Header);
-            var play = new Rect(r.x + 6f, r.y + 4f, 26f, 20f);
-            if (GUI.Button(play, new GUIContent(VfxUi.Icon(s.Playing ? "PauseButton" : "PlayButton")), EditorStyles.miniButton))
-            {
-                s.Playing = !s.Playing;
-                if (s.Playing) OnPlay?.Invoke();
-            }
-            var restart = new Rect(play.xMax + 4f, play.y, 26f, 20f);
-            if (GUI.Button(restart, new GUIContent(VfxUi.Icon("Refresh")), EditorStyles.miniButton)) s.Clock = 0f;
-            var speeds = new Rect(r.xMax - 126f, play.y, 120f, 20f);
-            var scrub = new Rect(restart.xMax + 8f, play.y + 2f, speeds.x - restart.xMax - 16f, 16f);
-            EditorGUI.BeginChangeCheck();
-            var fraction = GUI.HorizontalSlider(scrub, s.Clock / s.Loop, 0f, 1f);
-            if (EditorGUI.EndChangeCheck()) s.Scrub(fraction);
-            EditorGUI.BeginChangeCheck();
-            var picked = GUI.Toolbar(speeds, Array.IndexOf(SpeedValues, s.Speed), SpeedLabels, EditorStyles.miniButton);
-            if (EditorGUI.EndChangeCheck()) s.Speed = SpeedValues[picked];
         }
 
         #endregion

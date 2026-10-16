@@ -33,14 +33,10 @@ namespace Feeder.MCP.Editor.Vfx
         public readonly VfxLivePreview Preview;
         public readonly HashSet<string> Hidden = new HashSet<string>();
         public string Selected = "";
-        public bool Playing = true;
-        public float Speed = 1f;
-        public float Clock;
 
         public List<Node> Nodes { get; private set; } = new List<Node>();
         public int Version { get; private set; }
         public int Changes { get; private set; }
-        public float Loop { get; private set; } = 1f;
         public string? Blocked { get; private set; }
 
         public Transform Root => Preview.Instance!.transform;
@@ -55,8 +51,6 @@ namespace Feeder.MCP.Editor.Vfx
             Preview = new VfxLivePreview();
             try
             {
-                var frame = VfxPreview.Run(asset, new VfxPreview.Options { Image = false });
-                Preview.Frame(frame.FrameCenter, frame.FrameRadius);
                 Rebuild();
             }
             catch
@@ -92,21 +86,7 @@ namespace Feeder.MCP.Editor.Vfx
                     if (flags[i]) Changes++;
                 }
             }
-            var rootSystem = Root.GetComponent<ParticleSystem>();
-            Loop = Mathf.Max(rootSystem != null ? rootSystem.main.duration : 0f, EffectLength());
-        }
-
-        public void Advance(float deltaTime)
-        {
-            var rootSystem = Root.GetComponent<ParticleSystem>();
-            var rate = Speed * (rootSystem != null ? rootSystem.main.simulationSpeed : 1f);
-            Clock = Mathf.Repeat(Clock + deltaTime * rate, Loop);
-        }
-
-        public void Scrub(float fraction)
-        {
-            Playing = false;
-            Clock = Mathf.Clamp01(fraction) * Loop;
+            Preview.Resimulate();
         }
 
         public void Revert() => Rebuild();
@@ -133,19 +113,6 @@ namespace Feeder.MCP.Editor.Vfx
             var duplicates = Nodes.Where(n => n.System != null).GroupBy(n => n.Transform.name).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
             Blocked = duplicates.Count == 0 ? null : $"Tên emitter trùng: {string.Join(", ", duplicates)}. Lưu địa chỉ emitter theo tên, hãy đổi tên trong prefab.";
             Touch();
-        }
-
-        float EffectLength()
-        {
-            try
-            {
-                return VfxPreview.EstimateDuration(Preview.Systems);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[Matrix VFX] cannot measure the length of '{Name}', keeping the last one: {ex.Message}");
-                return Loop;
-            }
         }
 
         void BuildNodes()

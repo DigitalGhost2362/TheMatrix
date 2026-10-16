@@ -2,10 +2,13 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
 
 namespace Feeder.MCP.Editor.Vfx
@@ -18,6 +21,8 @@ namespace Feeder.MCP.Editor.Vfx
         const int StatSamples = 24;
         const float Fov = 30f;
         const int MaxFramePoints = 20000;
+        static readonly Regex GrabPassPattern = new Regex(@"\bGrabPass\s*\{");
+        static readonly Dictionary<Shader, bool> GrabShaders = new Dictionary<Shader, bool>();
 
         public sealed class Options
         {
@@ -163,6 +168,8 @@ namespace Feeder.MCP.Editor.Vfx
                     var fill = sheet.GetPixels32();
                     for (var i = 0; i < fill.Length; i++) fill[i] = new Color32(40, 40, 40, 255);
                     sheet.SetPixels32(fill);
+                    foreach (var r in top.GetComponentsInChildren<Renderer>(true))
+                        if (UsesGrabPass(r)) r.enabled = false;
                     cam.targetTexture = rt;
                     for (var i = 0; i < times.Length; i++)
                     {
@@ -275,6 +282,19 @@ namespace Feeder.MCP.Editor.Vfx
             var total = emitEnd + life;
             if (loops) total = Mathf.Min(total, Mathf.Max(2f, emitEnd * 2f));
             return Mathf.Clamp(total, 0.2f, 10f);
+        }
+
+        // a built-in GrabPass shader cannot run under a render pipeline: every render logs
+        // "_GrabTexture can't be added to this global property sheet", so previews skip those renderers
+        public static bool UsesGrabPass(Renderer r) =>
+            GraphicsSettings.currentRenderPipeline != null && r.sharedMaterials.Any(m => m != null && m.shader != null && UsesGrabPass(m.shader));
+
+        static bool UsesGrabPass(Shader shader)
+        {
+            if (GrabShaders.TryGetValue(shader, out var grab)) return grab;
+            var path = AssetDatabase.GetAssetPath(shader);
+            grab = path.EndsWith(".shader", StringComparison.OrdinalIgnoreCase) && File.Exists(path) && GrabPassPattern.IsMatch(File.ReadAllText(path));
+            return GrabShaders[shader] = grab;
         }
 
         #endregion
