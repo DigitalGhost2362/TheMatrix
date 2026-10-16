@@ -89,3 +89,7 @@ crashlytics-build.properties
 /.codex/config.toml
 
 /TestCases/
+
+# Only the Matrix package is tracked under Packages/. Every other embedded package
+/Packages/*/
+!/Packages/com.feeder.mcp/
