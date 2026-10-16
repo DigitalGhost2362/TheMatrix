@@ -1,0 +1,65 @@
+name: UPM registry
+
+# Publishes every vX.Y.Z tag of com.feeder.mcp to the static registry on the `registry` branch,
+# served at https://raw.githubusercontent.com/<owner>/<repo>/registry. Tarballs live in GitHub Releases.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: upm-registry
+  cancel-in-progress: false
+
+env:
+  FIRST_VERSION: 0.87.1
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check out the registry branch
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin registry >/dev/null; then
+            git worktree add -B registry registry origin/registry
+          else
+            git worktree add --orphan -b registry registry
+          fi
+
+      - name: Publish missing versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for tag in $(git tag -l 'v[0-9]*' | sort -V); do
+            v=${tag#v}
+            [ "$(printf '%s\n%s\n' "$FIRST_VERSION" "$v" | sort -V | head -1)" = "$FIRST_VERSION" ] || continue
+            [ -f "registry/versions/$v.json" ] && continue
+            git cat-file -e "$tag:Packages/com.feeder.mcp/package.json" 2>/dev/null || continue
+            tgz=$(python3 .github/scripts/upm_registry.py pack "$tag" dist) || continue
+            if ! gh release view "$tag" >/dev/null 2>&1; then
+              python3 .github/scripts/upm_registry.py notes "$tag" > notes.md
+              gh release create "$tag" --verify-tag --title "$tag" --notes-file notes.md
+            fi
+            gh release upload "$tag" "$tgz" --clobber
+            python3 .github/scripts/upm_registry.py entry "$tag" "$tgz" \
+              "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$(basename "$tgz")" registry
+          done
+          python3 .github/scripts/upm_registry.py index registry
+
+      - name: Push the registry
+        working-directory: registry
+        run: |
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Update registry"
+          git push origin registry
