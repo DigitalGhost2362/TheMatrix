@@ -1,0 +1,36 @@
+{
+  "objects": [
+    {
+      "package": {
+        "name": "com.feeder.mcp",
+        "version": "0.89.0",
+        "description": "Matrix Bridge for Unity: a local MCP bridge with a status window and a bundled local server.",
+        "displayName": "Matrix Bridge",
+        "author": {
+          "name": "Feeder",
+          "email": "bingo6xxx@gmail.com",
+          "url": "https://github.com/BingoBoiz"
+        },
+        "keywords": [
+          "unity",
+          "mcp",
+          "ai",
+          "editor"
+        ],
+        "date": "2026-10-16T11:24:30+07:00",
+        "links": {}
+      },
+      "score": {
+        "final": 1,
+        "detail": {
+          "quality": 1,
+          "popularity": 1,
+          "maintenance": 1
+        }
+      },
+      "searchScore": 1
+    }
+  ],
+  "total": 1,
+  "time": "2026-10-16T05:00:00.000Z"
+}

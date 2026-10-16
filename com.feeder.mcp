@@ -1,0 +1,111 @@
+{
+  "_id": "com.feeder.mcp",
+  "name": "com.feeder.mcp",
+  "description": "Matrix Bridge for Unity: a local MCP bridge with a status window and a bundled local server.",
+  "dist-tags": {
+    "latest": "0.89.0"
+  },
+  "versions": {
+    "0.87.1": {
+      "name": "com.feeder.mcp",
+      "displayName": "Matrix Bridge",
+      "version": "0.87.1",
+      "unity": "2022.3",
+      "description": "Matrix Bridge for Unity: a local MCP bridge with a status window and a bundled local server.",
+      "documentationUrl": "https://github.com/BingoBoiz/TheMatrix#readme",
+      "changelogUrl": "https://github.com/BingoBoiz/TheMatrix/blob/main/Packages/com.feeder.mcp/CHANGELOG.md",
+      "licensesUrl": "https://github.com/BingoBoiz/TheMatrix/blob/main/Packages/com.feeder.mcp/LICENSE.md",
+      "keywords": [
+        "unity",
+        "mcp",
+        "ai",
+        "editor"
+      ],
+      "dependencies": {
+        "com.unity.modules.uielements": "1.0.0",
+        "com.unity.test-framework": "1.1.33"
+      },
+      "author": {
+        "name": "Feeder",
+        "email": "bingo6xxx@gmail.com",
+        "url": "https://github.com/BingoBoiz"
+      },
+      "_id": "com.feeder.mcp@0.87.1",
+      "dist": {
+        "tarball": "https://github.com/DigitalGhost2362/TheMatrix/releases/download/v0.87.1/com.feeder.mcp-0.87.1.tgz",
+        "shasum": "eea5aa93f0b4e9c50f7a2dc7d8af745b22bc62de",
+        "integrity": "sha512-44WTf5FicvnBZF1POROordmWHSXNY5/YMWTyfo8uKFUwhZjFTcPXvqFZyN35HFSyKziZYKThwo2wK9Mm6OA8Tw=="
+      }
+    },
+    "0.88.0": {
+      "name": "com.feeder.mcp",
+      "displayName": "Matrix Bridge",
+      "version": "0.88.0",
+      "unity": "2022.3",
+      "description": "Matrix Bridge for Unity: a local MCP bridge with a status window and a bundled local server.",
+      "documentationUrl": "https://github.com/BingoBoiz/TheMatrix#readme",
+      "changelogUrl": "https://github.com/BingoBoiz/TheMatrix/blob/main/Packages/com.feeder.mcp/CHANGELOG.md",
+      "licensesUrl": "https://github.com/BingoBoiz/TheMatrix/blob/main/Packages/com.feeder.mcp/LICENSE.md",
+      "keywords": [
+        "unity",
+        "mcp",
+        "ai",
+        "editor"
+      ],
+      "dependencies": {
+        "com.unity.modules.uielements": "1.0.0",
+        "com.unity.test-framework": "1.1.33"
+      },
+      "author": {
+        "name": "Feeder",
+        "email": "bingo6xxx@gmail.com",
+        "url": "https://github.com/BingoBoiz"
+      },
+      "_id": "com.feeder.mcp@0.88.0",
+      "dist": {
+        "tarball": "https://github.com/DigitalGhost2362/TheMatrix/releases/download/v0.88.0/com.feeder.mcp-0.88.0.tgz",
+        "shasum": "37029beffd9516185ef358693bf9e154d4a81f1d",
+        "integrity": "sha512-33wZH6VkPMixZTsMTtj1lI0XgQmN1CPsX3CSUGJkMD8ALJvRiBxTwhVFGwd3u0Ai/PBAm5rhZYqzlxV1S24EyQ=="
+      }
+    },
+    "0.89.0": {
+      "name": "com.feeder.mcp",
+      "displayName": "Matrix Bridge",
+      "version": "0.89.0",
+      "unity": "2022.3",
+      "description": "Matrix Bridge for Unity: a local MCP bridge with a status window and a bundled local server.",
+      "documentationUrl": "https://github.com/BingoBoiz/TheMatrix#readme",
+      "changelogUrl": "https://github.com/BingoBoiz/TheMatrix/blob/main/Packages/com.feeder.mcp/CHANGELOG.md",
+      "licensesUrl": "https://github.com/BingoBoiz/TheMatrix/blob/main/Packages/com.feeder.mcp/LICENSE.md",
+      "keywords": [
+        "unity",
+        "mcp",
+        "ai",
+        "editor"
+      ],
+      "dependencies": {
+        "com.unity.modules.uielements": "1.0.0",
+        "com.unity.test-framework": "1.1.33"
+      },
+      "author": {
+        "name": "Feeder",
+        "email": "bingo6xxx@gmail.com",
+        "url": "https://github.com/BingoBoiz"
+      },
+      "_id": "com.feeder.mcp@0.89.0",
+      "dist": {
+        "tarball": "https://github.com/DigitalGhost2362/TheMatrix/releases/download/v0.89.0/com.feeder.mcp-0.89.0.tgz",
+        "shasum": "4b79d6aac7f906b3749ba2814311ec7ccd70851e",
+        "integrity": "sha512-A7Dq1ks9D0ymZ6o555KBRfpQZdW9hBcOVrcZAFLQg4WvfonTa+xzpd3wChKJ6RCVJWxM0lTGRDdf/jRvjN8QXA=="
+      }
+    }
+  },
+  "time": {
+    "created": "2026-09-30T11:21:58+07:00",
+    "modified": "2026-10-16T05:00:00.000Z",
+    "0.87.1": "2026-09-30T11:21:58+07:00",
+    "0.88.0": "2026-10-15T11:50:29+07:00",
+    "0.89.0": "2026-10-16T11:24:30+07:00"
+  },
+  "readme": ""
+}
