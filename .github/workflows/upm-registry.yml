@@ -40,6 +40,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          published=0
           for tag in $(git tag -l 'v[0-9]*' | sort -V); do
             v=${tag#v}
             [ "$(printf '%s\n%s\n' "$FIRST_VERSION" "$v" | sort -V | head -1)" = "$FIRST_VERSION" ] || continue
@@ -53,8 +54,9 @@ jobs:
             gh release upload "$tag" "$tgz" --clobber
             python3 .github/scripts/upm_registry.py entry "$tag" "$tgz" \
               "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$(basename "$tgz")" registry
+            published=1
           done
-          python3 .github/scripts/upm_registry.py index registry
+          if [ "$published" = 1 ]; then python3 .github/scripts/upm_registry.py index registry; fi
 
       - name: Push the registry
         working-directory: registry
