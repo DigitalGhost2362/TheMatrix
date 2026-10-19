@@ -151,7 +151,7 @@ Call this tool through the MCP client connected to the local Matrix Bridge serve
 Example input:
 ```json
 {
-  "path": "Assets/Skills/MySkill.cs\".\nCRITICAL — Assembly Definition placement: If the project uses Assembly Definition files (.asmdef), you MUST place the script inside a folder that belongs to an assembly definition which already references all required dependencies (e.g. Feeder.ToolHost, UnityEditor, UnityEngine). Placing the file in the wrong assembly will cause compile errors due to missing type references. Before choosing a path, inspect existing .asmdef files with the assets-find tool to identify the correct assembly folder",
+  "path": "Assets/Skills/MySkill.cs\".\nCRITICAL — Assembly Definition placement: If the project uses Assembly Definition files (.asmdef), you MUST place the script inside a folder that belongs to an assembly definition which already references all required dependencies (e.g. Feeder.ToolHost, UnityEditor, UnityEngine). Placing the file in the wrong assembly will cause compile errors due to missing type references. Before choosing a path, inspect existing .asmdef files with the rql-query tool (assets(\"t:AssemblyDefinitionAsset\")) to identify the correct assembly folder",
   "code": "value"
 }
 ```
@@ -165,7 +165,7 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `path` | `string` | Yes | Path for the C# (.cs) file to be created. Sample: "Assets/Skills/MySkill.cs".
-CRITICAL — Assembly Definition placement: If the project uses Assembly Definition files (.asmdef), you MUST place the script inside a folder that belongs to an assembly definition which already references all required dependencies (e.g. Feeder.ToolHost, UnityEditor, UnityEngine). Placing the file in the wrong assembly will cause compile errors due to missing type references. Before choosing a path, inspect existing .asmdef files with the assets-find tool to identify the correct assembly folder. |
+CRITICAL — Assembly Definition placement: If the project uses Assembly Definition files (.asmdef), you MUST place the script inside a folder that belongs to an assembly definition which already references all required dependencies (e.g. Feeder.ToolHost, UnityEditor, UnityEngine). Placing the file in the wrong assembly will cause compile errors due to missing type references. Before choosing a path, inspect existing .asmdef files with the rql-query tool (assets("t:AssemblyDefinitionAsset")) to identify the correct assembly folder. |
 | `code` | `string` | Yes | C# code for the skill tool. |
 
 ### Input JSON Schema

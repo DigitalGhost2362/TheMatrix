@@ -243,6 +243,24 @@ namespace Feeder.MCP.Editor.Tests
         }
 
         [Test]
+        public void RemoveOrphanedToolSkills_DeletesOnlyOurSkillsOfToolsThatAreGone()
+        {
+            Assume.That(MatrixPluginEditor.HasInstance && MatrixPluginEditor.Instance.Tools != null, "Matrix Bridge is not active, so no tool manager is built.");
+            var tools = MatrixPluginEditor.Instance.Tools!.GetAllTools().ToList();
+            var live = Skill(SkillFileGenerator.ToolSkillPrefix + tools[0].Name, OwnBody);
+            var gone = Skill(SkillFileGenerator.ToolSkillPrefix + "tool-that-was-removed", OwnBody);
+            var foreign = Skill(SkillFileGenerator.ToolSkillPrefix + "someone-elses", ForeignBody);
+            var handWritten = Skill(SkillFileGenerator.ToolSkillPrefix + "shared-editor", "A skill body with no tool footer.");
+
+            new SkillFileGenerator().RemoveOrphanedToolSkills(tools, _skills);
+
+            Assert.IsTrue(Directory.Exists(live));
+            Assert.IsFalse(Directory.Exists(gone));
+            Assert.IsTrue(Directory.Exists(foreign));
+            Assert.IsTrue(Directory.Exists(handWritten));
+        }
+
+        [Test]
         public void UnityGenerator_ToolSkillCarriesTheOwnMark()
         {
             var generator = Activator.CreateInstance(typeof(UnitySkillFileGenerator));

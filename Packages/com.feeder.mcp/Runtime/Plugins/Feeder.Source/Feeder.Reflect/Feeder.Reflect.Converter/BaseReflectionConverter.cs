@@ -529,6 +529,18 @@ public abstract class BaseReflectionConverter<T> : IReflectionConverter
 		if (obj == null)
 		{
 			obj = reflector.Deserialize(data, type, null, depth, logs, logger);
+			// a value made by SerializedMember.FromValue holds plain json, not the member format
+			if (obj == null && data.valueJsonElement.HasValue && data.valueJsonElement.Value.ValueKind == JsonValueKind.Object)
+			{
+				try
+				{
+					obj = reflector.JsonSerializer.Deserialize(reflector, data.valueJsonElement, type);
+				}
+				catch (JsonException)
+				{
+					obj = null;
+				}
+			}
 			if (obj == null)
 			{
 				if (logger != null && logger.IsEnabled(LogLevel.Error))

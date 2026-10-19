@@ -129,6 +129,50 @@ public class SkillFileGenerator : ISkillFileGenerator
 		return result;
 	}
 
+	// a tool removed from the package leaves its matrix-<tool> folder behind; delete the ones this package wrote
+	public virtual void RemoveOrphanedToolSkills(IEnumerable<IRunTool> registeredTools, string skillsPath)
+	{
+		if (registeredTools == null || !Directory.Exists(skillsPath))
+		{
+			return;
+		}
+		List<IRunTool> list = new List<IRunTool>();
+		foreach (IRunTool tool in registeredTools)
+		{
+			if (tool != null)
+			{
+				list.Add(tool);
+			}
+		}
+		HashSet<string> known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (IRunTool tool in list)
+		{
+			known.Add(ToolSkillPrefix + SanitizeSkillName(tool.Name));
+		}
+		foreach (string folderName in BuildNameMap(list, "RemoveOrphanedToolSkills").Values)
+		{
+			known.Add(ToolSkillPrefix + folderName);
+		}
+		foreach (string folder in Directory.GetDirectories(skillsPath, ToolSkillPrefix + "*"))
+		{
+			if (known.Contains(Path.GetFileName(folder)))
+			{
+				continue;
+			}
+			try
+			{
+				if (DeleteOwnSkill(folder))
+				{
+					_logger?.LogInformation("{class}: removed '{path}': no registered tool writes it any more.", "SkillFileGenerator", folder);
+				}
+			}
+			catch (Exception exception)
+			{
+				_logger?.LogWarning(exception, "{class}: could not remove the orphaned skill '{path}'.", "SkillFileGenerator", folder);
+			}
+		}
+	}
+
 	public virtual bool Generate(IEnumerable<ISkillContent> skills, string skillsPath)
 	{
 		if (skills == null)

@@ -120,6 +120,7 @@ public class ToolHost : IToolHost, IDisposable
 			{
 				result = false;
 			}
+			_skillFileGenerator.RemoveOrphanedToolSkills(tools.Concat(disabledTools), skillsPath);
 		}
 		if (_skillContentCollection.Count > 0 && !_skillFileGenerator.Generate(_skillContentCollection.Values, skillsPath))
 		{

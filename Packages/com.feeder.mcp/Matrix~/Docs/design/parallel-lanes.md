@@ -122,7 +122,7 @@ agents overwriting each other's scripts, which no lock can prevent.
 ```
 
 Enforcement point: a `LaneWriteGate` check at the top of every mutating tool
-(`script-update-or-create`, `script-delete`, `assets-modify`, `assets-move`, `assets-delete`,
+(`script-update-or-create`, `script-delete`, `rql-mutate`, `assets-move`, `assets-delete`,
 `gameobject-*`, `scene-save`, `package-*`). Outside `owns` ∪ `shared.writable`:
 `writePolicy: "warn"` logs and proceeds, `"reject"` throws with the owning lane's name. Start with
 `warn`, flip to `reject` once the manifest is trustworthy.

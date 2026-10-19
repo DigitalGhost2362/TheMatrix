@@ -68,7 +68,7 @@ Add the same registry and the version you want to the project's `Packages/manife
     }
   ],
   "dependencies": {
-    "com.feeder.mcp": "0.89.0"
+    "com.feeder.mcp": "1.0.0"
   }
 }
 ```
@@ -81,7 +81,7 @@ a version number, as above.
 **Window > Package Manager > + > Add package from git URL** also works, with a tag for a fixed release:
 
 ```text
-https://github.com/BingoBoiz/TheMatrix.git?path=/Packages/com.feeder.mcp#v0.89.0
+https://github.com/BingoBoiz/TheMatrix.git?path=/Packages/com.feeder.mcp#v1.0.0
 ```
 
 This needs Git on the machine, and Package Manager shows only the installed version.

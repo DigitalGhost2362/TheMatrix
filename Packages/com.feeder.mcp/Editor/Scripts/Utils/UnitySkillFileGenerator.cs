@@ -1,4 +1,6 @@
 #nullable enable
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Feeder.ToolHost;
 using Feeder.ToolHost.Skills;
@@ -36,6 +38,29 @@ namespace Feeder.MCP.Editor.Utils
         /// Input JSON Schema to save tokens.
         /// </summary>
         public override bool IncludeInputSchemaPropertyDescriptions => false;
+
+        bool vfxToolsEnabled;
+
+        /// <inheritdoc/>
+        public override bool Generate(IEnumerable<IRunTool> tools, string skillsPath, string host)
+        {
+            vfxToolsEnabled = tools?.Any(t => t.Name.StartsWith("vfx-")) == true;
+            return base.Generate(tools!, skillsPath, host);
+        }
+
+        /// <summary>
+        /// The experimental VFX skill is written only while a vfx-* tool is enabled, so agents of
+        /// projects that never use VFX Studio do not carry it.
+        /// </summary>
+        public override bool Generate(IEnumerable<ISkillContent> skills, string skillsPath)
+        {
+            if (vfxToolsEnabled || skills == null)
+                return base.Generate(skills!, skillsPath);
+            var vfx = skills.Where(s => s.Name == Skill_Vfx.SkillId).ToList();
+            if (vfx.Count > 0)
+                base.Delete(vfx, skillsPath);
+            return base.Generate(skills.Except(vfx), skillsPath);
+        }
 
         /// <inheritdoc/>
         protected override void BuildHowToCallHeading(StringBuilder sb)

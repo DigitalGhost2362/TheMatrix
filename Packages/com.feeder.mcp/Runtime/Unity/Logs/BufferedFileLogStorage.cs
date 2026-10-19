@@ -35,14 +35,8 @@ namespace Feeder.MCP
             _logEntriesBufferLength = 0;
         }
 
-        public override void Flush()
+        protected override void FlushCore()
         {
-            if (_isDisposed.Value)
-            {
-                _logger.LogWarning("{method} called but already disposed, ignored.",
-                    nameof(Flush));
-                return;
-            }
             lock (_fileMutex)
             {
                 // Flush buffered entries to file
@@ -50,7 +44,7 @@ namespace Feeder.MCP
                 {
                     var entriesToFlush = new LogEntry[_logEntriesBufferLength];
                     Array.Copy(_logEntriesBuffer, entriesToFlush, _logEntriesBufferLength);
-                    base.AppendInternal(entriesToFlush);
+                    WriteEntries(entriesToFlush);
                     _logEntriesBufferLength = 0;
                 }
                 fileWriteStream?.Flush();

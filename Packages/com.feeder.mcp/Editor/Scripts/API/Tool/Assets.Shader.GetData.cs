@@ -29,11 +29,11 @@ namespace Feeder.MCP.Editor.API
         )]
         [AiSkillDescription("Get detailed data about a shader asset — properties, subshaders, passes, " +
             "compilation messages, and supported status. Supports token-saving path-scoped reads via `paths` or " +
-            "`viewQuery`. Use '" + Tool_Assets.AssetsFindToolId + "' with `t:Shader` or '" +
+            "`viewQuery`. Use '" + Tool_Rql.QueryToolId + "' with `t:Shader` or '" +
             AssetsShaderListAllToolId + "' to locate the shader first.")]
         [AiSkillBody("Get detailed data about a shader asset in the Unity project. " +
             "Returns shader properties, subshaders, passes, compilation errors, and supported status. " +
-            "Use '" + Tool_Assets.AssetsFindToolId + "' tool with filter 't:Shader' to find shaders, " +
+            "Use '" + Tool_Rql.QueryToolId + "' tool with filter 't:Shader' to find shaders, " +
             "or '" + AssetsShaderListAllToolId + "' tool to list all shader names.\n\n" +
             "## Toggles (most default off to keep responses small)\n\n" +
             "- `includeMessages` (default `true`) — shader compilation messages.\n" +
@@ -49,7 +49,7 @@ namespace Feeder.MCP.Editor.API
             "`fieldName`, `nested/field`, `arrayField/[i]`, `dictField/[key]`. Leading `#/` is stripped.")]
         [Description("Get detailed data about a shader asset in the Unity project. " +
             "Returns shader properties, subshaders, passes, compilation errors, and supported status. " +
-            "Use '" + Tool_Assets.AssetsFindToolId + "' tool with filter 't:Shader' to find shaders, " +
+            "Use '" + Tool_Rql.QueryToolId + "' tool with filter 't:Shader' to find shaders, " +
             "or '" + AssetsShaderListAllToolId + "' tool to list all shader names.\n\n" +
             "Path-scoped reads (token-saving): supply '" + "paths" + "' (a list of paths) to read only the listed " +
             "fields/elements via Reflector.TryReadAt, or '" + "viewQuery" + "' (a ViewQuery) to navigate to a " +

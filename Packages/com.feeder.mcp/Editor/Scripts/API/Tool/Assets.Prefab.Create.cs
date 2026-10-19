@@ -20,14 +20,14 @@ namespace Feeder.MCP.Editor.API
         )]
         [AiSkillDescription("Create a Prefab (or Prefab Variant) at a project asset path. " +
             "Source can be a scene GameObject (`gameObjectRef`) or an existing prefab asset (`sourcePrefabAssetPath`). " +
-            "Creates intermediate folders if missing. Use '" + Tool_GameObject.GameObjectFindToolId +
+            "Creates intermediate folders if missing. Use '" + Tool_Rql.QueryToolId +
             "' to locate the source GameObject first.")]
         [AiSkillBody("Create a prefab from a GameObject in the current active scene. " +
             "The prefab will be saved in the project assets at the specified path. " +
             "Creates folders recursively if they do not exist. " +
             "If the source GameObject is already a prefab instance and 'connectGameObjectToPrefab' is true, a Prefab Variant is created automatically. " +
             "To create a Prefab Variant from an existing prefab asset, provide 'sourcePrefabAssetPath' instead of 'gameObjectRef'. " +
-            "Use '" + Tool_GameObject.GameObjectFindToolId + "' tool to find the target GameObject first.\n\n" +
+            "Use '" + Tool_Rql.QueryToolId + "' tool to find the target GameObject first.\n\n" +
             "## Inputs (mutually exclusive sources)\n\n" +
             "- `prefabAssetPath` — required. Must start with `Assets/` and end with `.prefab`.\n" +
             "- `gameObjectRef` — scene GameObject to convert (or to seed a Prefab Variant from when it is already a prefab instance).\n" +
@@ -41,7 +41,7 @@ namespace Feeder.MCP.Editor.API
             "Creates folders recursively if they do not exist. " +
             "If the source GameObject is already a prefab instance and 'connectGameObjectToPrefab' is true, a Prefab Variant is created automatically. " +
             "To create a Prefab Variant from an existing prefab asset, provide 'sourcePrefabAssetPath' instead of 'gameObjectRef'. " +
-            "Use '" + Tool_GameObject.GameObjectFindToolId + "' tool to find the target GameObject first.")]
+            "Use '" + Tool_Rql.QueryToolId + "' tool to find the target GameObject first.")]
         public AssetObjectRef Create
         (
             [Description("Prefab asset path. Should be in the format 'Assets/Path/To/Prefab.prefab'.")]

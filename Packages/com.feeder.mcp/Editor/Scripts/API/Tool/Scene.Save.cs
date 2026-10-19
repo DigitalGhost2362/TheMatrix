@@ -20,9 +20,9 @@ namespace Feeder.MCP.Editor.API
         )]
         [AiSkillDescription("Save an opened scene back to its asset file (or to a new path when `path` is " +
             "provided). When `openedSceneName` is empty, saves the currently active scene. " +
-            "Use '" + SceneListOpenedToolId + "' to find the scene name first.")]
+            "Use '" + Tool_Rql.QueryToolId + "' to find the scene name first.")]
         [AiSkillBody("Save Opened scene to the asset file. " +
-            "Use '" + SceneListOpenedToolId + "' tool to get the list of all opened scenes.\n\n" +
+            "Use '" + Tool_Rql.QueryToolId + "' tool to get the list of all opened scenes.\n\n" +
             "## Inputs\n\n" +
             "- `openedSceneName` (optional) — name of an opened scene to save. Empty/null = active scene.\n" +
             "- `path` (optional) — destination `.unity` path. Empty/null = save back to the scene's existing path.\n\n" +
@@ -31,7 +31,7 @@ namespace Feeder.MCP.Editor.API
             "supplied path does not end with `.unity`. On `EditorSceneManager.SaveScene` failure, surfaces an error " +
             "with the current opened-scenes list for diagnosis.")]
         [Description("Save Opened scene to the asset file. " +
-            "Use '" + SceneListOpenedToolId + "' tool to get the list of all opened scenes.")]
+            "Use '" + Tool_Rql.QueryToolId + "' tool to get the list of all opened scenes.")]
         public void Save
         (
             [Description("Name of the opened scene that should be saved. Could be empty if need to save the current active scene.")]

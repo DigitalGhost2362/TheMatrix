@@ -30,15 +30,16 @@ public class SerializationContext
 		_pathStack.Push("#");
 	}
 
+	// a repeat returns false without pushing: the caller writes a reference and never calls Exit for it
 	public bool Enter(object obj, string? segment)
 	{
-		if (!string.IsNullOrEmpty(segment))
-		{
-			_pathStack.Push(segment);
-		}
 		if (_visited.ContainsKey(obj))
 		{
 			return false;
+		}
+		if (!string.IsNullOrEmpty(segment))
+		{
+			_pathStack.Push(segment);
 		}
 		_visited[obj] = BuildCurrentPath();
 		return true;

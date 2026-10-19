@@ -11,5 +11,7 @@ public interface ISkillFileGenerator
 	bool Generate(IEnumerable<ISkillContent> skills, string skillsPath);
 
 	bool Delete(IEnumerable<ISkillContent> skills, string skillsPath);
+
+	void RemoveOrphanedToolSkills(IEnumerable<IRunTool> registeredTools, string skillsPath);
 }
 }

@@ -26,9 +26,9 @@ namespace Feeder.MCP.Editor.API
         )]
         [AiSkillDescription("List the fully-qualified C# type names of every concrete `UnityEngine.Component` " +
             "subclass available in the project. Paginated (default 5/page, max 500). " +
-            "Use this to find a valid `componentName` for '" + GameObjectComponentAddToolId + "'.")]
+            "Use this to find a valid `componentName` for '" + Tool_Rql.MutateToolId + "'.")]
         [AiSkillBody("List C# class names extended from UnityEngine.Component. " +
-            "Use this to find component type names for '" + GameObjectComponentAddToolId + "' tool. " +
+            "Use this to find component type names for '" + Tool_Rql.MutateToolId + "' tool. " +
             "Results are paginated to avoid overwhelming responses.\n\n" +
             "## Inputs\n\n" +
             "- `search` (optional) — case-insensitive substring filter on type names.\n" +
@@ -39,7 +39,7 @@ namespace Feeder.MCP.Editor.API
             "`search` if supplied, then returns a `ComponentListResult` containing the requested page plus " +
             "`TotalCount` / `TotalPages` so the caller can iterate.")]
         [Description("List C# class names extended from UnityEngine.Component. " +
-            "Use this to find component type names for '" + GameObjectComponentAddToolId + "' tool. " +
+            "Use this to find component type names for '" + Tool_Rql.MutateToolId + "' tool. " +
             "Results are paginated to avoid overwhelming responses.")]
         public ComponentListResult ListAll
         (

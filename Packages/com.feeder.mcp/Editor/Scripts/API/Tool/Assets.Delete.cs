@@ -23,13 +23,13 @@ namespace Feeder.MCP.Editor.API
         )]
         [AiSkillDescription("Delete the assets at the given project paths. " +
             "IRREVERSIBLE — deleted files are permanently removed from disk (no trash/undo), so verify with '" +
-            AssetsFindToolId + "' first. Refreshes the AssetDatabase at the end.")]
+            Tool_Rql.QueryToolId + "' first. Refreshes the AssetDatabase at the end.")]
         [AiSkillBody("Delete the assets at paths from the project. " +
             "Does AssetDatabase.Refresh() at the end. " +
-            "Use '" + AssetsFindToolId + "' tool to find assets before deleting.\n\n" +
+            "Use '" + Tool_Rql.QueryToolId + "' tool to find assets before deleting.\n\n" +
             "## Warning\n\n" +
             "This is IRREVERSIBLE: `AssetDatabase.DeleteAssets` removes the files from disk permanently — " +
-            "there is no trash and no undo. Double-check each path with '" + AssetsFindToolId + "' before calling.\n\n" +
+            "there is no trash and no undo. Double-check each path with '" + Tool_Rql.QueryToolId + "' before calling.\n\n" +
             "## Inputs\n\n" +
             "- `paths` — project-relative asset paths to delete. Must be non-empty.\n\n" +
             "## Behavior\n\n" +
@@ -38,7 +38,7 @@ namespace Feeder.MCP.Editor.API
             "are surfaced in `response.DeletedPaths`. The tool is destructive (removes files from disk).")]
         [Description("Delete the assets at paths from the project. " +
             "Does AssetDatabase.Refresh() at the end. " +
-            "Use '" + AssetsFindToolId + "' tool to find assets before deleting.")]
+            "Use '" + Tool_Rql.QueryToolId + "' tool to find assets before deleting.")]
         public DeleteAssetsResponse Delete
         (
             [Description("The paths of the assets")]

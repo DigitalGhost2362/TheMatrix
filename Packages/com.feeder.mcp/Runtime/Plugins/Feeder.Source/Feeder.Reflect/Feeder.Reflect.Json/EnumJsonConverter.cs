@@ -27,7 +27,7 @@ public class EnumJsonConverter : JsonConverter<object>
 			long @int = reader.GetInt64();
 			Type underlyingType = Enum.GetUnderlyingType(type);
 			object value = Convert.ChangeType(@int, underlyingType);
-			if (Enum.IsDefined(type, value))
+			if (IsValid(type, value))
 			{
 				return Enum.ToObject(type, value);
 			}
@@ -48,13 +48,33 @@ public class EnumJsonConverter : JsonConverter<object>
 			{
 				throw new JsonException("Unable to convert '" + text + "' to enum " + type.Name + ". Valid values are: " + string.Join(", ", Enum.GetNames(type)));
 			}
-			if (Enum.IsDefined(type, result))
+			if (IsValid(type, result))
 			{
 				return result;
 			}
 			throw new JsonException("Unable to convert '" + text + "' to enum " + type.Name + ". Valid values are: " + string.Join(", ", Enum.GetNames(type)));
 		}
 		throw new JsonException($"Expected string or number token but got {reader.TokenType} for enum type '{typeToConvert.GetTypeId()}'");
+	}
+
+	// a [Flags] enum also accepts any combination of its defined bits ("North, South" or 5)
+	static bool IsValid(Type type, object value)
+	{
+		if (Enum.IsDefined(type, value))
+		{
+			return true;
+		}
+		if (!type.IsDefined(typeof(FlagsAttribute), false))
+		{
+			return false;
+		}
+		ulong bits = unchecked((ulong)Convert.ToInt64(value));
+		ulong defined = 0;
+		foreach (object item in Enum.GetValues(type))
+		{
+			defined |= unchecked((ulong)Convert.ToInt64(item));
+		}
+		return (bits & ~defined) == 0;
 	}
 
 	public override void Write(Utf8JsonWriter writer, object? value, JsonSerializerOptions options)

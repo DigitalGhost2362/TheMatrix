@@ -201,7 +201,7 @@ namespace Feeder.MCP.Editor.API
                 "you MUST place the script inside a folder that belongs to an assembly definition which already references " +
                 "all required dependencies (e.g. Feeder.ToolHost, UnityEditor, UnityEngine). " +
                 "Placing the file in the wrong assembly will cause compile errors due to missing type references. " +
-                "Before choosing a path, inspect existing .asmdef files with the assets-find tool to identify the correct assembly folder.")]
+                "Before choosing a path, inspect existing .asmdef files with the rql-query tool (assets(\"t:AssemblyDefinitionAsset\")) to identify the correct assembly folder.")]
             string path,
 
             [Description("C# code for the skill tool.")]

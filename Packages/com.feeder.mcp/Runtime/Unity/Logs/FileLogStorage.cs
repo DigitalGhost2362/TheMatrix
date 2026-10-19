@@ -129,6 +129,12 @@ namespace Feeder.MCP
                     nameof(Flush));
                 return;
             }
+            FlushCore();
+        }
+
+        // writes pending data without the disposed check, so Dispose can still save what is buffered
+        protected virtual void FlushCore()
+        {
             lock (_fileMutex)
             {
                 fileWriteStream?.Flush();
@@ -202,6 +208,11 @@ namespace Feeder.MCP
                     nameof(AppendInternal));
                 return;
             }
+            WriteEntries(entries);
+        }
+
+        protected void WriteEntries(LogEntry[] entries)
+        {
             fileWriteStream ??= CreateWriteStream(_requestedFileName, out fileName, out filePath);
 
             // Check if file size limit reached and reset if needed
@@ -441,7 +452,7 @@ namespace Feeder.MCP
 
             try
             {
-                Flush();
+                FlushCore();
             }
             finally
             {

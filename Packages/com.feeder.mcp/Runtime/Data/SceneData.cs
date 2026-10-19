@@ -13,7 +13,7 @@ namespace Feeder.MCP.Data
         public List<GameObjectData>? RootGameObjects { get; set; } = null;
 
         [Description("Path-scoped read or view-query result, populated when 'paths' or 'viewQuery' is supplied " +
-            "to the scene-get-data tool. Null otherwise.")]
+            "to a tool that reads a scene. Null otherwise.")]
         public SerializedMember? Data { get; set; } = null;
 
         public SceneData() { }

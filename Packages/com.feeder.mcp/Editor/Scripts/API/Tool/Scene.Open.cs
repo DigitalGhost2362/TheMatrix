@@ -19,9 +19,9 @@ namespace Feeder.MCP.Editor.API
         )]
         [AiSkillDescription("Open a Unity scene asset in Single or Additive mode. " +
             "Returns the post-open list of all opened scenes. " +
-            "Use '" + Tool_Assets.AssetsFindToolId + "' to locate the scene asset first.")]
+            "Use '" + Tool_Rql.QueryToolId + "' to locate the scene asset first.")]
         [AiSkillBody("Open scene from the project asset file. " +
-            "Use '" + Tool_Assets.AssetsFindToolId + "' tool to find the scene asset first.\n\n" +
+            "Use '" + Tool_Rql.QueryToolId + "' tool to find the scene asset first.\n\n" +
             "## Inputs\n\n" +
             "- `sceneRef` — `AssetObjectRef` pointing at a `SceneAsset`. Throws if the asset cannot be resolved or " +
             "is not a `SceneAsset`.\n" +
@@ -29,7 +29,7 @@ namespace Feeder.MCP.Editor.API
             "  - `Single` — closes the currently opened scenes and opens this one.\n" +
             "  - `Additive` — keeps the currently opened scenes and opens this one alongside them.")]
         [Description("Open scene from the project asset file. " +
-            "Use '" + Tool_Assets.AssetsFindToolId + "' tool to find the scene asset first.")]
+            "Use '" + Tool_Rql.QueryToolId + "' tool to find the scene asset first.")]
         public SceneDataShallow[] Open
         (
             AssetObjectRef sceneRef,

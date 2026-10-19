@@ -23,9 +23,9 @@ namespace Feeder.MCP.Editor.API
         )]
         [AiSkillDescription("Unload an opened scene from the Unity Editor (asynchronously via " +
             "`SceneManager.UnloadSceneAsync`). Unsaved changes in that scene are lost — save with '" +
-            SceneSaveToolId + "' first if needed. Use '" + SceneListOpenedToolId + "' to find the scene name first.")]
+            SceneSaveToolId + "' first if needed. Use '" + Tool_Rql.QueryToolId + "' to find the scene name first.")]
         [AiSkillBody("Unload scene from the Opened scenes in Unity Editor. " +
-            "Use '" + SceneListOpenedToolId + "' tool to get the list of all opened scenes.\n\n" +
+            "Use '" + Tool_Rql.QueryToolId + "' tool to get the list of all opened scenes.\n\n" +
             "## Warning\n\n" +
             "Any unsaved changes in the unloaded scene are lost. If the scene may have unsaved edits, save it " +
             "with '" + SceneSaveToolId + "' before unloading.\n\n" +
@@ -36,7 +36,7 @@ namespace Feeder.MCP.Editor.API
             "`UnloadSceneResult` containing the scene name and an `AssetObjectRef` to its asset (or `null` if the " +
             "scene was not backed by an asset on disk).")]
         [Description("Unload scene from the Opened scenes in Unity Editor. " +
-            "Use '" + SceneListOpenedToolId + "' tool to get the list of all opened scenes.")]
+            "Use '" + Tool_Rql.QueryToolId + "' tool to get the list of all opened scenes.")]
         public Task<UnloadSceneResult> Unload
         (
             [Description("Name of the loaded scene.")]

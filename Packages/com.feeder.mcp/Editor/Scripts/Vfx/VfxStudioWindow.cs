@@ -39,6 +39,7 @@ namespace Feeder.MCP.Editor.Vfx
         readonly VfxEditView editView = new VfxEditView();
         VfxEditSession? session;
         bool ticking;
+        bool started;
         double lastTick;
 
         int tab;
@@ -62,7 +63,6 @@ namespace Feeder.MCP.Editor.Vfx
             editView.OnRevert = () => Defer(() => session?.Revert());
             editView.OnPlay = EnsureTick;
             editView.OnToast = Toast;
-            Defer(Startup);
         }
 
         void OnDisable()
@@ -87,9 +87,15 @@ namespace Feeder.MCP.Editor.Vfx
             base.DiscardChanges();
         }
 
+        // a tab restored from the layout stays idle until it is first shown
         void OnGUI()
         {
-            tab = GUI.Toolbar(new Rect(0f, 0f, position.width, TabHeight), tab, Tabs);
+            if (!started)
+            {
+                started = true;
+                Defer(Startup);
+            }
+            tab =GUI.Toolbar(new Rect(0f, 0f, position.width, TabHeight), tab, Tabs);
             GUILayout.Space(TabHeight);
             if (tab == 0)
             {

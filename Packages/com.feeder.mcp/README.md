@@ -28,7 +28,7 @@ runtime. Unity resolves the official Unity Test Framework dependency from its st
 Installing from Git also works, without the version list:
 
 ```text
-https://github.com/BingoBoiz/TheMatrix.git?path=/Packages/com.feeder.mcp#v0.89.0
+https://github.com/BingoBoiz/TheMatrix.git?path=/Packages/com.feeder.mcp#v1.0.0
 ```
 
 ## Getting started
@@ -131,6 +131,34 @@ Deadlines, in the same config file and read when the server starts: `timeoutMs` 
 call; `reconnectGraceMs` (default 180 s) that a call waits for an editor that is reloading; and
 `deferredToolTimeoutMs` (default 15 minutes) for tools that finish after a compile or domain reload.
 `script-execute` takes `timeoutSeconds` for code that runs long on purpose.
+
+## Query tools
+
+Three tools read and change many objects in one call with a pipeline query. Setup keeps `rql-query`
+and `rql-schema` enabled; turn `rql-mutate` on in the Skills window when clients should change things.
+
+```text
+objects | where Light.intensity > 1 | select name, Light.intensity, $path
+find("Player") | set position = [0, 1, 0], name = "Hero"
+```
+
+- `rql-query` reads the open scenes (or the open prefab), assets, the console and the selection, and
+  answers with a compact text table or JSON. It refuses stages and methods that change the project.
+- `rql-mutate` ends a query with `set`, `call`, `add` or `destroy`, or starts it with `new(...)`. It
+  checks every target before changing anything, records the whole query as one undo step named
+  `Matrix query`, and marks scenes and assets dirty without saving them. `dryRun=true` lists every
+  change and reverts it; `maxTargets` (default 100) refuses wider changes; `save=true` saves what it
+  touched.
+- `rql-schema` prints the syntax, the functions and the component types in the open scenes; with
+  `typeName` it lists that type's members and which ones can be written.
+
+From C#, `Feeder.MCP.Editor.Query.MatrixQuery.Run` and `MatrixQuery.Mutate` take the same queries.
+
+They replace the per-object tools: find, read and change GameObjects, components, objects, scenes,
+assets and the selection with `rql-query` and `rql-mutate`. Tools for actions a query cannot express
+stay: opening, saving and unloading scenes, prefab mode, copying, moving and deleting assets,
+`assets-refresh`, play mode, selection changes, `gameobject-duplicate`, console, scripts, tests,
+packages, screenshots, profiler, UI inspection and VFX.
 
 ## Hyper Testing Mode (Experimental)
 

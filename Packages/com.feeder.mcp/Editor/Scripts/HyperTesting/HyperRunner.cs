@@ -32,15 +32,14 @@ namespace Feeder.MCP.Editor.HyperTesting
         static readonly string[] PlaytestTools =
         {
             "ping", "unity-tool-list", "tool-set-enabled-state", "editor-application-get-state", "editor-application-set-state",
-            "console-get-logs", "screenshot-game-view", "screenshot-camera", "script-execute", "scene-list-opened", "scene-get-data",
-            "scene-open", "gameobject-find", "gameobject-component-get", "object-get-data", "reflection-method-find",
-            "reflection-method-call", "assets-find", "ui-inspect-tree", "ui-inspect-element", "profiler-get-memory-stats",
-            "gameobject-modify", "gameobject-component-modify", "object-modify",
+            "console-get-logs", "screenshot-game-view", "screenshot-camera", "script-execute", "rql-query", "rql-schema",
+            "rql-mutate", "scene-open", "reflection-method-find", "reflection-method-call", "ui-inspect-tree",
+            "ui-inspect-element", "profiler-get-memory-stats",
         };
 
         static readonly string[] BlockedTools =
         {
-            "script-update-or-create", "script-delete", "assets-delete", "assets-move", "assets-modify", "assets-copy",
+            "script-update-or-create", "script-delete", "assets-delete", "assets-move", "assets-copy",
             "assets-create-folder", "assets-material-create", "assets-prefab-create", "assets-prefab-save", "scene-save",
             "scene-create", "package-add", "package-remove", "assets-refresh",
         };

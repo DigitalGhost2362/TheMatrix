@@ -96,6 +96,7 @@ namespace Feeder.MCP.Editor.UI
 
         static readonly SkillGroup[] _known =
         {
+            new SkillGroup("Query", "RQ", "Read and change many objects with one query."),
             new SkillGroup("Scenes", "SC", "Open, save and switch scenes."),
             new SkillGroup("GameObjects", "GO", "Find, create and edit objects in the open scene."),
             new SkillGroup("Assets", "AS", "Search, read and edit files in the project."),
@@ -111,6 +112,7 @@ namespace Feeder.MCP.Editor.UI
         // first title segment -> known group, and how many leading segments the row label drops
         static readonly Dictionary<string, (string Group, int Drop)> _byFirstSegment = new Dictionary<string, (string Group, int Drop)>
         {
+            ["Query"] = ("Query", 1),
             ["Scene"] = ("Scenes", 1),
             ["GameObject"] = ("GameObjects", 1),
             ["Object"] = ("GameObjects", 0),

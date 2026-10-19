@@ -35,12 +35,9 @@ namespace Feeder.MCP.Editor
         {
             "unity-tool-list",
             "tool-set-enabled-state",
-            "gameobject-find",
-            "gameobject-component-get",
-            "scene-list-opened",
-            "scene-get-data",
+            "rql-query",
+            "rql-schema",
             "console-get-logs",
-            "assets-find",
             "editor-application-get-state",
             "screenshot-game-view",
         };

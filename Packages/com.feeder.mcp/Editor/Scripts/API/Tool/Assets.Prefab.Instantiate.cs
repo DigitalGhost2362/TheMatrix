@@ -21,9 +21,9 @@ namespace Feeder.MCP.Editor.API
         )]
         [AiSkillDescription("Instantiate a prefab into the currently active scene at an optional position/rotation/scale, " +
             "parented under an optional scene GameObject path. " +
-            "Use '" + Tool_Assets.AssetsFindToolId + "' to locate the prefab asset first.")]
+            "Use '" + Tool_Rql.QueryToolId + "' to locate the prefab asset first.")]
         [AiSkillBody("Instantiates prefab in the current active scene. " +
-            "Use '" + Tool_Assets.AssetsFindToolId + "' tool to find prefab assets in the project.\n\n" +
+            "Use '" + Tool_Rql.QueryToolId + "' tool to find prefab assets in the project.\n\n" +
             "## Inputs\n\n" +
             "- `prefabAssetPath` — project asset path of the prefab to instantiate.\n" +
             "- `gameObjectPath` — destination path in the scene; the last segment becomes the new GameObject's name, " +
@@ -31,7 +31,7 @@ namespace Feeder.MCP.Editor.API
             "- `position` / `rotation` / `scale` — optional transform; default to zero / zero / one.\n" +
             "- `isLocalSpace` — when `true`, applies the transform in local space relative to the parent.")]
         [Description("Instantiates prefab in the current active scene. " +
-            "Use '" + Tool_Assets.AssetsFindToolId + "' tool to find prefab assets in the project.")]
+            "Use '" + Tool_Rql.QueryToolId + "' tool to find prefab assets in the project.")]
         public GameObjectRef Instantiate
         (
             [Description("Prefab asset path.")]

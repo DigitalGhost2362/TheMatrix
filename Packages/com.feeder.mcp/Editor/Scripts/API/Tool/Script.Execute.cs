@@ -29,7 +29,9 @@ namespace Feeder.MCP.Editor.API
         [AiSkillBody(
             "## Modes\n\n" +
             "- **Full code mode** (default, `isMethodBody=false`): the `csharpCode` argument must define a complete class with a static method (no top-level statements).\n" +
-            "- **Body-only mode** (`isMethodBody=true`): provide only the method body statements. The tool auto-generates the usings, class, and method header.\n\n" +
+            "- **Body-only mode** (`isMethodBody=true`): provide only the method body statements. The tool auto-generates the usings, class, and method header. " +
+            "When the body returns a value (`return go.name;`), the method returns `object` and the value comes back as the result; otherwise it is `void`. " +
+            "A `return x;` that sits only inside a lambda or local function keeps the method `void`. If some paths return a value, every path must (end with `return null;`).\n\n" +
             "## Passing Unity objects as parameters\n\n" +
             "Unity objects (`GameObject`, `Component`, etc.) can be passed as parameters using their `Ref` types (`GameObjectRef`, `ComponentRef`, etc.) or directly by type:\n\n" +
             "- `UnityEngine.GameObject` — resolves an actual GameObject from value `{\"instanceID\": N}`, `{\"name\": \"...\"}`, or `{\"path\": \"...\"}`.\n" +
@@ -77,7 +79,7 @@ namespace Feeder.MCP.Editor.API
                 "Do NOT use top-level statements. " +
                 "In body-only mode (isMethodBody=true): provide only the method body statements. " +
                 "The tool auto-generates usings, class, and method header. " +
-                "Example body: 'go.SetActive(false);'. " +
+                "Example body: 'go.SetActive(false);'. A body may 'return' a value (e.g. 'return go.name;'), which becomes the result. " +
                 "Custom helper classes can still be defined inline in the body-only string after the main logic, " +
                 "but for complex additional class definitions use full code mode instead.")]
             string csharpCode,
@@ -100,7 +102,7 @@ namespace Feeder.MCP.Editor.API
             [Description("When true, 'csharpCode' is treated as just the method body. " +
                 "The tool auto-generates standard using directives (System, UnityEngine, " +
                 "Feeder.MCP.Data, Feeder.MCP.Runtime.Extensions, UnityEditor), " +
-                "the class definition, and the method signature (void return type). " +
+                "the class definition, and the method signature (returns object when the body has 'return value;', otherwise void). " +
                 "Parameters from the 'parameters' list are automatically added to the method signature using their typeName and name. " +
                 "When false (default), 'csharpCode' must be a complete C# compilation unit with class and method definitions.")]
             bool isMethodBody = false,
@@ -124,9 +126,11 @@ namespace Feeder.MCP.Editor.API
                 throw new Exception(HyperTesting.HyperTestingActivation.ActivationRefusal);
 
             string codeToCompile;
+            var returnsValue = false;
             if (isMethodBody)
             {
-                codeToCompile = GenerateFullCode(csharpCode, className, methodName, parameters);
+                returnsValue = BodyReturnsValue(csharpCode);
+                codeToCompile = GenerateFullCode(csharpCode, className, methodName, parameters, returnsValue);
             }
             else
             {
@@ -143,7 +147,9 @@ namespace Feeder.MCP.Editor.API
                 MatrixPluginEditor.RequestMoreTime(requestId, TimeSpan.FromSeconds(timeoutSeconds));
 
             var timer = System.Diagnostics.Stopwatch.StartNew();
-            var assemblyBytes = CompileOnServer(codeToCompile, out var cached);
+            var assemblyBytes = returnsValue
+                ? CompileBodyWithValue(csharpCode, className, methodName, parameters, codeToCompile, out var cached)
+                : CompileOnServer(codeToCompile, out cached);
             var compileMs = timer.ElapsedMilliseconds;
 
             return MainThread.Instance.Run(() =>
@@ -194,11 +200,107 @@ namespace Feeder.MCP.Editor.API
             });
         }
 
-        static string GenerateFullCode(
+        // a 'return value;' may belong to a lambda or local function only; then the body compiles as void instead
+        static byte[] CompileBodyWithValue(string body, string className, string methodName, SerializedMemberList? parameters, string objectCode, out bool cached)
+        {
+            try
+            {
+                return CompileOnServer(objectCode, out cached);
+            }
+            catch (ToolCallerException objectError) when (objectError.Message.Contains("CS0161") || objectError.Message.Contains("CS0126"))
+            {
+                try
+                {
+                    return CompileOnServer(GenerateFullCode(body, className, methodName, parameters, returnsValue: false), out cached);
+                }
+                catch (ToolCallerException voidError) when (voidError.Message.Contains("CS0127"))
+                {
+                    throw new ToolCallerException("The body returns a value on some paths but not on others. " +
+                        "End it with a return on every path (for example 'return null;').\n" + objectError.Message);
+                }
+            }
+        }
+
+        static readonly System.Text.RegularExpressions.Regex ValueReturn =
+            new System.Text.RegularExpressions.Regex(@"\breturn\b\s*[^;\s]", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        internal static bool BodyReturnsValue(string body) => ValueReturn.IsMatch(StripLiterals(body));
+
+        // blanks comments and string/char literals so a 'return' inside them is not taken for code
+        internal static string StripLiterals(string code)
+        {
+            var sb = new StringBuilder(code.Length);
+            var i = 0;
+            while (i < code.Length)
+            {
+                var c = code[i];
+                var next = i + 1 < code.Length ? code[i + 1] : '\0';
+                if (c == '/' && next == '/')
+                {
+                    while (i < code.Length && code[i] != '\n')
+                        i++;
+                    continue;
+                }
+                if (c == '/' && next == '*')
+                {
+                    var end = code.IndexOf("*/", i + 2, StringComparison.Ordinal);
+                    i = end < 0 ? code.Length : end + 2;
+                    sb.Append(' ');
+                    continue;
+                }
+                var verbatim = (c == '@' && next == '"') || (c == '$' && next == '@') || (c == '@' && next == '$');
+                if (verbatim || c == '"' || (c == '$' && next == '"'))
+                {
+                    i = SkipString(code, i, verbatim);
+                    sb.Append("\"\"");
+                    continue;
+                }
+                if (c == '\'')
+                {
+                    i++;
+                    while (i < code.Length && code[i] != '\'')
+                        i += code[i] == '\\' ? 2 : 1;
+                    i++;
+                    sb.Append("' '");
+                    continue;
+                }
+                sb.Append(c);
+                i++;
+            }
+            return sb.ToString();
+        }
+
+        static int SkipString(string code, int i, bool verbatim)
+        {
+            while (i < code.Length && code[i] != '"')
+                i++;
+            i++;
+            while (i < code.Length)
+            {
+                var c = code[i];
+                if (verbatim && c == '"' && i + 1 < code.Length && code[i + 1] == '"')
+                {
+                    i += 2;
+                    continue;
+                }
+                if (!verbatim && c == '\\')
+                {
+                    i += 2;
+                    continue;
+                }
+                if (c == '"')
+                    return i + 1;
+                i++;
+            }
+            return i;
+        }
+
+        internal static string GenerateFullCode(
             string methodBody,
             string className,
             string methodName,
-            SerializedMemberList? parameters)
+            SerializedMemberList? parameters,
+            bool returnsValue = false)
         {
             var sb = new StringBuilder();
 
@@ -225,7 +327,7 @@ namespace Feeder.MCP.Editor.API
 
             sb.AppendLine($"public class {className}");
             sb.AppendLine("{");
-            sb.AppendLine($"    public static void {methodName}({methodParams})");
+            sb.AppendLine($"    public static {(returnsValue ? "object" : "void")} {methodName}({methodParams})");
             sb.AppendLine("    {");
 
             // Indent each line of the method body

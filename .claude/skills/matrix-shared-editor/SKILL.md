@@ -24,7 +24,7 @@ this skill ignores it. Tools that are not in your tool list may only be disabled
 - enter / exit play mode (`editor-application-set-state`)
 - anything that triggers a compile: `script-update-or-create`, `script-delete`, `assets-refresh`
 - `script-execute` that mutates anything, or that runs while you are playing
-- `scene-open`, `scene-save`, `scene-unload`, prefab stage open/save, `assets-modify` / `assets-delete`
+- `scene-open`, `scene-save`, `scene-unload`, prefab stage open/save, `rql-mutate`, `assets-delete`
 - wiping or changing PlayerPrefs, EditorPrefs or save files; changing `Time.timeScale`
 - `console-clear-logs` (it deletes other sessions' evidence)
 - `tests-run`, `package-add`, `package-remove`
@@ -32,8 +32,8 @@ this skill ignores it. Tools that are not in your tool list may only be disabled
 **Free** - no lock:
 
 - reading code, writing `.cs` or docs on disk with file tools
-- read-only MCP queries: `editor-application-get-state`, `scene-list-opened`, `console-get-logs`,
-  `gameobject-find`, `*-get-data`, screenshots
+- read-only MCP queries: `editor-application-get-state`, `rql-query`, `rql-schema`, `console-get-logs`,
+  `*-get-data`, screenshots
 
 A file written on disk still reaches the Editor: Unity refreshes when its window regains focus, and
 Hot Reload (if installed) patches a save straight into whoever is playing. You cannot prevent that,
@@ -132,13 +132,13 @@ function Lock-BreakStale {
   compile, a play session, the next test case), re-read `lock.json`; if `owner` is still you, rewrite it
   with a fresh `heartbeat`. If `owner` is
   someone else, you lost the lock by going stale - stop all Editor-exclusive work and report.
-- **Release**: exit play mode, restore what you changed (Rule 6), confirm `scene-list-opened` reports
+- **Release**: exit play mode, restore what you changed (Rule 6), confirm `rql-query` `scenes` reports
   no scene dirtied by you, then delete the directory - only if `owner` is still you.
 
 ## Rule 3 - Check the Editor after acquiring
 
 The lock only binds sessions that follow this skill. Humans do not. Right after acquiring, call
-`editor-application-get-state` and `scene-list-opened`:
+`editor-application-get-state` and `rql-query` `scenes`:
 
 - `isPlaying`, `isPaused` or `isCompiling` true while you hold the lock -> a human (or a rogue session)
   is using the Editor. Release and hand off (Rule 4).

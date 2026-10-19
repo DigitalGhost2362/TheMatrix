@@ -16,9 +16,13 @@ namespace Feeder.MCP.Data
         {
             instanceID = component.GetInstanceID();
             typeName = component.GetType().GetTypeId();
-            isEnabled = component is UnityEngine.Behaviour behaviour
-                ? (behaviour.enabled ? Enabled.True : Enabled.False)
-                : Enabled.NA;
+            isEnabled = component switch
+            {
+                UnityEngine.Behaviour behaviour => behaviour.enabled ? Enabled.True : Enabled.False,
+                UnityEngine.Collider collider => collider.enabled ? Enabled.True : Enabled.False,
+                UnityEngine.Renderer renderer => renderer.enabled ? Enabled.True : Enabled.False,
+                _ => Enabled.NA,
+            };
         }
 
         public enum Enabled

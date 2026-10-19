@@ -20,9 +20,9 @@ namespace Feeder.MCP.Editor.API
         )]
         [AiSkillDescription("Mark an opened scene as the Editor's active scene (the one new GameObjects are " +
             "added to and that's used as the default for many operations). " +
-            "Use '" + SceneListOpenedToolId + "' to enumerate opened scenes first.")]
+            "Use '" + Tool_Rql.QueryToolId + "' to enumerate opened scenes first.")]
         [AiSkillBody("Set the specified opened scene as the active scene. " +
-            "Use '" + SceneListOpenedToolId + "' tool to get the list of all opened scenes.\n\n" +
+            "Use '" + Tool_Rql.QueryToolId + "' tool to get the list of all opened scenes.\n\n" +
             "## Inputs\n\n" +
             "- `sceneRef` — `AssetObjectRef` pointing at a `SceneAsset`. The scene must already be opened.\n\n" +
             "## Behavior\n\n" +
@@ -30,7 +30,7 @@ namespace Feeder.MCP.Editor.API
             "`EditorSceneManager.SetActiveScene`. No-op if the scene is already active. Returns the post-call " +
             "snapshot of opened scenes.")]
         [Description("Set the specified opened scene as the active scene. " +
-            "Use '" + SceneListOpenedToolId + "' tool to get the list of all opened scenes.")]
+            "Use '" + Tool_Rql.QueryToolId + "' tool to get the list of all opened scenes.")]
         public SceneDataShallow[] SetActive(AssetObjectRef sceneRef)
         {
             return MainThread.Instance.Run(() =>

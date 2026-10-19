@@ -20,10 +20,10 @@ namespace Feeder.MCP.Editor.API
         )]
         [AiSkillDescription("Copy assets at given paths and store them at new paths. " +
             "Refreshes the AssetDatabase at the end. " +
-            "Use '" + AssetsFindToolId + "' to locate the source assets first.")]
+            "Use '" + Tool_Rql.QueryToolId + "' to locate the source assets first.")]
         [AiSkillBody("Copy assets at given paths and store them at new paths. " +
             "Does AssetDatabase.Refresh() at the end. " +
-            "Use '" + AssetsFindToolId + "' tool to find assets before copying.\n\n" +
+            "Use '" + Tool_Rql.QueryToolId + "' tool to find assets before copying.\n\n" +
             "## Inputs\n\n" +
             "- `sourcePaths` — paths of the assets to copy.\n" +
             "- `destinationPaths` — paths to store the copied assets (must match `sourcePaths` length).\n\n" +
@@ -32,7 +32,7 @@ namespace Feeder.MCP.Editor.API
             "instead of throwing, so a single bad pair does not abort the whole batch.")]
         [Description("Copy assets at given paths and store them at new paths. " +
             "Does AssetDatabase.Refresh() at the end. " +
-            "Use '" + AssetsFindToolId + "' tool to find assets before copying.")]
+            "Use '" + Tool_Rql.QueryToolId + "' tool to find assets before copying.")]
         public CopyAssetsResponse Copy
         (
             [Description("The paths of the assets to copy.")]

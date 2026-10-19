@@ -22,9 +22,9 @@ namespace Feeder.MCP.Editor.API
         )]
         [AiSkillDescription("Duplicate a batch of GameObjects in the currently opened Prefab or active Scene. " +
             "Marks each affected scene as dirty after duplication. " +
-            "Use '" + GameObjectFindToolId + "' to locate the source GameObjects first.")]
+            "Use '" + Tool_Rql.QueryToolId + "' to locate the source GameObjects first.")]
         [AiSkillBody("Duplicate GameObjects in opened Prefab or in a Scene. " +
-            "Use '" + GameObjectFindToolId + "' tool to find the target GameObjects first.\n\n" +
+            "Use '" + Tool_Rql.QueryToolId + "' tool to find the target GameObjects first.\n\n" +
             "## Inputs\n\n" +
             "- `gameObjectRefs` — `GameObjectRefList` of source GameObjects.\n\n" +
             "## Behavior\n\n" +
@@ -34,7 +34,7 @@ namespace Feeder.MCP.Editor.API
             "Marks every distinct affected scene dirty so the duplicated objects are saved with the scene. " +
             "Returns refs to the sources (the duplicates are reachable via the post-call `Selection`).")]
         [Description("Duplicate GameObjects in opened Prefab or in a Scene. " +
-            "Use '" + GameObjectFindToolId + "' tool to find the target GameObjects first.")]
+            "Use '" + Tool_Rql.QueryToolId + "' tool to find the target GameObjects first.")]
         public List<GameObjectRef> Duplicate(GameObjectRefList gameObjectRefs)
         {
             return MainThread.Instance.Run(() =>

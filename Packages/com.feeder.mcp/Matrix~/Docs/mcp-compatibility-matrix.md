@@ -20,9 +20,9 @@ Baseline measured 2026-07-10 against the earlier server ("previous local"), Unit
 | Long-running tools | `script-update-or-create`, `package-add/remove`, `tests-run`, `assets-refresh` return Processing and complete after compile/domain reload (100 ms polling loop in the previous server) | Processing is reported as deferred and gets `DeferredToolTimeout`; time with the link down does not count; a tool may ask for more time (FMP section 8) |
 | Error format | JSON-RPC error objects; tool failures as `isError: true` results | Byte-compatible mapping (FMP §4) |
 
-## Tool inventory (38 exposed via `tools/list`)
+## Tool inventory (25 exposed via `tools/list`)
 
-assets-find, assets-find-built-in, assets-get-data, assets-material-create, assets-modify, assets-refresh, assets-prefab-close, assets-prefab-create, assets-prefab-instantiate, assets-prefab-open, assets-prefab-save, assets-shader-get-data, assets-shader-list-all, console-get-logs, gameobject-component-add, gameobject-component-destroy, gameobject-component-get, gameobject-component-list-all, gameobject-component-modify, gameobject-create, gameobject-destroy, gameobject-duplicate, gameobject-find, gameobject-modify, gameobject-set-parent, object-get-data, object-modify, scene-create, scene-get-data, scene-list-opened, scene-open, scene-save, scene-set-active, scene-unload, screenshot-isolated, script-execute, tests-run, unity-tool-list
+assets-find-built-in, assets-material-create, assets-refresh, assets-prefab-close, assets-prefab-create, assets-prefab-instantiate, assets-prefab-open, assets-prefab-save, assets-shader-get-data, assets-shader-list-all, console-get-logs, gameobject-component-list-all, gameobject-duplicate, rql-mutate, rql-query, rql-schema, scene-create, scene-open, scene-save, scene-set-active, scene-unload, screenshot-isolated, script-execute, tests-run, unity-tool-list
 
 Note: the Unity plugin registers more tools than are exposed (per-tool enable flags in the plugin config filter the list). Parity is defined against whatever the registry marks enabled, not this fixed set.
 

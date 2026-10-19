@@ -2,6 +2,90 @@
 
 All notable changes to this package are documented here.
 
+## [1.0.0] - 2026-10-19
+
+### Added
+
+- **Query tools** - read and change many objects with one pipeline query:
+  `source | stage | stage`.
+  - `rql-query`:
+    - **Sources:** `objects`, `roots`, `selection`, `scenes`, `logs`, `components`, `prefab`,
+      `assets("t:Material"[, folder])`, `asset(path)`, `find(path or name or id)`, `obj(id)`, or any expression.
+    - **Stages:** `where`, `select ... as`, `sort ... desc`, `take`, `skip`, `first`, `last`, `count`, `reverse`,
+      `distinct`, `group`, `sum`/`avg`/`min`/`max`, `get`, `components`, `children`, `descendants`, `parent`,
+      `gameobject`.
+    - **Expressions:**
+      - Members can reach into structs and components, for example `transform.position.x` or
+        `Light.intensity` on a GameObject.
+      - Shader properties are read by name, for example `material["_BaseColor"]`.
+      - Meta fields: `$path`, `$id`, `$type`, `$index`.
+      - Operators: comparison, `contains`, `startswith`, `endswith` (all three ignore case), `matches`
+        (regex), `in`, `is Type`, `??`, arithmetic, and vector and color operators.
+      - Functions such as `vec`, `color`, `euler`, `has`, `comp`, `distance`, `round` and `iif`.
+    - **Output:** a compact text table by default, or JSON with `format=json`. `limit` caps the rows; the
+      total count is always reported.
+    - Reading a missing member returns `null` and adds a warning.
+    - Only reading methods can be called.
+  - `rql-mutate`:
+    - **Stages:** `set PATH = EXPR, ...` writes through structs, components, shader properties and array
+      elements, and converts values to the member's type. `call`, `add Type` and `destroy` are also
+      available, and `new("Name"[, primitive][, parent])` creates objects.
+    - **All-or-nothing:**
+      - Every target is checked first, and an error lists each problem.
+      - If a later stage fails, the earlier stages are rolled back.
+    - The whole query is one undo step, `Matrix query`.
+    - `dryRun` reports each change as `target | action | old | new` and reverts it.
+    - `maxTargets` (default 100) refuses wider changes.
+    - `save` saves the touched scenes, prefab and assets. Without it they are only marked dirty.
+  - `rql-schema` shows the syntax card, every function and the component types in the open scenes, with
+    counts. With `typeName`, it lists that type's members (read only or read-write), its methods and its
+    enum values.
+  - From C#: `Feeder.MCP.Editor.Query.MatrixQuery.Run` and `MatrixQuery.Mutate`.
+- Setup now keeps `rql-query` and `rql-schema` in the core tool set. The Skills window has a new
+  **Query** group.
+
+### Changed
+
+- `script-execute` in body-only mode:
+  - A body that returns a value, such as `return go.name;`, compiles as a method returning `object`, and
+    the value comes back as the result.
+  - A body with no value return still compiles as `void`.
+  - A `return x;` inside a lambda or a local function does not count as a value return.
+  - A body that returns a value on some paths but not others fails with an error that explains the fix.
+- VFX Studio is marked experimental: the menu is now **Tools > Feeder > VFX Studio (Experimental)**.
+- The `matrix-vfx` skill file is written only while at least one `vfx-*` tool is enabled, and is removed
+  when they are all off. Projects that do not use VFX no longer carry it.
+- A VFX Studio tab restored from the Editor layout stays idle until it is first shown: the effect
+  library scan no longer runs on every Editor start and domain reload behind a hidden tab.
+
+### Removed
+
+- The tools that the query tools replace. Use these queries instead:
+  - `gameobject-find`, `gameobject-component-get`, `object-get-data`, `scene-get-data`, `scene-list-opened`,
+    `assets-find`, `assets-get-data`, `editor-selection-get` -> `rql-query` with `find(...)`, `obj(id)`,
+    `roots`, `scenes`, `assets("filter")`, `asset(path)`, `selection`, then `select`, `get` or
+    `components`.
+  - `gameobject-create`, `gameobject-destroy`, `gameobject-modify`, `gameobject-set-parent`,
+    `gameobject-component-add`, `gameobject-component-destroy`, `gameobject-component-modify`,
+    `object-modify`, `assets-modify` -> `rql-mutate` with `new(...)`, `destroy`, `set`,
+    `set parent = ...`, `add Type`, `components Type | destroy`, and `save=true` for assets.
+  - Setup's core tool set drops them.
+  - Skill generation now also deletes the `matrix-<tool>` skills it wrote for tools that no longer exist.
+    Skills that other tools or people wrote are left alone.
+  - Clients and saved prompts that call these names get "tool not found". Switch them to the queries.
+
+### Fixed
+
+- `ComponentDataShallow.isEnabled` reports whether a Collider or Renderer is enabled. Before, it was
+  `NA` for them.
+- JSON input accepts combined values of `[Flags]` enums, for example `"FreezePositionX, FreezeRotation"` or
+  a number. Before, they were rejected.
+- Serializing an object graph with a cycle writes correct `$ref` paths after the first back-reference.
+  Before, every later path carried an extra segment and could not be resolved.
+- Writing an object into a field that is `null` through a path (`TryModifyAt`) works.
+- Log entries still buffered when the editor closes or reloads are written to the log file instead of
+  being lost.
+
 ## [0.89.0] - 2026-10-16
 
 ### Added

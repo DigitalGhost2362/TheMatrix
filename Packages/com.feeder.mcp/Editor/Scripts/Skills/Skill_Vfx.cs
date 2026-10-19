@@ -14,7 +14,7 @@ namespace Feeder.MCP.Editor.API
 # Matrix VFX
 
 Five tools, one prefab per effect, the prefab is the source of truth. Humans keep editing it in the
-Inspector or in `Tools/Feeder/VFX Studio`; you read it back with `vfx-read` before patching.
+Inspector or in `Tools/Feeder/VFX Studio (Experimental)`; you read it back with `vfx-read` before patching.
 
 | Tool | Use | Cost |
 |---|---|---|
@@ -53,7 +53,7 @@ Preview with `context=<model prefab>`; for the final look place an instance in a
 `camera=<camera name>` so bloom/tonemapping match the game. Compare side by side with the reference frames
 at the same orientation, not from memory.
 
-Token rules: never call `gameobject-component-get`/`particle-system-get` on effects (huge); never re-send
+Token rules: never dump whole ParticleSystem components with `rql-query` (huge; select single members or use `vfx-read`); never re-send
 unchanged emitters; prefer stats over images; one sheet per iteration, not per patch.
 
 ## Spec
