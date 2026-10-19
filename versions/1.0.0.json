@@ -1,0 +1,32 @@
+{
+  "name": "com.feeder.mcp",
+  "displayName": "Matrix Bridge",
+  "version": "1.0.0",
+  "unity": "2022.3",
+  "description": "Matrix Bridge for Unity: a local MCP bridge with a status window and a bundled local server.",
+  "documentationUrl": "https://github.com/BingoBoiz/TheMatrix#readme",
+  "changelogUrl": "https://github.com/BingoBoiz/TheMatrix/blob/main/Packages/com.feeder.mcp/CHANGELOG.md",
+  "licensesUrl": "https://github.com/BingoBoiz/TheMatrix/blob/main/Packages/com.feeder.mcp/LICENSE.md",
+  "keywords": [
+    "unity",
+    "mcp",
+    "ai",
+    "editor"
+  ],
+  "dependencies": {
+    "com.unity.modules.uielements": "1.0.0",
+    "com.unity.test-framework": "1.1.33"
+  },
+  "author": {
+    "name": "Feeder",
+    "email": "bingo6xxx@gmail.com",
+    "url": "https://github.com/BingoBoiz"
+  },
+  "_id": "com.feeder.mcp@1.0.0",
+  "dist": {
+    "tarball": "https://github.com/DigitalGhost2362/TheMatrix/releases/download/v1.0.0/com.feeder.mcp-1.0.0.tgz",
+    "shasum": "3bd4628d562b4b7f9dcf22882d699ff45aa6532a",
+    "integrity": "sha512-EkKMMz//phuGwTSdPnQnI3RFyaltjBAaJxlrz4XQsAX8szwPJTPMlnjtSZGjiz2avMmLs3+PVjx0p1hZ9yo5UA=="
+  },
+  "_time": "2026-10-19T13:45:39+07:00"
+}
