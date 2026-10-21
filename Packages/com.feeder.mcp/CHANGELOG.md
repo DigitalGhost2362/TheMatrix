@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here.
 
+## [1.0.1] - 2026-10-21
+
+### Changed
+
+- Skill files are regenerated only when the package version or the set of enabled
+  tools changed, instead of on every Editor load.
+- Matrix Setup regenerates the skills as one of its steps.
+
 ## [1.0.0] - 2026-10-19
 
 ### Added
