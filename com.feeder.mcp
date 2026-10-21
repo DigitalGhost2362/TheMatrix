@@ -3,7 +3,7 @@
   "name": "com.feeder.mcp",
   "description": "Matrix Bridge for Unity: a local MCP bridge with a status window and a bundled local server.",
   "dist-tags": {
-    "latest": "1.0.0"
+    "latest": "1.0.1"
   },
   "versions": {
     "0.87.1": {
@@ -129,15 +129,47 @@
         "shasum": "3bd4628d562b4b7f9dcf22882d699ff45aa6532a",
         "integrity": "sha512-EkKMMz//phuGwTSdPnQnI3RFyaltjBAaJxlrz4XQsAX8szwPJTPMlnjtSZGjiz2avMmLs3+PVjx0p1hZ9yo5UA=="
       }
+    },
+    "1.0.1": {
+      "name": "com.feeder.mcp",
+      "displayName": "Matrix Bridge",
+      "version": "1.0.1",
+      "unity": "2022.3",
+      "description": "Matrix Bridge for Unity: a local MCP bridge with a status window and a bundled local server.",
+      "documentationUrl": "https://github.com/BingoBoiz/TheMatrix#readme",
+      "changelogUrl": "https://github.com/BingoBoiz/TheMatrix/blob/main/Packages/com.feeder.mcp/CHANGELOG.md",
+      "licensesUrl": "https://github.com/BingoBoiz/TheMatrix/blob/main/Packages/com.feeder.mcp/LICENSE.md",
+      "keywords": [
+        "unity",
+        "mcp",
+        "ai",
+        "editor"
+      ],
+      "dependencies": {
+        "com.unity.modules.uielements": "1.0.0",
+        "com.unity.test-framework": "1.1.33"
+      },
+      "author": {
+        "name": "Feeder",
+        "email": "bingo6xxx@gmail.com",
+        "url": "https://github.com/BingoBoiz"
+      },
+      "_id": "com.feeder.mcp@1.0.1",
+      "dist": {
+        "tarball": "https://github.com/DigitalGhost2362/TheMatrix/releases/download/v1.0.1/com.feeder.mcp-1.0.1.tgz",
+        "shasum": "91e1fbf6c1bc1757674e4309b5aca9ffec76abc4",
+        "integrity": "sha512-zDLfwQYeLD0e2Vh00vb2KTLDnV7cvCFYsTG/1/mn2zQAOz2qTSXBurq/uC48sIYE+1HUUkSq6HGVSFrEdC7zuQ=="
+      }
     }
   },
   "time": {
     "created": "2026-09-30T11:21:58+07:00",
-    "modified": "2026-10-19T06:49:38.000Z",
+    "modified": "2026-10-21T10:02:09.000Z",
     "0.87.1": "2026-09-30T11:21:58+07:00",
     "0.88.0": "2026-10-15T11:50:29+07:00",
     "0.89.0": "2026-10-16T11:24:30+07:00",
-    "1.0.0": "2026-10-19T13:45:39+07:00"
+    "1.0.0": "2026-10-19T13:45:39+07:00",
+    "1.0.1": "2026-10-21T16:56:39+07:00"
   },
   "readme": ""
 }

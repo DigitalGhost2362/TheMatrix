@@ -1,8 +1,8 @@
 {
-  "_updated": 1792392578701,
+  "_updated": 1792576929634,
   "com.feeder.mcp": {
     "name": "com.feeder.mcp",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Matrix Bridge for Unity: a local MCP bridge with a status window and a bundled local server.",
     "displayName": "Matrix Bridge",
     "author": {
@@ -17,16 +17,17 @@
       "editor"
     ],
     "dist-tags": {
-      "latest": "1.0.0"
+      "latest": "1.0.1"
     },
     "versions": {
       "0.87.1": "",
       "0.88.0": "",
       "0.89.0": "",
-      "1.0.0": "latest"
+      "1.0.0": "",
+      "1.0.1": "latest"
     },
     "time": {
-      "modified": "2026-10-19T06:49:38.000Z"
+      "modified": "2026-10-21T10:02:09.000Z"
     }
   }
 }
