@@ -9,6 +9,14 @@ All notable changes to this package are documented here.
 - Skill files are regenerated only when the package version or the set of enabled
   tools changed, instead of on every Editor load.
 - Matrix Setup regenerates the skills as one of its steps.
+- `matrix-shared-editor` holds `Temp/agent-editor-lock` for one burst of Editor work (a compile,
+  one play session, one scene edit) instead of the whole task:
+  - release before any step that does not need the Editor, and after a failure;
+  - 15-minute cap per claim, heartbeats only inside a burst;
+  - retry a busy lock for up to 10 minutes before writing a test-case handoff;
+  - the verifier claims the lock per test case and releases it while writing a fix.
+  The lock scripts, `lock.json` and the 20-minute TTL are unchanged, so old and new sessions share
+  one lock.
 
 ## [1.0.0] - 2026-10-19
 

@@ -1,6 +1,6 @@
 ---
 name: matrix-shared-editor
-description: "Protocol for a Unity Editor shared by several AI sessions and humans at once: which Matrix tools need exclusive use of the Editor, the Temp/agent-editor-lock claim (atomic mkdir, heartbeat, stale break), the state check that catches a human in play mode, and the test-case handoff - when the Editor is busy the author writes TestCases/<stamp>-<slug>.md and stops, and a later verifier session runs the pending cases. Use BEFORE entering play mode, compiling, opening or saving a scene, wiping prefs or save data, clearing the console or running tests, and when asked to run pending test cases."
+description: "Protocol for a Unity Editor shared by several AI sessions and humans at once: which Matrix tools need exclusive use of the Editor, the Temp/agent-editor-lock claim (atomic mkdir, heartbeat, stale break; held for one burst of Editor work - a compile, one play session - and released between bursts, never for a whole task), the state check that catches a human in play mode, and the test-case handoff - when the Editor is busy the author writes TestCases/<stamp>-<slug>.md and stops, and a later verifier session runs the pending cases. Use BEFORE entering play mode, compiling, opening or saving a scene, wiping prefs or save data, clearing the console or running tests, and when asked to run pending test cases."
 ---
 
 # Shared Editor
@@ -10,8 +10,9 @@ the console, EditorPrefs, PlayerPrefs and save files belong to the whole Editor,
 test at the same time corrupt each other's result - and sometimes each other's assets. This skill
 serializes Editor use and turns "the Editor is busy" into a written handoff instead of a collision.
 
-Claim the Editor here before any compile or play session, then compile, read the console, play and
-collect evidence the way the project's own workflow says.
+Claim the Editor here before each compile or play session, compile, read the console, play and
+collect evidence the way the project's own workflow says, then give the Editor back at once. The lock
+is for the Editor, not for your task: while you think, code or wait, other sessions must be able to play.
 
 The lock is a convention between sessions, not something Matrix enforces: a session that never reads
 this skill ignores it. Tools that are not in your tool list may only be disabled: call
@@ -40,6 +41,29 @@ Hot Reload (if installed) patches a save straight into whoever is playing. You c
 which is why the verifier compares the tree before and after its run (Rule 5).
 
 Never stop, pause or exit someone else's play mode. Never answer a modal dialog you did not open.
+
+### Hold it for one burst, not for the task
+
+A burst is the shortest run of Editor-exclusive calls that another session must not cut into:
+
+- **a compile:** `assets-refresh` (or a script write) -> wait until it stops compiling -> read the console.
+- **a play session:** set the preconditions -> enter play mode -> steps and evidence -> exit play mode ->
+  restore (Rule 6).
+- **an edit-mode batch:** `scene-open` -> `rql-mutate` / mutating `script-execute` -> `scene-save`.
+
+A compile immediately followed by the play session that tests it may share one claim.
+
+Acquire right before the burst and release right after it. **Release before anything that does not
+need the Editor**: thinking, reading or writing code and docs, running Blender or another tool, waiting
+for a subagent, a reviewer or the user, writing a test case or a report. A review loop, a fix round or a
+verifier with several cases claims the lock once per burst, never across the whole loop.
+
+**Cap: 15 minutes per claim**, counted from `acquired`; heartbeats do not extend it. If a burst would
+run past it, finish the current step, exit play mode, restore, release, and claim again. Another
+session may get the Editor in between; that is the point. Then wait for it or hand off (Rule 4).
+
+Every new claim is a new start: run the Rule 3 check again and read the console only from the new
+claim's time. Scenes, prefs and the compiled code may have changed since your last burst.
 
 ## Rule 2 - The lock
 
@@ -123,17 +147,22 @@ function Lock-BreakStale {
 
 `New-Item` without `-Force` fails when the directory exists, which is what makes the claim atomic.
 
-- **Busy** (the directory exists): read `lock.json`. Live -> the Editor is taken, go to Rule 4.
+- **Busy** (the directory exists): read `lock.json`. Live -> the Editor is taken, go to Rule 4. A live
+  lock older than the 15-minute cap is still live: do not break it; report its `owner`, `task` and
+  `acquired` so the user can tell that session to release.
 - **Stale** (`now - heartbeat > 1200`): re-read `lock.json` immediately before deleting and delete only
   if `heartbeat` is unchanged from what you judged stale; then acquire once. A lock directory with no
   `lock.json` is live (its owner is between `mkdir` and the write) unless the directory itself is older
   than 20 minutes. Never delete a live lock.
-- **Heartbeat** (`lock_heartbeat` / `Lock-Heartbeat`): before every step that can take minutes (a
-  compile, a play session, the next test case), re-read `lock.json`; if `owner` is still you, rewrite it
-  with a fresh `heartbeat`. If `owner` is
-  someone else, you lost the lock by going stale - stop all Editor-exclusive work and report.
-- **Release**: exit play mode, restore what you changed (Rule 6), confirm `rql-query` `scenes` reports
-  no scene dirtied by you, then delete the directory - only if `owner` is still you.
+- **Heartbeat** (`lock_heartbeat` / `Lock-Heartbeat`): only inside a burst, before a step that can
+  take minutes (waiting on a compile, a long play step), re-read `lock.json`; if `owner` is still you,
+  rewrite it with a fresh `heartbeat`. If `owner` is someone else, you lost the lock by going stale -
+  stop all Editor-exclusive work and report. Never heartbeat to keep the lock while you are not in a
+  burst - release it instead.
+- **Release**: at the end of every burst - exit play mode, restore what you changed (Rule 6), confirm
+  `rql-query` `scenes` reports no scene dirtied by you, then delete the directory - only if `owner` is
+  still you. A session that ends, fails or is interrupted releases too; a lock left behind blocks
+  everyone for 20 minutes.
 
 ## Rule 3 - Check the Editor after acquiring
 
@@ -155,10 +184,12 @@ if (EditorApplication.isPlayingOrWillChangePlaymode) return "abort: play mode";
 
 When the task needs play-mode proof, try to acquire the lock.
 
-- **Acquired and the Editor is clean** -> verify normally (compile, read the
-  console, play, collect evidence), release, report.
-- **Busy, human in the Editor, or verification cut short** (focus trap, lost lock) -> write the handoff
-  and stop:
+- **Acquired and the Editor is clean** -> verify in bursts (Rule 1): compile and read the console,
+  play and collect evidence, release. If a result sends you back to the code, release first, fix, then
+  claim again for the next compile and play. Report after the last release.
+- **Busy** -> claims are short, so retry a few times over up to 10 minutes. Still busy -> handoff below.
+- **Human in the Editor, still busy after retrying, or verification cut short** (focus trap, lost lock)
+  -> write the handoff and stop:
   1. Create `TestCases/` at the project root if missing, and make sure `.gitignore` ignores `/TestCases/`.
      Never put test cases under `Assets/` - a new file there triggers an import in the shared Editor.
   2. Write `TestCases/<yyyyMMdd-HHmm>-<slug>.md` from the *Test case template* at the end of this skill.
@@ -179,24 +210,27 @@ Triggered by a request like "run the pending test cases".
 
 1. List `TestCases/*.md` with `Status: pending`, oldest first. A `running` case whose owner holds no
    live lock was abandoned - treat it as `pending` and note that in its run log.
-2. Acquire the lock (Rule 2) and check the Editor (Rule 3). Busy -> report and stop.
-3. Snapshot the tree: `git status --porcelain` and `git hash-object` of every touched file.
-4. For each case:
-   - Set `Status: running (<owner>, <time>)`. Heartbeat the lock.
+2. Snapshot the tree: `git status --porcelain` and `git hash-object` of every touched file.
+3. Acquire the lock (Rule 2) and check the Editor (Rule 3). Busy -> retry as in Rule 4, then report
+   and stop.
+4. For each case (one claim per case, Rule 1 - release between cases whenever you stop to read, think
+   or write, and re-acquire with the Rule 3 check before the next compile or play):
+   - Set `Status: running (<owner>, <time>)`. Heartbeat the lock, or claim it again if you released it.
    - Compare the recorded hashes with the current ones. Different -> the code moved after the case was
      written: read the diff and adapt the steps before running them, and note it in the run log.
-   - Compile and read the console. Filter `console-get-logs` by your own start
-     time; do not clear the console.
+   - Compile and read the console. Filter `console-get-logs` by this claim's start time; do not clear
+     the console.
    - Set the preconditions, run the steps, collect the evidence, then, when a panel changed, repeat it: open it twice in a row, leave a serialized reference empty, and invoke a callback that was never assigned.
-   - **FAIL** -> fix and re-run, at most **3 fix rounds**, then `Status: blocked`. Fix a file only if
-     it is unchanged since your snapshot in step 3 **and** was not modified in the 10 minutes before
+   - **FAIL** -> exit play mode, restore and release the lock while you write the fix, then claim it
+     again to re-run; at most **3 fix rounds**, then `Status: blocked`. Fix a file only if
+     it is unchanged since your snapshot in step 2 **and** was not modified in the 10 minutes before
      it - otherwise another session may still be editing it: record the failure and the evidence,
      leave the code alone. Every fix follows the project's coding standard, is logged in the run log
      (file + reason) and gets its hash updated in the case header. Do not commit.
-   - Before writing **PASS**, compare `git status --porcelain` with the step-3 snapshot plus your own
+   - Before writing **PASS**, compare `git status --porcelain` with the step-2 snapshot plus your own
      fixes. Anything else changed during the run -> the result is suspect; re-run the case once.
    - Clean up (Rule 6) and set `Status: pass`, `fail` or `blocked`, with the evidence.
-5. Release the lock. Report per case: status, the evidence lines, the fixes made, anything not verified.
+5. Make sure the lock is released. Report per case: status, the evidence lines, the fixes made, anything not verified.
 
 ## Rule 6 - Leave the Editor as you found it
 
