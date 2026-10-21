@@ -53,6 +53,7 @@ namespace Feeder.MCP.Editor
             {
                 Step("Git", IgnoreMachineSpecificFiles),
                 Step("Tools", () => ApplyToolSet(all: false)),
+                Step("Skills", () => $"Skills: regenerated for {BridgeAgents.RegenerateSkills()} client(s)"),
                 Step("Claude Code", StartClaudeSetup),
             });
 

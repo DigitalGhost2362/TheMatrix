@@ -43,7 +43,7 @@ namespace Feeder.MCP.Editor
             API.Tool_Tests.Init();
             PackageUtils.Init();
 
-            BridgeAgents.RegenerateSkills();
+            BridgeAgents.RegenerateSkillsIfChanged();
 
             // Write MCP config files for auto-configure-enabled agents (once per session).
             EditorApplication.delayCall += AutoConfigureAgents;

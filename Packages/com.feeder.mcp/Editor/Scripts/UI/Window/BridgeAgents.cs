@@ -119,13 +119,13 @@ namespace Feeder.MCP.Editor.UI
             MatrixPluginEditor.Instance.Save();
         }
 
-        public static void GenerateSkills(AgentConfig.AiAgentConfigurator agent)
+        public static bool GenerateSkills(AgentConfig.AiAgentConfigurator agent)
         {
             var previous = MatrixPluginEditor.SkillsPath;
             try
             {
                 MatrixPluginEditor.SkillsPath = agent.SkillsPath!;
-                MatrixPluginEditor.Instance.ToolHostInstance?.GenerateSkillFiles(MatrixPluginEditor.ProjectRootPath);
+                return MatrixPluginEditor.Instance.ToolHostInstance?.GenerateSkillFiles(MatrixPluginEditor.ProjectRootPath) == true;
             }
             finally
             {
@@ -133,8 +133,34 @@ namespace Feeder.MCP.Editor.UI
             }
         }
 
+        static string SkillsStampKey => $"Feeder_Matrix_SkillsStamp_{UnityEngine.Application.dataPath}";
+
+        // the skills only change with the package version or the set of enabled tools
+        static string? SkillsStamp()
+        {
+            var tools = MatrixPluginEditor.Instance.Tools;
+            var all = tools?.GetAllTools();
+            if (all == null)
+                return null;
+
+            var enabled = all
+                .Where(tool => tools!.IsToolEnabled(tool.Name))
+                .Select(tool => tool.Name)
+                .OrderBy(name => name, StringComparer.Ordinal);
+            return $"{MatrixPlugin.Version}|{string.Join(",", enabled)}";
+        }
+
+        public static void RegenerateSkillsIfChanged()
+        {
+            var stamp = SkillsStamp();
+            if (stamp == null || UnityEditor.EditorPrefs.GetString(SkillsStampKey, string.Empty) != stamp)
+                RegenerateSkills();
+        }
+
         public static int RegenerateSkills()
         {
+            var stamp = SkillsStamp();
+            var generated = true;
             var count = 0;
             foreach (var agentId in MatrixPluginEditor.AutoConfigureAgentIds)
             {
@@ -142,9 +168,11 @@ namespace Feeder.MCP.Editor.UI
                 if (agent?.SupportsSkills != true || !MatrixPluginEditor.IsAutoGenerateSkills(agent.AgentId))
                     continue;
 
-                GenerateSkills(agent);
+                generated &= GenerateSkills(agent);
                 count++;
             }
+            if (stamp != null && generated)
+                UnityEditor.EditorPrefs.SetString(SkillsStampKey, stamp);
             return count;
         }
 
