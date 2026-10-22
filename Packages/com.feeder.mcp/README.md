@@ -5,31 +5,20 @@ clients. The package ships with the local Windows x64 MCP server payload.
 
 ## Installation
 
-Matrix Bridge is published to its own package registry, so Package Manager lists every release and
-switches between them. In Unity 2022.3 or newer, open **Edit > Project Settings > Package Manager**
-and add a scoped registry:
+In Unity 2022.3 or newer, open **Window > Package Manager**, click **+**, choose
+**Add package from git URL** and paste:
 
-| Field | Value |
-|---|---|
-| Name | `Matrix` |
-| URL | `https://raw.githubusercontent.com/DigitalGhost2362/TheMatrix/registry` |
-| Scope(s) | `com.feeder.mcp` |
+```text
+https://github.com/DigitalGhost2362/TheMatrix.git?path=/Packages/com.feeder.mcp
+```
 
-Then open **Window > Package Manager > My Registries > Matrix**, select **Matrix Bridge** and click
-**Install**. Pick another release under **Version History > See other versions**. The package has no
-signature: click **Install Anyway** when Unity asks. The repository README has the steps with
-screenshots.
+Git must be installed on the machine. To update, select **Matrix Bridge** in Package Manager and click
+**Update**: Unity fetches the newest version from `main`.
 
 The package is plain source: it contains no precompiled `.dll`. It ships a
 compressed self-contained local server. On first use, the editor extracts the server into the
 consuming project's `Library/feeder-matrix` cache. It does not require Git LFS or a separate .NET
 runtime. Unity resolves the official Unity Test Framework dependency from its standard registry.
-
-Installing from Git also works, without the version list:
-
-```text
-https://github.com/BingoBoiz/TheMatrix.git?path=/Packages/com.feeder.mcp#v1.0.0
-```
 
 ## Getting started
 

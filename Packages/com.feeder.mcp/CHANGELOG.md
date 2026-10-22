@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- Install from the Git URL only, and update with **Update** in Package Manager. The Matrix registry and
+  the installer `.unitypackage` are no longer published. Projects on the registry replace the version
+  number in `Packages/manifest.json` with the Git URL and remove the `Matrix` scoped registry.
+
 ## [1.0.1] - 2026-10-21
 
 ### Changed
