@@ -2,9 +2,9 @@
   <PropertyGroup>
     <RootNamespace>Feeder.Matrix</RootNamespace>
     <AssemblyName>feeder-mcp-server</AssemblyName>
-    <Version>0.4.0</Version>
-    <AssemblyVersion>0.4.0.0</AssemblyVersion>
-    <FileVersion>0.4.0.0</FileVersion>
+    <Version>0.5.0</Version>
+    <AssemblyVersion>0.5.0.0</AssemblyVersion>
+    <FileVersion>0.5.0.0</FileVersion>
     <Authors>Feeder</Authors>
     <Company>Feeder</Company>
     <Product>Feeder MCP Server</Product>

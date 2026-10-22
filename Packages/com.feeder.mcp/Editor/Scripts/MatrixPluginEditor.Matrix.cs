@@ -51,6 +51,10 @@ namespace Feeder.MCP
 
         internal void AnnounceReload() => _matrixAdapter?.AnnounceReload();
 
+        internal Task<string> ReleaseEditorLockAsync()
+            => _matrixAdapter?.ReleaseEditorLockAsync()
+               ?? throw new System.InvalidOperationException("Feeder Local Matrix is not connected.");
+
         void DisposeMatrixAdapter()
         {
             _matrixAdapter?.Dispose();

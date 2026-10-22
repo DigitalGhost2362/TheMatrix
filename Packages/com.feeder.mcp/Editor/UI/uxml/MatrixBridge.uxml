@@ -6,6 +6,7 @@
             <ui:Label name="mb-state" class="mb-state mb-state--offline" text="OFFLINE" tooltip="Link or unlink the bridge" />
             <ui:Label name="mb-address" class="mb-address" text="" />
             <ui:Label name="mb-note" class="mb-note" text="" picking-mode="Ignore" />
+            <ui:Label name="mb-lock" class="mb-lock" text="" />
         </ui:VisualElement>
         <ui:VisualElement name="mb-chips" class="mb-chips" />
     </ui:VisualElement>

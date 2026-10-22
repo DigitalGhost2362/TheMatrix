@@ -27,6 +27,10 @@ namespace Feeder.MCP.Editor.UI
         {
             "mb-state--offline", "mb-state--linking", "mb-state--online", "mb-state--working", "mb-state--playtest", "mb-state--fault",
         };
+        private static readonly string[] _lockClasses =
+        {
+            "mb-lock--agent", "mb-lock--outside", "mb-lock--over",
+        };
         private static readonly LogLevel[] _menuLogLevels =
         {
             LogLevel.Trace, LogLevel.Debug, LogLevel.Info, LogLevel.Warning, LogLevel.Error,
@@ -53,6 +57,8 @@ namespace Feeder.MCP.Editor.UI
         private Label? _address;
         private Label? _note;
         private Label? _menu;
+        private Label? _lock;
+        private IVisualElementScheduledItem? _lockTick;
         private VisualElement? _core;
         private VisualElement? _chips;
         private TextField? _portField;
@@ -159,6 +165,7 @@ namespace Feeder.MCP.Editor.UI
             _address = root.Q<Label>("mb-address");
             _note = root.Q<Label>("mb-note");
             _menu = root.Q<Label>("mb-menu");
+            _lock = root.Q<Label>("mb-lock");
             _chips = root.Q<VisualElement>("mb-chips");
 
             if (bridgeRoot == null || _state == null || _address == null || _chips == null)
@@ -178,6 +185,11 @@ namespace Feeder.MCP.Editor.UI
             {
                 _menu.UnregisterCallback<ClickEvent>(OnMenuClicked);
                 _menu.RegisterCallback<ClickEvent>(OnMenuClicked);
+            }
+            if (_lock != null)
+            {
+                _lock.UnregisterCallback<ClickEvent>(OnLockClicked);
+                _lock.RegisterCallback<ClickEvent>(OnLockClicked);
             }
 
             BuildChips();
@@ -207,6 +219,10 @@ namespace Feeder.MCP.Editor.UI
             AgentActivity.Changed
                 .Subscribe(OnAgentActivity)
                 .AddTo(_subscriptions);
+            BridgeLock.State
+                .ObserveOnCurrentSynchronizationContext()
+                .Subscribe(OnLockState)
+                .AddTo(_subscriptions);
             _subscriptions.Add(MatrixPluginEditor.SubscribeOnChanged(OnConfigChanged, invokeImmediately: false));
             MatrixPluginEditor.PluginProperty
                 .WhereNotNull()
@@ -223,6 +239,9 @@ namespace Feeder.MCP.Editor.UI
             _rainTick = null;
             _workingExpiry?.Pause();
             _workingExpiry = null;
+            _lockTick?.Pause();
+            _lockTick = null;
+            _lock = null;
             _rainView = null;
             _chipViews.Clear();
             _portField = null;
@@ -239,6 +258,43 @@ namespace Feeder.MCP.Editor.UI
         private void OnConfigChanged(MatrixPlugin.UnityConnectionConfig config) => Refresh();
 
         private void OnAgentActivity(Unit _) => Refresh();
+
+        private void OnLockState(Matrix.EditorLockState? state) => RefreshLock();
+
+        private void RefreshLock()
+        {
+            if (_lock == null)
+                return;
+
+            var state = _previewActive ? null : BridgeLock.State.CurrentValue;
+            _lock.EnableInClassList("mb-lock--visible", state != null);
+            foreach (var lockClass in _lockClasses)
+                _lock.EnableInClassList(lockClass, false);
+            if (state == null)
+            {
+                _lockTick?.Pause();
+                return;
+            }
+
+            _lock.text = state.Held ? "LOCK  " + BridgeLock.Line(state) : BridgeLock.Line(state);
+            _lock.tooltip = BridgeLock.Tooltip(state);
+            if (state.Held)
+                _lock.EnableInClassList(BridgeLock.IsPastCap(state) ? "mb-lock--over" : "mb-lock--" + state.Kind, true);
+
+            // the ages in the line and the tooltip move every second while someone holds the editor
+            if (!state.Held)
+                _lockTick?.Pause();
+            else if (_lockTick == null)
+                _lockTick = _lock.schedule.Execute(RefreshLock).Every(1000);
+            else
+                _lockTick.Resume();
+        }
+
+        private void OnLockClicked(ClickEvent evt)
+        {
+            if (_lock != null)
+                BridgeLock.ShowMenu(_lock.worldBound);
+        }
 
         private void OnPlugin(IToolHost plugin)
         {
@@ -303,6 +359,8 @@ namespace Feeder.MCP.Editor.UI
 
             if (phase == BridgePhase.Working && !_previewActive)
                 ScheduleWorkingExpiry();
+
+            RefreshLock();
 
             _energyTarget = BridgeStatus.RainEnergy(phase);
             _rainTick?.Resume();

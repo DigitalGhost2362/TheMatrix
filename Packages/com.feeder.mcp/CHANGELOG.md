@@ -4,8 +4,24 @@ All notable changes to this package are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Editor lock kept by the server** - agent sessions sharing one editor take turns through
+  `editor-lock-acquire`, `editor-lock-release` and `editor-lock-status`:
+  - while a session holds the editor, the other sessions' tools that are not read-only are refused
+    with the holder's name, task and start time;
+  - a claim ends on release, when its session closes, or after 10 minutes without a call;
+  - acquiring while the editor is in play mode with no holder answers busy.
+- The Matrix Bridge window shows which agent holds the editor, for what and for how long. Click the
+  entry to free a stuck claim. While an agent holds the editor, every Scene view gets a green frame
+  tagged with the holder, like the frame around the Game view during an agent play test.
+
 ### Changed
 
+- Server 0.5.0. It mirrors the lock to `Temp/agent-editor-lock/lock.json`, so sessions on the lock-file
+  scripts still see it, and treats a live lock file of such a session as busy.
+- `matrix-shared-editor` claims the editor with the new tools. The lock-file scripts remain, for an
+  older server only.
 - Install from the Git URL only, and update with **Update** in Package Manager. The Matrix registry and
   the installer `.unitypackage` are no longer published. Projects on the registry replace the version
   number in `Packages/manifest.json` with the Git URL and remove the `Matrix` scoped registry.

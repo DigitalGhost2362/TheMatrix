@@ -30,6 +30,7 @@ namespace Feeder.MCP.Editor.Matrix
         public string[] PendingOperations { get; set; } = Array.Empty<string>();
         public string? ProjectRoot { get; set; }
         public string? McpEntryName { get; set; }
+        public string[] Features { get; set; } = Array.Empty<string>();
     }
 
     [Serializable]
@@ -112,6 +113,24 @@ namespace Feeder.MCP.Editor.Matrix
         public string ClientTitle { get; set; } = string.Empty;
         public string ClientVersion { get; set; } = string.Empty;
         public bool IsConnected { get; set; }
+    }
+
+    /// <summary>Who holds the editor lock; kept by the matrix and pushed with EditorLockChanged.</summary>
+    [Serializable]
+    internal sealed class EditorLockState
+    {
+        public bool Held { get; set; }
+        // "agent" or "outside"
+        public string Kind { get; set; } = string.Empty;
+        public string Owner { get; set; } = string.Empty;
+        public string Task { get; set; } = string.Empty;
+        public string ClientName { get; set; } = string.Empty;
+        public string ClientVersion { get; set; } = string.Empty;
+        public string SessionId { get; set; } = string.Empty;
+        public long AcquiredUnixMs { get; set; }
+        public long LastActivityUnixMs { get; set; }
+        public long ExpiresUnixMs { get; set; }
+        public int CallsInFlight { get; set; }
     }
 
     [Serializable]

@@ -16,6 +16,17 @@ internal sealed class RegisterRequestMirror
     public string AuthToken { get; set; } = string.Empty;
     public int EditorState { get; set; }
     public string[] PendingOperations { get; set; } = [];
+    public string? ProjectRoot { get; set; }
+    public string[] Features { get; set; } = [];
+}
+
+internal sealed class EditorLockStateMirror
+{
+    public bool Held { get; set; }
+    public string Kind { get; set; } = string.Empty;
+    public string Owner { get; set; } = string.Empty;
+    public string Task { get; set; } = string.Empty;
+    public long AcquiredUnixMs { get; set; }
 }
 
 internal sealed class RegisterResponseMirror

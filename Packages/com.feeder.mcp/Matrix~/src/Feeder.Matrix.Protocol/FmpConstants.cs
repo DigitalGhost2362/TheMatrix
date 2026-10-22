@@ -22,6 +22,9 @@ public static class FmpCapabilities
 {
     /// <summary>The hub serves <c>Compile</c> to a registered Unity link.</summary>
     public const string Compile = "compile";
+
+    /// <summary>The matrix keeps the editor lock: the hub serves <c>ReleaseEditorLock</c> and pushes <c>EditorLockChanged</c>.</summary>
+    public const string EditorLock = "editor-lock";
 }
 
 /// <summary>Editor state reported in handshake and heartbeats.</summary>

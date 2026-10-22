@@ -10,12 +10,14 @@ namespace Feeder.Matrix.Tools;
 
 /// <summary>
 /// Tools served by the matrix itself, listed even while Unity is hung, reloading or gone:
-/// <c>editor-health</c> and, unless switched off, the <c>tool-call</c> proxy.
+/// <c>editor-health</c>, the editor lock tools and, unless switched off, the <c>tool-call</c> proxy.
+/// Unity tool calls pass through <see cref="CallUnityAsync"/>, where the editor lock refuses other sessions' editor-changing tools.
 /// </summary>
 public sealed class ServerTools(
     UnityLinkRegistry registry,
     McpClientTracker clients,
     EditorHealth health,
+    EditorLock editorLock,
     IOptions<MatrixOptions> options,
     ILogger<ServerTools> logger)
 {
@@ -46,6 +48,7 @@ public sealed class ServerTools(
                 Annotations = new ToolAnnotations { ReadOnlyHint = true, IdempotentHint = true },
             },
         };
+        tools.AddRange(EditorLock.Tools());
         if (options.Value.EnableToolCallProxy)
         {
             tools.Add(new Tool
@@ -62,13 +65,27 @@ public sealed class ServerTools(
     }
 
     public bool Handles(string? name)
-        => name == EditorHealth.ToolName || (name == ToolCallName && options.Value.EnableToolCallProxy);
+        => name == EditorHealth.ToolName || EditorLock.IsLockTool(name) || (name == ToolCallName && options.Value.EnableToolCallProxy);
 
     public async ValueTask<CallToolResult> CallAsync(CallToolRequestParams request, string? sessionId, IUnityBackend backend, CancellationToken ct)
     {
         if (request.Name == EditorHealth.ToolName)
             return Text(health.Report());
+        if (EditorLock.IsLockTool(request.Name))
+            return editorLock.Call(request, sessionId);
         return await ProxyAsync(request, sessionId, backend, ct);
+    }
+
+    /// <summary>Runs a Unity tool for a session, unless another session or a person holds the editor lock.</summary>
+    public async ValueTask<CallToolResult> CallUnityAsync(CallToolRequestParams request, string? sessionId, IUnityBackend backend, CancellationToken ct)
+    {
+        if (editorLock.Refusal(sessionId, request.Name) is { } refusal)
+        {
+            logger.LogInformation("{Tool} refused for session {SessionId}: editor lock", request.Name, sessionId);
+            return Refuse(refusal);
+        }
+        using (editorLock.Track(sessionId))
+            return await backend.CallToolAsync(request, ct);
     }
 
     async ValueTask<CallToolResult> ProxyAsync(CallToolRequestParams request, string? sessionId, IUnityBackend backend, CancellationToken ct)
@@ -92,7 +109,8 @@ public sealed class ServerTools(
 
         // 1. never itself or another matrix tool
         if (string.Equals(name, ToolCallName, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(name, EditorHealth.ToolName, StringComparison.OrdinalIgnoreCase))
+            string.Equals(name, EditorHealth.ToolName, StringComparison.OrdinalIgnoreCase) ||
+            EditorLock.ToolNames.Contains(name, StringComparer.OrdinalIgnoreCase))
             return Refuse($"'{name}' is a matrix tool: call it directly, not through tool-call.");
 
         // one spelling for every check below and for the call itself
@@ -118,7 +136,7 @@ public sealed class ServerTools(
         CallToolResult result;
         try
         {
-            result = await backend.CallToolAsync(new CallToolRequestParams { Name = name, Arguments = targetArguments }, ct);
+            result = await CallUnityAsync(new CallToolRequestParams { Name = name, Arguments = targetArguments }, sessionId, backend, ct);
         }
         catch (McpProtocolException e)
         {

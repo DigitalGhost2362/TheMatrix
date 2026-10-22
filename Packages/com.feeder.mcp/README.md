@@ -121,6 +121,31 @@ call; `reconnectGraceMs` (default 180 s) that a call waits for an editor that is
 `deferredToolTimeoutMs` (default 15 minutes) for tools that finish after a compile or domain reload.
 `script-execute` takes `timeoutSeconds` for code that runs long on purpose.
 
+## Editor lock
+
+When several agent sessions share one editor, they take turns with the editor lock, which the server
+keeps:
+
+- `editor-lock-acquire` (`task`, `owner`) claims the editor for one burst of work: a compile, one play
+  session, an edit-mode batch. When someone else holds it, the answer names the holder.
+- `editor-lock-release` gives it back. `editor-lock-status` says who holds it.
+
+While a session holds the lock, the server refuses the other sessions' tools that are not marked
+read-only, and says who holds the editor and for what. Read-only tools always run. A claim ends when
+its session releases it, when the session closes, or after 10 minutes without a call from it.
+
+The **Matrix Bridge** window shows the holder under the status: the agent's name, its task and how
+long it has held the editor. The tooltip adds the client, the session and when an idle claim will be
+freed. Click the line to free an agent's claim, for example one left behind by a stuck session. With
+no claim the line reads `editor free`: the editor is yours. To work in it, ask the agents to stop first;
+the lock only orders agents among themselves.
+
+While an agent holds the lock, every Scene view gets a green frame, tagged at the bottom with the holder.
+
+The lock is also written to `Temp/agent-editor-lock/lock.json`, the lock file used before the server
+kept the lock. A session that still claims with that file blocks the claim while its file is live; the
+server cannot tell which session wrote it, so it refuses no tools for it.
+
 ## Query tools
 
 Three tools read and change many objects in one call with a pipeline query. Setup keeps `rql-query`

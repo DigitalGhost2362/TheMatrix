@@ -32,6 +32,8 @@ public sealed record UnityRegisterRequest
     [Key(11)] public string? ProjectRoot { get; init; }
     // Name of the matrix's entry in the agents' MCP config (tool names are mcp__<entry>__<tool>).
     [Key(12)] public string? McpEntryName { get; init; }
+    // Optional editor features this plugin handles, e.g. "editor-lock" (it accepts EditorLockChanged).
+    [Key(13)] public string[] Features { get; set; } = [];
 }
 
 [MessagePackObject]
@@ -149,4 +151,23 @@ public sealed record CompileResponse
     [Key(1)] public byte[]? Assembly { get; init; }
     [Key(2)] public string[] Diagnostics { get; set; } = [];
     [Key(3)] public string? Error { get; init; }
+}
+
+/// <summary>Who holds the editor lock, pushed to the editor with <c>EditorLockChanged</c>.</summary>
+[MessagePackObject]
+public sealed record EditorLockState
+{
+    [Key(0)] public bool Held { get; init; }
+    // "agent" (an MCP session) or "outside" (a lock file written by a session that does not claim through the matrix)
+    [Key(1)] public string Kind { get; set; } = string.Empty;
+    [Key(2)] public string Owner { get; set; } = string.Empty;
+    [Key(3)] public string Task { get; set; } = string.Empty;
+    [Key(4)] public string ClientName { get; set; } = string.Empty;
+    [Key(5)] public string ClientVersion { get; set; } = string.Empty;
+    [Key(6)] public string SessionId { get; set; } = string.Empty;
+    [Key(7)] public long AcquiredUnixMs { get; init; }
+    [Key(8)] public long LastActivityUnixMs { get; init; }
+    // when the matrix frees an idle claim on its own; 0 = never
+    [Key(9)] public long ExpiresUnixMs { get; init; }
+    [Key(10)] public int CallsInFlight { get; init; }
 }

@@ -17,6 +17,9 @@ public sealed class UnityLink
     public string? McpEntryName { get; set; }
     public string? PluginVersion { get; set; }
 
+    /// <summary>Optional editor features the plugin handles (<see cref="UnityRegisterRequest.Features"/>).</summary>
+    public string[] Features { get; set; } = [];
+
     /// <summary>Last background heartbeat; null for plugins that never send one.</summary>
     public HeartbeatMessage? Heartbeat { get; set; }
     public DateTimeOffset HeartbeatAt { get; set; }
@@ -75,6 +78,7 @@ public sealed class UnityLinkRegistry
             ProjectRoot = request.ProjectRoot,
             McpEntryName = request.McpEntryName,
             PluginVersion = request.PluginVersion,
+            Features = request.Features ?? [],
         };
         // Newest registration wins for a project (ADR-0003); resume keeps the instance id.
         _linksByProject.AddOrUpdate(request.ProjectId, link, (_, existing) =>
@@ -89,6 +93,7 @@ public sealed class UnityLinkRegistry
                 existing.ProjectRoot = request.ProjectRoot;
                 existing.McpEntryName = request.McpEntryName;
                 existing.PluginVersion = request.PluginVersion;
+                existing.Features = request.Features ?? [];
                 // the beats before a reload describe the old domain; the new one starts its own
                 existing.Heartbeat = null;
                 return existing;

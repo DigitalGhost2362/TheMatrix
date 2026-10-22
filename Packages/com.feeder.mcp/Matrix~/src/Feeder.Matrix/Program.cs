@@ -57,6 +57,8 @@ try
     builder.Services.AddSingleton<IUnityBackend, BackendRouter>();
     builder.Services.AddSingleton<ScriptCompiler>();
     builder.Services.AddSingleton<EditorHealth>();
+    builder.Services.AddSingleton<EditorLock>();
+    builder.Services.AddHostedService<EditorLockMonitor>();
     builder.Services.AddSingleton<ServerTools>();
 
     builder.Services
@@ -95,7 +97,7 @@ try
             var serverTools = context.Services!.GetRequiredService<ServerTools>();
             if (serverTools.Handles(context.Params?.Name))
                 return await serverTools.CallAsync(context.Params!, context.Server.SessionId, backend, ct);
-            return await backend.CallToolAsync(context.Params!, ct);
+            return await serverTools.CallUnityAsync(context.Params!, context.Server.SessionId, backend, ct);
         })
         .WithListPromptsHandler((_, _) => ValueTask.FromResult(new ListPromptsResult()))
         .WithGetPromptHandler((context, _) =>
@@ -187,7 +189,7 @@ static ReadResourceResult throwResourceNotFound(string? uri)
 
 public static class MatrixVersion
 {
-    public const string Value = "0.4.0";
+    public const string Value = "0.5.0";
 }
 
 // Exposes the entry point to WebApplicationFactory-based integration tests.

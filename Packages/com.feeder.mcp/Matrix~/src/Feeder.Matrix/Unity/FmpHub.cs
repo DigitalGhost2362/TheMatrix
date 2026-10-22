@@ -1,5 +1,6 @@
 using Feeder.Matrix.Compile;
 using Feeder.Matrix.Protocol;
+using Feeder.Matrix.Tools;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 
@@ -11,6 +12,7 @@ public interface IFmpUnityClient
     Task InvokeTool(ToolInvoke invoke);
     Task CancelTool(string operationId);
     Task McpClientsChanged(McpClientInfo[] clients);
+    Task EditorLockChanged(EditorLockState state);
 }
 
 /// <summary>FMP/1 hub — the Unity side of the matrix. WebSocket + MessagePack only.</summary>
@@ -18,6 +20,7 @@ public sealed class FmpHub(
     UnityLinkRegistry registry,
     McpClientTracker mcpClients,
     ScriptCompiler compiler,
+    EditorLock editorLock,
     IOptions<MatrixOptions> options,
     ILogger<FmpHub> logger) : Hub<IFmpUnityClient>
 {
@@ -68,6 +71,7 @@ public sealed class FmpHub(
         // Seed the freshly-linked editor with the current MCP client set so its "AI agent"
         // indicator is correct immediately after a domain reload, not only on the next change.
         _ = Clients.Caller.McpClientsChanged(mcpClients.Snapshot());
+        _ = editorLock.PublishAsync(link);
 
         return new UnityRegisterResponse
         {
@@ -75,7 +79,7 @@ public sealed class FmpHub(
             ChosenProtocolVersion = FmpConstants.ProtocolVersion,
             RegistryUpToDate = link.Registry?.RegistryHash == request.ToolRegistryHash,
             AwaitedOperations = registry.AwaitedOperationIds,
-            Capabilities = [FmpCapabilities.Compile],
+            Capabilities = [FmpCapabilities.Compile, FmpCapabilities.EditorLock],
         };
     }
 
@@ -83,6 +87,16 @@ public sealed class FmpHub(
         => registry.IsRegistered(Context.ConnectionId)
             ? compiler.CompileAsync(request, Context.ConnectionAborted)
             : Task.FromResult(new CompileResponse { Error = "Compile is only served to a registered Unity link; call Register first." });
+
+    /// <summary>Frees the editor lock, whoever holds it. Returns what was freed.</summary>
+    public string ReleaseEditorLock()
+    {
+        if (!registry.IsRegistered(Context.ConnectionId))
+            return "nothing";
+        var freed = editorLock.ForceRelease();
+        logger.LogInformation("Editor lock released from the Unity editor: {Freed}", freed);
+        return freed;
+    }
 
     public void Unregister(string projectId, string unityInstanceId)
     {

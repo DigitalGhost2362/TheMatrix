@@ -138,6 +138,47 @@
     display: flex;
 }
 
+.mb-lock {
+    display: none;
+    margin: 10px 0 0 0;
+    padding: 2px 10px;
+    max-width: 94%;
+    white-space: normal;
+    font-size: 11px;
+    letter-spacing: 1px;
+    -unity-text-align: middle-center;
+    color: rgb(79, 174, 120);
+    background-color: rgba(2, 6, 4, 0.8);
+    border-width: 1px;
+    border-radius: 2px;
+    border-color: rgba(63, 143, 93, 0.5);
+    transition-property: background-color;
+    transition-duration: 0.15s;
+}
+
+.mb-lock:hover {
+    background-color: rgba(2, 27, 11, 0.95);
+}
+
+.mb-lock--visible {
+    display: flex;
+}
+
+.mb-lock--agent {
+    color: rgb(255, 196, 64);
+    border-color: rgba(255, 196, 64, 0.6);
+}
+
+.mb-lock--outside {
+    color: rgb(255, 209, 99);
+    border-color: rgba(255, 209, 99, 0.5);
+}
+
+.mb-lock--over {
+    color: rgb(255, 124, 96);
+    border-color: rgba(255, 124, 96, 0.7);
+}
+
 .mb-chips {
     position: absolute;
     left: 0;

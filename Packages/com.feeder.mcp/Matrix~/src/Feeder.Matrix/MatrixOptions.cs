@@ -25,6 +25,12 @@ public sealed class MatrixOptions
     /// <summary>Lists the <c>tool-call</c> proxy tool. Off removes it from the tool list.</summary>
     public bool EnableToolCallProxy { get; set; } = true;
 
+    /// <summary>While a session or a person holds the editor lock, refuse other sessions' editor-changing tools. Off only reports the holder.</summary>
+    public bool EnforceEditorLock { get; set; } = true;
+
+    /// <summary>An agent's editor claim with no tool call for this long is freed.</summary>
+    public TimeSpan EditorLockIdleTimeout { get; set; } = TimeSpan.FromMinutes(10);
+
     public long MaxRequestBodyBytes { get; set; } = 16 * 1024 * 1024;
 
     /// <summary>Require a bearer token on MCP requests and the same token in the Unity FMP handshake.</summary>

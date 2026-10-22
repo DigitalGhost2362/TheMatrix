@@ -12,6 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Feeder.ToolHost;
 using Feeder.ToolHost.Common.Model;
+using Feeder.MCP.Editor.UI;
 using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Utils;
 using Feeder.Fmp;
@@ -329,6 +330,25 @@ namespace Feeder.MCP.Editor.Matrix
         // null until Register answers on the current link, so a reconnect never reuses the old server's answer
         string[]? _serverCapabilities;
 
+        const string EditorLockFeature = "editor-lock";
+
+        /// <summary>Frees the editor lock, whoever holds it. Returns what was freed.</summary>
+        public async Task<string> ReleaseEditorLockAsync()
+        {
+            var connection = RequireEditorLock();
+            return FmpJson.Parse<string?>(await connection.InvokeAsync("ReleaseEditorLock", "[]", _lifetime.Token).ConfigureAwait(false)) ?? "nothing";
+        }
+
+        FmpConnection RequireEditorLock()
+        {
+            var connection = _connection;
+            if (connection?.State != FmpState.Connected || _serverCapabilities == null)
+                throw new InvalidOperationException("Feeder Local Matrix is not connected.");
+            if (!_serverCapabilities.Contains(EditorLockFeature))
+                throw new InvalidOperationException("This Feeder Local Matrix server does not keep the editor lock. Reinstall the server from the Matrix Bridge menu.");
+            return connection;
+        }
+
         public async Task<CompileResponse> CompileAsync(CompileRequest request, CancellationToken cancellationToken)
         {
             var connection = _connection;
@@ -357,6 +377,12 @@ namespace Feeder.MCP.Editor.Matrix
                 PublishMcpClients(FmpJson.First<McpClientInfo[]>(arguments));
                 return Task.CompletedTask;
             });
+            connection.On("EditorLockChanged", arguments =>
+            {
+                if (ReferenceEquals(connection, _connection))
+                    BridgeLock.Publish(FmpJson.First<EditorLockState>(arguments));
+                return Task.CompletedTask;
+            });
             connection.HandlerFailed += (target, error) =>
                 _logger.LogError(error, "Feeder Local Matrix call {target} failed", target);
             connection.StateChanged += state =>
@@ -376,6 +402,7 @@ namespace Feeder.MCP.Editor.Matrix
             {
                 _owner.SetMatrixConnectionState(FmpState.Disconnected);
                 PublishMcpClients(Array.Empty<McpClientInfo>());
+                BridgeLock.Publish(null);
                 if (ReferenceEquals(connection, _connection))
                     ScheduleReconnect();
             };
@@ -451,6 +478,7 @@ namespace Feeder.MCP.Editor.Matrix
                 PendingOperations = _operations.Keys.ToArray(),
                 ProjectRoot = _projectRoot,
                 McpEntryName = Feeder.ToolHost.AgentConfig.AiAgentConfig.DefaultMcpServerName,
+                Features = new[] { EditorLockFeature },
             }), cancellationToken));
 
             if (response.Error != null)
@@ -458,6 +486,8 @@ namespace Feeder.MCP.Editor.Matrix
             if (response.ChosenProtocolVersion != ProtocolVersion)
                 throw new InvalidOperationException($"Unsupported FMP protocol '{response.ChosenProtocolVersion}'.");
             _serverCapabilities = response.Capabilities ?? Array.Empty<string>();
+            if (!_serverCapabilities.Contains(EditorLockFeature))
+                BridgeLock.Publish(null);
             if (!response.RegistryUpToDate)
                 await _connection!.SendAsync("PublishRegistry", FmpJson.Arguments(snapshot), cancellationToken);
         }

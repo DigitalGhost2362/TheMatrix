@@ -147,7 +147,7 @@ namespace Feeder.Fmp.Tests
 
                     // past the grace the editor's tools leave the list and calls fail at once
                     using (JsonDocument list = await mcp.ListToolsAsync())
-                        Assert.Equal(new[] { "editor-health", "tool-call" }, McpHttpClient.ToolNames(list));
+                        Assert.Equal(new[] { "editor-health", "editor-lock-acquire", "editor-lock-release", "editor-lock-status", "tool-call" }, McpHttpClient.ToolNames(list));
                     using (JsonDocument response = await mcp.CallToolAsync("run", "{}").WaitAsync(TimeSpan.FromSeconds(5)))
                         Assert.Contains("No Unity editor is connected", response.RootElement.GetRawText());
                 }

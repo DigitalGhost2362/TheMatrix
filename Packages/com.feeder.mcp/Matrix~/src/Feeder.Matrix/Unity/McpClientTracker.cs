@@ -23,6 +23,9 @@ public sealed class McpClientTracker(
     private readonly ConcurrentDictionary<string, HashSet<string>> _listedTools = new();
     private int _lastBroadcastActiveCount;
 
+    /// <summary>Raised with the session id when an MCP session ends (the client closed it or it timed out).</summary>
+    public event Action<string>? SessionEnded;
+
     /// <summary>Runs one MCP session while keeping the tracker (and Unity) informed of its lifetime.</summary>
     public async Task RunSessionAsync(McpServer server, CancellationToken cancellationToken)
     {
@@ -37,10 +40,23 @@ public sealed class McpClientTracker(
         }
         finally
         {
-            _sessions.TryRemove(new KeyValuePair<string, Entry>(sessionId, entry));
-            _listedTools.TryRemove(sessionId, out _);
-            await BroadcastAsync();
+            await EndAsync(sessionId, entry);
         }
+    }
+
+    internal async Task EndAsync(string sessionId, Entry entry)
+    {
+        _sessions.TryRemove(new KeyValuePair<string, Entry>(sessionId, entry));
+        _listedTools.TryRemove(sessionId, out _);
+        try
+        {
+            SessionEnded?.Invoke(sessionId);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "A SessionEnded handler failed for MCP session {SessionId}", sessionId);
+        }
+        await BroadcastAsync();
     }
 
     internal Entry Register(string sessionId, Func<Implementation?> clientInfo, McpServer? server = null)
@@ -105,6 +121,13 @@ public sealed class McpClientTracker(
             }, lastActivity);
         }).ToArray();
     }
+
+    /// <summary>Name and version the client sent in initialize, or null for an unknown session.</summary>
+    public Implementation? ClientOf(string? sessionId)
+        => sessionId is not null && _sessions.TryGetValue(sessionId, out var entry) ? entry.ClientInfo() : null;
+
+    /// <summary>True while the session is open on the matrix.</summary>
+    public bool IsOpen(string? sessionId) => sessionId is not null && _sessions.ContainsKey(sessionId);
 
     public McpClientInfo[] Snapshot() => Describe().Select(d => d.Info).ToArray();
 

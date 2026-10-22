@@ -161,3 +161,41 @@ Right before a domain reload the editor sends one more heartbeat with `editorSta
 **Waiting for a link.** A call that finds the project's link down waits for it to come back for up to `ReconnectGrace` (default 180 s); time spent with the link down does not count against the call's deadline. A project that never linked, a link down longer than the grace, or an editor process that has exited fails the call at once. Every timeout and lost-link error ends with the matrix's editor health summary.
 
 **Error code.** `FMP_INTERRUPTED`: the operation was cut off by a domain reload before it finished; its code may have run in part.
+
+## 9. Editor lock (additive in v1)
+
+Added 2026-10-22. The matrix keeps one claim on the editor, held by an MCP session (the
+`editor-lock-*` MCP tools). While it is held, the matrix refuses other
+MCP sessions' calls to Unity tools whose `ToolDescriptor.readOnly` is false.
+
+**Capability and feature.** A matrix that keeps the lock lists `"editor-lock"` in
+`UnityRegisterResponse.capabilities`. `UnityRegisterRequest` gains `features` (key 13, string array); an
+editor that lists `"editor-lock"` accepts `EditorLockChanged`. The matrix never sends it to an editor
+that did not list the feature, and an editor never calls the hub methods below on a matrix without the
+capability.
+
+**`EditorLockChanged(EditorLockState)`** (B->U). Sent right after `Register` and whenever the state
+changes (at most every 5 s for the holder's activity and the lock file).
+
+| Field | Key | Type | Notes |
+|---|---|---|---|
+| `held` | 0 | bool | |
+| `kind` | 1 | string | `agent` (an MCP session) or `outside` (a live `Temp/agent-editor-lock/lock.json` written by a session that does not claim through the matrix). |
+| `owner` | 2 | string | Label the holder chose. |
+| `task` | 3 | string | |
+| `clientName` | 4 | string | MCP `clientInfo.name` of the holding session. |
+| `clientVersion` | 5 | string | |
+| `sessionId` | 6 | string | MCP session id; empty unless `kind` is `agent`. |
+| `acquiredUnixMs` | 7 | long | Start of the current claim. |
+| `lastActivityUnixMs` | 8 | long | Last tool call of the holder, or the lock file's heartbeat. |
+| `expiresUnixMs` | 9 | long | When an idle claim is freed; 0 = not while it lasts. |
+| `callsInFlight` | 10 | int | Holder's calls still running. |
+
+**`ReleaseEditorLock() -> string`** (U->B). A person frees whatever holds the editor, including an
+`outside` lock file; returns what was freed. Answers only a registered link.
+
+**Lifetime.** An agent claim ends on `editor-lock-release`, when its MCP session ends, or after
+`EditorLockIdleTimeout` (default 10 minutes) with no call from it and none running, or when a person
+frees it from the editor. The matrix mirrors every claim to
+`Temp/agent-editor-lock/lock.json` (with `"matrix": true`), so sessions using the lock-file protocol see
+it.

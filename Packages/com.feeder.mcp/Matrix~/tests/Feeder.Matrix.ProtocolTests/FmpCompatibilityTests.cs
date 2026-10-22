@@ -57,10 +57,34 @@ public class FmpCompatibilityTests
             HubJson)!;
         Assert.Null(register.ProjectRoot);
         Assert.Null(register.McpEntryName);
+        Assert.Empty(register.Features);
 
         var progress = JsonSerializer.Deserialize<ToolProgress>("""{"operationId":"op","progress":0.5}""", HubJson)!;
         Assert.False(progress.Deferred);
         Assert.Equal(0, progress.ExtendDeadlineMs);
+    }
+
+    [Fact]
+    public void Editor_lock_state_reaches_the_plugin_in_its_json_shape()
+    {
+        var json = JsonSerializer.Serialize(new EditorLockState
+        {
+            Held = true,
+            Kind = "agent",
+            Owner = "claude-catwalk",
+            Task = "catwalk score",
+            ClientName = "claude-code",
+            SessionId = "sid",
+            AcquiredUnixMs = 5,
+            ExpiresUnixMs = 9,
+            CallsInFlight = 1,
+        }, HubJson);
+
+        Assert.Contains("\"owner\":\"claude-catwalk\"", json);
+        Assert.Contains("\"callsInFlight\":1", json);
+        var free = JsonSerializer.Deserialize<EditorLockState>("{}", HubJson)!;
+        Assert.False(free.Held);
+        Assert.Equal(string.Empty, free.Owner);
     }
 
     [Fact]

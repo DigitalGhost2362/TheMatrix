@@ -121,5 +121,7 @@ public class McpClientTrackerTests
             Calls.Add(clients);
             return Task.CompletedTask;
         }
+
+        public Task EditorLockChanged(EditorLockState state) => Task.CompletedTask;
     }
 }

@@ -40,8 +40,8 @@ The zip holds the published `feeder-mcp-server.exe` renamed to `matrix-server.ex
 version. Change that version in `src/Feeder.Matrix/Feeder.Matrix.csproj`, in `src/Feeder.Matrix/Program.cs`
 and in `McpServerManager.ServerVersion` together.
 
-Shipped payload 0.4.0, `matrix-server.exe` SHA-256:
-`b26d08d5be341c81dd9a9e49821774139b7e4022751089ba06439b73b8e9385b`
+Shipped payload 0.5.0, `matrix-server.exe` SHA-256:
+`c199dfb81680a2cb507b601bb44967289d10cdaf1de58cd8feeaa8dcb3ed72cd`
 
 ## Run (matrix-only, mock backend)
 
