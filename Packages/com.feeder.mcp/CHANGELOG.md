@@ -15,6 +15,19 @@ All notable changes to this package are documented here.
 - The Matrix Bridge window shows which agent holds the editor, for what and for how long. Click the
   entry to free a stuck claim. While an agent holds the editor, every Scene view gets a green frame
   tagged with the holder, like the frame around the Game view during an agent play test.
+- **`watch` tool and `matrix-watch` skill** (off by default; turn on in the Skills window) - record a
+  playtest the user plays so an agent can learn the workflow and replay it:
+  - `watch action=start` puts a cyan frame with a STOP button on the Game view. Recording runs in
+    Play mode and ends when the user exits Play mode or presses STOP, whichever comes first;
+  - records key and gamepad presses, UI clicks with object path, label and listeners, world clicks,
+    drags, player position four times a second, scene loads, console errors and warnings, F9 markers
+    and a 640 px frame every 2 s and at each action. Input System projects also get the raw
+    `input.inputtrace`. Projects on the old Input Manager are recorded too;
+  - writes `MatrixWatch/<stamp>-<name>/` at the project root, ignored by Git. It holds `summary.md`
+    (timeline, stuck and fall flags, grounded safe points for teleports), `events.jsonl`, `frames/`
+    and 3x3 contact sheets. `watch action=status` returns the summary;
+  - the skill covers reading the recording, asking what is missing, writing a playbook and replaying
+    it with code shortcuts, UI clicks, walking, and teleports for long distances only.
 
 ### Changed
 

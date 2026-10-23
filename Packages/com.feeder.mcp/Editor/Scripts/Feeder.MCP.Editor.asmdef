@@ -9,7 +9,9 @@
         "Feeder.Json",
         "Feeder.Logging",
         "Feeder.Rx",
-        "Feeder.Fmp"
+        "Feeder.Fmp",
+        "UnityEngine.UI",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [
         "Editor"
@@ -20,6 +22,17 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.ugui",
+            "expression": "1.0.0",
+            "define": "MATRIX_UGUI"
+        },
+        {
+            "name": "com.unity.inputsystem",
+            "expression": "1.0.0",
+            "define": "MATRIX_INPUT_SYSTEM"
+        }
+    ],
     "noEngineReferences": false
 }

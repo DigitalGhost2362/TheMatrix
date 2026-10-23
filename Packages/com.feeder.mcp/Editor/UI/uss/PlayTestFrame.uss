@@ -25,6 +25,34 @@
     border-bottom-right-radius: 4px;
 }
 
+/* Game view while a watch records the user's playtest */
+.ptf-host--watch .ptf-frame {
+    border-color: rgb(0, 229, 255);
+}
+
+.ptf-host--watch .ptf-tag {
+    background-color: rgb(0, 229, 255);
+}
+
+.ptf-stop {
+    position: absolute;
+    top: 0;
+    right: 0;
+    margin: 0;
+    padding: 1px 12px 2px 12px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    -unity-font-style: bold;
+    color: rgb(2, 6, 4);
+    background-color: rgb(0, 229, 255);
+    border-width: 0;
+    border-bottom-left-radius: 4px;
+}
+
+.ptf-stop:hover {
+    background-color: rgb(255, 255, 255);
+}
+
 /* Scene view while the editor lock is held: the whole view, tag at the bottom clear of the top toolbar */
 .ptf-host--lock {
     top: 0;
