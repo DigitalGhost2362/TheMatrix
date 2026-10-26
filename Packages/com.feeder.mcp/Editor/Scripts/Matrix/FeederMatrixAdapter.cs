@@ -349,12 +349,30 @@ namespace Feeder.MCP.Editor.Matrix
             return connection;
         }
 
+        /// <summary>How long a compile waits for a link that is registering before it gives up.</summary>
+        static readonly TimeSpan RegistrationWait = TimeSpan.FromSeconds(10);
+
         public async Task<CompileResponse> CompileAsync(CompileRequest request, CancellationToken cancellationToken)
         {
-            var connection = _connection;
-            var capabilities = _serverCapabilities;
-            if (connection?.State != FmpState.Connected || capabilities == null)
-                throw new InvalidOperationException("Feeder Local Matrix is not connected, so C# cannot be compiled.");
+            // the matrix routes a call the moment Register runs on the hub, which is before its answer lands here,
+            // so a tool that arrives right after a reload or a reconnect must wait for the answer, not fail a live link
+            var deadline = DateTime.UtcNow + RegistrationWait;
+            FmpConnection connection;
+            string[] capabilities;
+            while (true)
+            {
+                var link = _connection;
+                var served = _serverCapabilities;
+                if (link?.State == FmpState.Connected && served != null)
+                {
+                    connection = link;
+                    capabilities = served;
+                    break;
+                }
+                if (_disposed || _lifetime.IsCancellationRequested || DateTime.UtcNow >= deadline)
+                    throw new InvalidOperationException("Feeder Local Matrix is not connected, so C# cannot be compiled.");
+                await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+            }
             if (!capabilities.Contains("compile"))
                 throw new InvalidOperationException("This Feeder Local Matrix server cannot compile C#. Reinstall the server from the Tools > Feeder menu.");
             // callers block on this, so the continuation must not need the main thread
