@@ -4,7 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Feeder.ToolHost;
 using Feeder.ToolHost.Common.Model;
-using Feeder.MCP.Editor.MatrixSpace;
+using Feeder.MCP.Editor.Activity;
+using Feeder.MCP.Editor.Persistence;
 using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Runtime.Utils;
 using Feeder.Fmp;
@@ -23,6 +24,7 @@ namespace Feeder.MCP.Editor.UI
         private static readonly string[] _windowUxmlPaths = EditorAssetLoader.GetEditorAssetPaths("Editor/UI/uxml/MatrixBridge.uxml");
         private static readonly string[] _chipUxmlPaths = EditorAssetLoader.GetEditorAssetPaths("Editor/UI/uxml/BridgeChip.uxml");
         private static readonly string[] _windowUssPaths = EditorAssetLoader.GetEditorAssetPaths("Editor/UI/uss/MatrixBridge.uss");
+        private static PlayerPrefsBool _rainBackground = new("Feeder_MatrixSpace_RainBackground", true);
         private static readonly string[] _phaseClasses =
         {
             "mb-state--offline", "mb-state--linking", "mb-state--online", "mb-state--working", "mb-state--playtest", "mb-state--fault",
@@ -174,7 +176,7 @@ namespace Feeder.MCP.Editor.UI
                 return;
             }
 
-            if (MatrixSpaceSettings.RainBackground.Value)
+            if (_rainBackground.Value)
                 SetupRain(bridgeRoot);
 
             _state.UnregisterCallback<ClickEvent>(OnStateClicked);
@@ -573,7 +575,7 @@ namespace Feeder.MCP.Editor.UI
             foreach (var level in _menuLogLevels)
                 menu.AddItem(new GUIContent("Logging/" + level), MatrixPluginEditor.LogLevel == level, SetLogLevel, level);
             menu.AddItem(new GUIContent("Skills"), false, MenuItems.ShowSkills);
-            menu.AddItem(new GUIContent("Rain"), MatrixSpaceSettings.RainBackground.Value, ToggleRain);
+            menu.AddItem(new GUIContent("Rain"), _rainBackground.Value, ToggleRain);
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent("Open logs"), false, MenuItems.OpenServerLogs);
             menu.AddItem(new GUIContent("Open config file"), false, RevealConfigFile);
@@ -593,7 +595,7 @@ namespace Feeder.MCP.Editor.UI
 
         private void ToggleRain()
         {
-            MatrixSpaceSettings.RainBackground.Value = !MatrixSpaceSettings.RainBackground.Value;
+            _rainBackground.Value = !_rainBackground.Value;
             CreateGUI();
         }
 

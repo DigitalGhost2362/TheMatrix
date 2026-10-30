@@ -7,7 +7,7 @@ using UnityEditor;
 using UnityEngine.UIElements;
 using ILogger = Feeder.Logging.ILogger;
 
-namespace Feeder.MCP.Editor.MatrixSpace
+namespace Feeder.MCP.Editor.Activity
 {
     /// <summary>
     /// A colored frame with a tag laid over an editor window: one retained UI Toolkit element that costs

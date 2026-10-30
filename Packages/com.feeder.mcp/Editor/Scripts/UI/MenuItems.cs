@@ -20,9 +20,6 @@ namespace Feeder.MCP.Editor.UI
         [MenuItem("Tools/Feeder/Bridge", priority = -18)]
         public static void ShowWindow() => MatrixBridgeWindow.ShowWindow();
 
-        [MenuItem("Tools/Feeder/Space (experimental)", priority = -17)]
-        public static void ShowMatrixSpace() => MatrixSpaceWindow.ShowWindow();
-
         [MenuItem("Tools/Feeder/Hyper Testing (Experimental)", priority = -16)]
         public static void ShowHyperTesting() => HyperTesting.HyperTestingWindow.ShowWindow();
 

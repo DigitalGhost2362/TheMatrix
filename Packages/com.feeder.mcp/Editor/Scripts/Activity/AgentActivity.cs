@@ -5,7 +5,7 @@ using Feeder.MCP.Editor.UI;
 using Feeder.Rx;
 using UnityEditor;
 
-namespace Feeder.MCP.Editor.MatrixSpace
+namespace Feeder.MCP.Editor.Activity
 {
     [InitializeOnLoad]
     public static class AgentActivity

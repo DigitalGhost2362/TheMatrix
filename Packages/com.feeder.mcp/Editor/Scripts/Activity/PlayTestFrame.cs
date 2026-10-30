@@ -8,7 +8,7 @@ using UnityEditor;
 using UnityEngine;
 using ILogger = Feeder.Logging.ILogger;
 
-namespace Feeder.MCP.Editor.MatrixSpace
+namespace Feeder.MCP.Editor.Activity
 {
     [InitializeOnLoad]
     internal static class PlayTestFrame

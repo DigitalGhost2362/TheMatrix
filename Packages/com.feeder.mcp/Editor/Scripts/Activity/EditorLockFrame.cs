@@ -4,7 +4,7 @@ using Feeder.MCP.Editor.UI;
 using Feeder.Rx;
 using UnityEditor;
 
-namespace Feeder.MCP.Editor.MatrixSpace
+namespace Feeder.MCP.Editor.Activity
 {
     /// <summary>Green frame around every Scene view while an agent holds the editor lock, tagged with the holder.</summary>
     [InitializeOnLoad]

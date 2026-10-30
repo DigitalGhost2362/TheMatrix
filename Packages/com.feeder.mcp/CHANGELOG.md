@@ -39,6 +39,14 @@ All notable changes to this package are documented here.
   the installer `.unitypackage` are no longer published. Projects on the registry replace the version
   number in `Packages/manifest.json` with the Git URL and remove the `Matrix` scoped registry.
 
+### Removed
+
+- **Matrix Space** (Tools > Feeder > Space): the agent pane window, its task board, swarm board,
+  shared memory and mailbox, usage meters, and the per-agent CLI install and login setup. The Bridge
+  window, its rain toggle and the play test and editor lock frames stay.
+- Matrix Setup no longer installs or verifies the Claude Code CLI. Each agent's MCP config is still
+  written from its chip in the Bridge window.
+
 ## [1.0.1] - 2026-10-21
 
 ### Changed
