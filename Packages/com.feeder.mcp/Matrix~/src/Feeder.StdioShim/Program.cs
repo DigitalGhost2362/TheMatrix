@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Text;
-using System.Text.Json;
 using Feeder.StdioShim;
 
 // Feeder stdio shim: relays newline-delimited JSON-RPC between an stdio-only MCP client and the
@@ -36,7 +35,8 @@ async Task WriteLineToStdoutAsync(string json)
     }
 }
 
-using var relay = new MatrixRelay(url, WriteLineToStdoutAsync, msg => Console.Error.WriteLine($"[feeder-stdio-shim] {msg}"));
+using var relay = new MatrixRelay(url, WriteLineToStdoutAsync, msg => Console.Error.WriteLine($"[feeder-stdio-shim] {msg}"),
+    startMatrix: () => TryStartMatrix(matrixExe));
 
 if (!await relay.WaitForMatrixAsync(TimeSpan.FromMilliseconds(500)))
 {
@@ -50,48 +50,11 @@ if (!await relay.WaitForMatrixAsync(TimeSpan.FromMilliseconds(500)))
 using var stdin = Console.OpenStandardInput();
 using var reader = new StreamReader(stdin, Encoding.UTF8);
 
-while (await reader.ReadLineAsync(shutdown.Token) is { } line)
-{
-    if (string.IsNullOrWhiteSpace(line))
-        continue;
-    try
-    {
-        await relay.ForwardAsync(line, shutdown.Token);
-    }
-    catch (Exception e)
-    {
-        Console.Error.WriteLine($"[feeder-stdio-shim] forward failed: {e.Message}");
-        if (TryGetRequestId(line, out var id))
-        {
-            var message = JsonSerializer.Serialize("Feeder matrix unreachable: " + e.Message);
-            await WriteLineToStdoutAsync(
-                "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"error\":{\"code\":-32603,\"message\":" + message + "}}");
-        }
-    }
-}
+await relay.RunAsync(reader, shutdown.Token);
 
 // stdin closed → client is gone; drop the session and exit.
 shutdown.Cancel();
 return 0;
-
-static bool TryGetRequestId(string json, out string idLiteral)
-{
-    idLiteral = "null";
-    try
-    {
-        using var doc = JsonDocument.Parse(json);
-        if (doc.RootElement.TryGetProperty("id", out var id))
-        {
-            idLiteral = id.GetRawText();
-            return true;
-        }
-        return false; // notification — nothing to answer
-    }
-    catch
-    {
-        return false;
-    }
-}
 
 static bool TryStartMatrix(string? matrixExe)
 {
@@ -103,12 +66,23 @@ static bool TryStartMatrix(string? matrixExe)
     }
     try
     {
-        Process.Start(new ProcessStartInfo(matrixExe)
+        // the matrix outlives this agent: it must not inherit the agent's stdio pipes or log into them
+        var startInfo = new ProcessStartInfo(matrixExe)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = Path.GetDirectoryName(matrixExe)!,
-        });
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        startInfo.Environment["FEEDER_MATRIX_FILE_LOG_ONLY"] = "1";
+        using var process = Process.Start(startInfo);
+        if (process == null)
+            return false;
+        process.StandardInput.Close();
+        process.StandardOutput.Close();
+        process.StandardError.Close();
         Console.Error.WriteLine($"[feeder-stdio-shim] started matrix: {matrixExe}");
         return true;
     }

@@ -47,14 +47,18 @@ namespace Feeder.MCP
 
         public ReadOnlyReactiveProperty<FmpState> ConnectionState => _connectionState;
 
-        public ReadOnlyReactiveProperty<bool> IsConnected => _connectionState
-            .Select(x => x == FmpState.Connected)
-            .ToReadOnlyReactiveProperty(false);
+        readonly ReadOnlyReactiveProperty<bool> _isConnected;
+
+        public ReadOnlyReactiveProperty<bool> IsConnected => _isConnected;
 
         // --- Constructor / Dispose ---
 
         protected MatrixPlugin()
         {
+            _isConnected = _connectionState
+                .Select(x => x == FmpState.Connected)
+                .ToReadOnlyReactiveProperty(false);
+            _disposables.Add(_isConnected);
             _disposables.Add(_connectionState);
         }
 

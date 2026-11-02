@@ -29,7 +29,7 @@ namespace Feeder.MCP.Editor.API
             "when `false`, the save is skipped. The prefab stage's dirtiness is always cleared at the end, so any " +
             "unsaved changes are discarded when `save` is `false`.\n\n" +
             "## Behavior\n\n" +
-            "Throws when no prefab stage is currently open. Returns an `AssetObjectRef` for the closed prefab asset.")]
+            "Throws when no prefab stage is currently open, or when the save fails (the stage then stays open and dirty). Returns an `AssetObjectRef` for the closed prefab asset.")]
         [Description("Close currently opened prefab. " +
             "Use it when you are in prefab editing mode in Unity Editor. " +
             "Use '" + AssetsPrefabOpenToolId + "' tool to open a prefab first.")]
@@ -52,7 +52,11 @@ namespace Feeder.MCP.Editor.API
                 var assetPath = prefabStage.assetPath;
 
                 if (save)
-                    PrefabUtility.SaveAsPrefabAsset(prefabGo, assetPath);
+                {
+                    PrefabUtility.SaveAsPrefabAsset(prefabGo, assetPath, out var saved);
+                    if (!saved)
+                        throw new InvalidOperationException(Error.PrefabSaveFailed(assetPath));
+                }
 
                 prefabStage.ClearDirtiness();
 

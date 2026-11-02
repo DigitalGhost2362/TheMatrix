@@ -32,48 +32,15 @@ public class MainThread
 		RunAsync(action).Wait();
 	}
 
+	// a task already runs wherever it was started; dispatching a blocking wait to the main thread only deadlocks it
 	public virtual Task RunAsync(Task task)
 	{
-		if (IsMainThread)
-		{
-			return task;
-		}
-		TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool>();
-		mainContext.Post(delegate
-		{
-			try
-			{
-				task.Wait();
-				tcs.SetResult(result: true);
-			}
-			catch (Exception exception)
-			{
-				tcs.SetException(exception);
-			}
-		}, null);
-		return tcs.Task;
+		return task;
 	}
 
 	public virtual Task<T> RunAsync<T>(Task<T> task)
 	{
-		if (IsMainThread)
-		{
-			return task;
-		}
-		TaskCompletionSource<T> tcs = new TaskCompletionSource<T>();
-		mainContext.Post(delegate
-		{
-			try
-			{
-				T result = task.Result;
-				tcs.SetResult(result);
-			}
-			catch (Exception exception)
-			{
-				tcs.SetException(exception);
-			}
-		}, null);
-		return tcs.Task;
+		return task;
 	}
 
 	public virtual Task<T> RunAsync<T>(Func<T> func)

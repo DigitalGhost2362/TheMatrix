@@ -26,7 +26,14 @@ public class RunPrompt : MethodWrapper, IRunPrompt, IEnabled
 
 	public MethodInfo Method => _methodInfo;
 
-	protected string? RequestID { get; set; }
+	// one instance serves every call of the tool, so the id must flow with the call, not live on the instance
+	private readonly AsyncLocal<string?> _requestId = new AsyncLocal<string?>();
+
+	protected string? RequestID
+	{
+		get => _requestId.Value;
+		set => _requestId.Value = value;
+	}
 
 	public static RunPrompt CreateFromStaticMethod(Reflector reflector, string name, ILogger? logger, MethodInfo methodInfo, string? title = null, bool? enabled = null)
 	{

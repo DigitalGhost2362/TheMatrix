@@ -207,7 +207,7 @@ namespace Feeder.MCP.Editor.Matrix
                         _logger.LogInformation("Connected Unity editor to Feeder Local Matrix at {url}", MatrixHubUrl);
                         return true;
                     }
-                    catch (Exception e) when (attempt < 39 && !_lifetime.IsCancellationRequested)
+                    catch (Exception e) when (!_lifetime.IsCancellationRequested)
                     {
                         lastError = e;
                         try
@@ -216,24 +216,36 @@ namespace Feeder.MCP.Editor.Matrix
                                 await _connection.StopAsync();
                         }
                         catch { }
-                        await Task.Delay(250, _lifetime.Token);
+                        if (attempt < 39)
+                            await Task.Delay(250, _lifetime.Token);
                     }
                 }
 
-                _logger.LogError(lastError, "Unable to connect Unity editor to Feeder Local Matrix at {url}", MatrixHubUrl);
-                _owner.SetMatrixConnectionState(FmpState.Disconnected);
-                ScheduleReconnect();
-                return false;
+                if (_lifetime.IsCancellationRequested)
+                    throw new OperationCanceledException(_lifetime.Token);
+                return FailConnect(lastError);
             }
             catch (OperationCanceledException)
             {
                 _owner.SetMatrixConnectionState(FmpState.Disconnected);
                 return false;
             }
+            catch (Exception e)
+            {
+                return FailConnect(e);
+            }
             finally
             {
                 _connectionGate.Release();
             }
+        }
+
+        bool FailConnect(Exception? error)
+        {
+            _logger.LogError(error, "Unable to connect Unity editor to Feeder Local Matrix at {url}", MatrixHubUrl);
+            _owner.SetMatrixConnectionState(FmpState.Disconnected);
+            ScheduleReconnect();
+            return false;
         }
 
         static readonly TimeSpan[] ReconnectBackoff =
@@ -254,6 +266,14 @@ namespace Feeder.MCP.Editor.Matrix
         {
             if (_disposed || _lifetime.IsCancellationRequested)
                 return;
+            // FMP raises Closed and StateChanged on a pool thread, and the checks below read EditorPrefs
+            if (!Feeder.Reflect.Utils.MainThread.Instance.IsMainThread)
+            {
+                Feeder.Reflect.Utils.MainThread.Instance.RunAsync(ScheduleReconnect).ContinueWith(
+                    task => _logger.LogError(task.Exception, "Failed to schedule a reconnect to Feeder Local Matrix"),
+                    TaskContinuationOptions.OnlyOnFaulted);
+                return;
+            }
             if (!MatrixPluginEditor.KeepConnected || !MatrixActivation.IsEnabled)
                 return;
             if (McpServerManager.ServerFault.CurrentValue != null)

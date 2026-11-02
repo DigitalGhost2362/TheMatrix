@@ -21,7 +21,8 @@ namespace Feeder.MCP.Runtime.Extensions
             if (!StringUtils.IsNullOrEmpty(componentRef.TypeName))
             {
                 var type = component?.GetType() ?? typeof(UnityEngine.Component);
-                return type.IsMatch(componentRef.TypeName);
+                // the ComponentRef(Component) constructor stores the short name
+                return type.IsMatch(componentRef.TypeName) || type.GetTypeShortName() == componentRef.TypeName;
             }
             if (componentRef.InstanceID == UnityEngine.EntityId.None && component == null)
             {

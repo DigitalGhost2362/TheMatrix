@@ -79,6 +79,7 @@ namespace Feeder.MCP.Editor.API
                 ScriptUtils.SchedulePostCompilationNotification(requestId, string.Join(",", files), "Script deletion");
 
                 AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+                ScriptUtils.CompletePostCompilationNotificationIfIdle(requestId);
             });
 
             var scriptWord = files.Length > 1 ? "Scripts" : "Script";

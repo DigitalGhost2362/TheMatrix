@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Text;
-using System.Text.Json;
 using Feeder.StdioShim;
 
 namespace Feeder.Matrix;
@@ -47,7 +46,8 @@ public static class StdioMode
             url,
             WriteLineToStdoutAsync,
             message => Console.Error.WriteLine($"[feeder-mcp-server] {message}"),
-            requireAuth ? token : null);
+            requireAuth ? token : null,
+            () => TryStartMatrix(port, requireAuth, token));
 
         if (!await relay.WaitForMatrixAsync(TimeSpan.FromMilliseconds(500)))
         {
@@ -61,26 +61,7 @@ public static class StdioMode
 
         using var stdin = Console.OpenStandardInput();
         using var reader = new StreamReader(stdin, Encoding.UTF8);
-        while (await reader.ReadLineAsync() is { } line)
-        {
-            if (string.IsNullOrWhiteSpace(line))
-                continue;
-
-            try
-            {
-                await relay.ForwardAsync(line, CancellationToken.None);
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine($"[feeder-mcp-server] forward failed: {e.Message}");
-                if (TryGetRequestId(line, out var id))
-                {
-                    var message = JsonSerializer.Serialize("Feeder matrix unreachable: " + e.Message);
-                    await WriteLineToStdoutAsync(
-                        "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"error\":{\"code\":-32603,\"message\":" + message + "}}");
-                }
-            }
-        }
+        await relay.RunAsync(reader, CancellationToken.None);
 
         return 0;
     }
@@ -93,17 +74,27 @@ public static class StdioMode
 
         try
         {
+            // the matrix outlives this agent: it must not inherit the agent's stdio pipes or log into them
             var startInfo = new ProcessStartInfo(executable)
             {
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 WorkingDirectory = AppContext.BaseDirectory,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
             };
+            startInfo.Environment["FEEDER_MATRIX_FILE_LOG_ONLY"] = "1";
             startInfo.ArgumentList.Add($"--FeederMatrix:Port={port}");
             startInfo.ArgumentList.Add($"--FeederMatrix:RequireAuth={requireAuth}");
             if (!string.IsNullOrEmpty(token))
                 startInfo.ArgumentList.Add($"--FeederMatrix:Token={token}");
-            Process.Start(startInfo);
+            using var process = Process.Start(startInfo);
+            if (process == null)
+                return false;
+            process.StandardInput.Close();
+            process.StandardOutput.Close();
+            process.StandardError.Close();
             return true;
         }
         catch (Exception e)
@@ -133,21 +124,4 @@ public static class StdioMode
 
     private static bool ReadBool(string[] args, string key)
         => bool.TryParse(ReadValue(args, key), out var value) && value;
-
-    private static bool TryGetRequestId(string json, out string idLiteral)
-    {
-        idLiteral = "null";
-        try
-        {
-            using var document = JsonDocument.Parse(json);
-            if (!document.RootElement.TryGetProperty("id", out var id))
-                return false;
-            idLiteral = id.GetRawText();
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
 }

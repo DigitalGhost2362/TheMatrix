@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using Feeder.Json;
 using Feeder.Json.Nodes;
 using Feeder.Json.Serialization;
@@ -413,7 +414,8 @@ public class Reflector
 		}
 		inputParameters?.EnhanceNames(method);
 		inputParameters?.EnhanceTypes(method);
-		Func<string> func = delegate
+		string error = null;
+		Func<Task<object>> invoke = delegate
 		{
 			Dictionary<string, object> dictionary = inputParameters?.ToDictionary((SerializedMember p) => p.name, (SerializedMember p) => reflector.Deserialize(p, null, null, 0, null, logger));
 			MethodWrapper methodWrapper = null;
@@ -426,7 +428,8 @@ public class Reflector
 				object obj = reflector.Deserialize(targetObject, method.DeclaringType, null, 0, null, logger);
 				if (obj == null)
 				{
-					return "[Error] 'targetObject' deserialized instance is null. Please specify the 'targetObject' properly.";
+					error = "[Error] 'targetObject' deserialized instance is null. Please specify the 'targetObject' properly.";
+					return null;
 				}
 				methodWrapper = new MethodWrapper(reflector, logger, obj, method);
 			}
@@ -436,16 +439,19 @@ public class Reflector
 			}
 			if (!methodWrapper.VerifyParameters(dictionary, out string error2))
 			{
-				return "[Error] " + error2;
+				error = "[Error] " + error2;
+				return null;
 			}
-			object result = ((dictionary != null) ? methodWrapper.InvokeDict(dictionary) : methodWrapper.Invoke()).Result;
-			return "[Success] Execution result:\n```json\n" + result.ToJson(reflector, null, 0, logger) + "\n```";
+			return (dictionary != null) ? methodWrapper.InvokeDict(dictionary) : methodWrapper.Invoke();
 		};
-		if (executeInMainThread)
+		Task<object> task = executeInMainThread ? MainThread.Instance.Run(invoke) : invoke();
+		if (task == null)
 		{
-			return MainThread.Instance.Run(func);
+			return error;
 		}
-		return func();
+		object result = MainThread.Instance.Run(task);
+		Func<string> format = () => "[Success] Execution result:\n```json\n" + result.ToJson(reflector, null, 0, logger) + "\n```";
+		return executeInMainThread ? MainThread.Instance.Run(format) : format();
 	}
 
 	public Reflector()

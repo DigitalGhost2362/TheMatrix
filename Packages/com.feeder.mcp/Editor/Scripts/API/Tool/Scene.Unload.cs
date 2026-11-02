@@ -10,6 +10,7 @@ using Feeder.MCP.Runtime.Utils;
 using Feeder.MCP.Utils;
 using Feeder.Logging;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -21,8 +22,8 @@ namespace Feeder.MCP.Editor.API
             SceneUnloadToolId,
             Title = "Scene / Unload"
         )]
-        [AiSkillDescription("Unload an opened scene from the Unity Editor (asynchronously via " +
-            "`SceneManager.UnloadSceneAsync`). Unsaved changes in that scene are lost — save with '" +
+        [AiSkillDescription("Unload an opened scene from the Unity Editor (`EditorSceneManager.CloseScene` in edit mode, " +
+            "`SceneManager.UnloadSceneAsync` in play mode). Unsaved changes in that scene are lost — save with '" +
             SceneSaveToolId + "' first if needed. Use '" + Tool_Rql.QueryToolId + "' to find the scene name first.")]
         [AiSkillBody("Unload scene from the Opened scenes in Unity Editor. " +
             "Use '" + Tool_Rql.QueryToolId + "' tool to get the list of all opened scenes.\n\n" +
@@ -32,7 +33,8 @@ namespace Feeder.MCP.Editor.API
             "## Inputs\n\n" +
             "- `name` — required non-empty scene name. Must match an opened scene; otherwise throws.\n\n" +
             "## Behavior\n\n" +
-            "Runs `SceneManager.UnloadSceneAsync` on the main thread and awaits completion. Returns an " +
+            "In edit mode closes the scene with `EditorSceneManager.CloseScene(scene, removeScene: true)`; in play mode runs " +
+            "`SceneManager.UnloadSceneAsync` and awaits completion. Throws when it is the only open scene. Returns an " +
             "`UnloadSceneResult` containing the scene name and an `AssetObjectRef` to its asset (or `null` if the " +
             "scene was not backed by an asset on disk).")]
         [Description("Unload scene from the Opened scenes in Unity Editor. " +
@@ -59,10 +61,21 @@ namespace Feeder.MCP.Editor.API
                 var scenePath = scene.path;
                 logger.LogInformation("Unloading scene '{Name}' at path '{Path}'", name, scenePath);
 
-                var asyncOperation = UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(scene);
+                if (UnityEngine.Application.isPlaying)
+                {
+                    var asyncOperation = UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(scene)
+                        ?? throw new InvalidOperationException($"Scene '{name}' cannot be unloaded: it is the only loaded scene.");
 
-                while (!asyncOperation.isDone)
-                    await Task.Yield();
+                    while (!asyncOperation.isDone)
+                        await Task.Yield();
+                }
+                else
+                {
+                    if (EditorSceneManager.sceneCount <= 1)
+                        throw new InvalidOperationException($"Scene '{name}' cannot be closed: it is the only open scene.");
+                    if (!EditorSceneManager.CloseScene(scene, removeScene: true))
+                        throw new InvalidOperationException($"Closing scene '{name}' failed. Check the Console for the reason.");
+                }
 
                 logger.LogInformation("Successfully unloaded scene '{Name}'", name);
 

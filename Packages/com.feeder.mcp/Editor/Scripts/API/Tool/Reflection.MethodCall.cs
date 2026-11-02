@@ -3,6 +3,7 @@ using System;
 using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using Feeder.ToolHost;
 using Feeder.Reflect;
 using Feeder.Reflect.Model;
@@ -142,7 +143,7 @@ namespace Feeder.MCP.Editor.API
             // if (!inputParameters.IsMatch(method, out var matchError))
             //     return $"[Error] {matchError}";
 
-            Func<SerializedMember> action = () =>
+            Func<Task<object?>> invoke = () =>
             {
                 var reflector = MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
 
@@ -175,14 +176,19 @@ namespace Feeder.MCP.Editor.API
                 if (!methodWrapper.VerifyParameters(dictInputParameters, out var error))
                     throw new Exception(error);
 
-                var task = dictInputParameters != null
+                return dictInputParameters != null
                     ? methodWrapper.InvokeDict(dictInputParameters)
                     : methodWrapper.Invoke();
+            };
 
-                var result = task.Result;
-                if (result is SerializedMember serializedResult)
-                    return serializedResult;
+            var task = executeInMainThread ? MainThread.Instance.Run(invoke) : invoke();
+            var result = MainThread.Instance.Run(task);
+            if (result is SerializedMember serializedResult)
+                return serializedResult;
 
+            Func<SerializedMember> serialize = () =>
+            {
+                var reflector = MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.");
                 return reflector.Serialize(
                     obj: result,
                     fallbackType: method.ReturnType,
@@ -190,10 +196,7 @@ namespace Feeder.MCP.Editor.API
                 );
             };
 
-            if (executeInMainThread)
-                return MainThread.Instance.Run(action);
-
-            return action();
+            return executeInMainThread ? MainThread.Instance.Run(serialize) : serialize();
         }
 
         static string SerializeForGuard(SerializedMemberList? parameters)

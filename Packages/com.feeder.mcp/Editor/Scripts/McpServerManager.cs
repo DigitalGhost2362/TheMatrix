@@ -171,8 +171,9 @@ namespace Feeder.MCP.Editor
                     if (EnvironmentUtils.IsCi())
                         return; // Skip auto-start in CI environment
 
-                    EditorApplication.update += StartServerIfNeeded;
-                });
+                    // this continuation runs on a pool thread, and subscribing to update is not thread-safe
+                    MainThread.Instance.RunAsync(() => { EditorApplication.update += StartServerIfNeeded; });
+                }, TaskScheduler.Default);
         }
 
         #region Binary Metadata
@@ -183,7 +184,7 @@ namespace Feeder.MCP.Editor
         /// the two to decide whether the cached binary in <c>Library/feeder-matrix</c> is current. Bumping
         /// the server means replacing the whole <c>Server~/&lt;rid&gt;</c> payload AND this constant together.
         /// </summary>
-        public const string ServerVersion = "0.5.0";
+        public const string ServerVersion = "0.5.1";
 
         public const string ExecutableName = ServerOwnership.ExeName;
         public const string BundledServerArchiveName = "server-payload.zip";
@@ -1393,12 +1394,9 @@ namespace Feeder.MCP.Editor
                     var portSuffix = $":{port}";
                     foreach (var line in output.Split('\n'))
                     {
-                        var trimmed = line.Trim();
-                        if (!trimmed.Contains("LISTENING"))
-                            continue;
-
-                        var parts = trimmed.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-                        if (parts.Length < 5)
+                        // the state column is localized ("ABHÖREN", "ÉCOUTE"); only a listening socket has no foreign port
+                        var parts = line.Trim().Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length < 5 || !parts[2].EndsWith(":0"))
                             continue;
 
                         var localAddress = parts[1];

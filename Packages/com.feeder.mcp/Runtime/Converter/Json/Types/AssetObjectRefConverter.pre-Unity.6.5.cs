@@ -29,13 +29,13 @@ namespace Feeder.MCP.JsonConverters
 
                 if (reader.TokenType == JsonTokenType.PropertyName)
                 {
-                    var propertyName = reader.GetString();
+                    var propertyName = ObjectRefConverter.CanonicalPropertyName(reader.GetString());
                     reader.Read(); // Move to the value token
 
                     switch (propertyName)
                     {
                         case ObjectRef.ObjectRefProperty.InstanceID:
-                            assetObjectRef.InstanceID = reader.GetInt32();
+                            assetObjectRef.InstanceID = ObjectRefConverter.ReadInstanceId(ref reader);
                             break;
                         case AssetObjectRef.AssetObjectRefProperty.AssetType:
                             assetObjectRef.AssetType = TypeUtils.GetType(reader.GetString());

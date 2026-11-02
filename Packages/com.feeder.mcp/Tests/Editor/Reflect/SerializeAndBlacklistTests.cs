@@ -146,5 +146,19 @@ namespace Feeder.MCP.Editor.Tests.Reflect
             Assert.AreEqual("Reference", back.typeName);
             Assert.AreEqual("#/second", back.valueJsonElement!.Value.GetProperty("$ref").GetString());
         }
+
+        [Test]
+        public void Deserialize_BackReference_ResolvesToTheSameInstance()
+        {
+            var root = new Link { tag = "root" };
+            var child = new Link { tag = "child", first = root };
+            root.second = child;
+
+            var copy = (Link?)_reflector.Deserialize(_reflector.Serialize(root), typeof(Link));
+
+            Assert.IsNotNull(copy);
+            Assert.AreEqual("child", copy!.second?.tag);
+            Assert.AreSame(copy, copy.second!.first);
+        }
     }
 }

@@ -16,12 +16,6 @@ namespace Feeder.MCP.Runtime.Utils
     {
         public override bool IsMainThread => MainThreadDispatcher.IsMainThread;
 
-        public override Task RunAsync(Task task)
-            => MainThreadDispatcher.IsMainThread ? task : Dispatch(() => { task.Wait(); return true; });
-
-        public override Task<T> RunAsync<T>(Task<T> task)
-            => MainThreadDispatcher.IsMainThread ? task : Dispatch(() => task.Result);
-
         public override Task<T> RunAsync<T>(Func<T> func)
             => MainThreadDispatcher.IsMainThread ? Task.FromResult(func()) : Dispatch(func);
 

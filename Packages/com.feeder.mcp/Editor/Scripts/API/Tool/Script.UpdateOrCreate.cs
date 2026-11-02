@@ -35,7 +35,9 @@ namespace Feeder.MCP.Editor.API
             "- `requestId` — required for the processing/delivered-later contract.\n\n" +
             "## Behavior\n\n" +
             "Creates any missing parent directories, writes the file, then calls `AssetDatabase.Refresh` and schedules " +
-            "a post-compilation notification so the final response is delivered after Unity finishes the recompile.")]
+            "a post-compilation notification so the final response is delivered after Unity finishes the recompile. " +
+            "Content identical to the file on disk is not written and answers `Success` at once; a refresh that starts " +
+            "no compilation (file outside any assembly) delivers the result right after the refresh.")]
         [Description("Updates or creates script file with the provided C# code. " +
             "Does AssetDatabase.Refresh() at the end. " +
             "Provides compilation error details if the code has syntax errors. " +
@@ -67,6 +69,8 @@ namespace Feeder.MCP.Editor.API
                 Directory.CreateDirectory(dirPath);
 
             var exists = File.Exists(filePath);
+            if (exists && File.ReadAllText(filePath) == content)
+                return ResponseCallTool.Success($"[Success] Script unchanged: {filePath}. Nothing to compile.").SetRequestID(requestId);
 
             File.WriteAllText(filePath, content);
 
@@ -82,6 +86,7 @@ namespace Feeder.MCP.Editor.API
                 ScriptUtils.SchedulePostCompilationNotification(requestId, filePath, $"{scriptWord}");
 
                 AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+                ScriptUtils.CompletePostCompilationNotificationIfIdle(requestId);
             });
 
             return ResponseCallTool.Processing($"{scriptWord}. Refreshing AssetDatabase and waiting for compilation to complete...").SetRequestID(requestId);

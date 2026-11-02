@@ -40,7 +40,12 @@ namespace Feeder.MCP.Editor.API.TestRunner
             _ => "Unknown"
         };
 
-        public static PlayerPrefsString TestCallRequestID = new PlayerPrefsString("Feeder_MCP_TestRunner_TestCallRequestID");
+        // session scoped: a request id must not outlive the editor session that can still answer it
+        public static string TestCallRequestID
+        {
+            get => UnityEditor.SessionState.GetString("Feeder_MCP_TestRunner_TestCallRequestID", string.Empty);
+            set => UnityEditor.SessionState.SetString("Feeder_MCP_TestRunner_TestCallRequestID", value);
+        }
 
         public static PlayerPrefsBool IncludePassingTests = new PlayerPrefsBool("Feeder_MCP_TestRunner_IncludePassingTests");
         public static PlayerPrefsBool IncludeMessage = new PlayerPrefsBool("Feeder_MCP_TestRunner_IncludeMessage", true);
@@ -116,8 +121,8 @@ namespace Feeder.MCP.Editor.API.TestRunner
             if (!EnvironmentUtils.IsCi())
                 MatrixPluginEditor.ConnectIfNeeded();
 
-            var requestId = TestCallRequestID.Value;
-            TestCallRequestID.Value = string.Empty;
+            var requestId = TestCallRequestID;
+            TestCallRequestID = string.Empty;
             if (string.IsNullOrEmpty(requestId) == false)
             {
                 var structuredResponse = CreateStructuredResponse(

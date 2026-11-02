@@ -201,8 +201,11 @@ namespace Feeder.MCP.Editor.Query
                     continue;
                 if (stage != null && scene == stage.scene)
                 {
-                    PrefabUtility.SaveAsPrefabAsset(stage.prefabContentsRoot, stage.assetPath);
-                    saved.Add(stage.assetPath);
+                    PrefabUtility.SaveAsPrefabAsset(stage.prefabContentsRoot, stage.assetPath, out var prefabSaved);
+                    if (prefabSaved)
+                        saved.Add(stage.assetPath);
+                    else
+                        ctx.Warn($"saving prefab '{stage.assetPath}' failed");
                     continue;
                 }
                 if (Application.isPlaying)

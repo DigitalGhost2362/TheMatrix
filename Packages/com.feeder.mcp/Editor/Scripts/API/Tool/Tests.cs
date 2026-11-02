@@ -111,13 +111,13 @@ namespace Feeder.MCP.Editor.API
             // Compilation finished (or was never happening), unsubscribe
             EditorApplication.update -= ResumePendingTestRunOnce;
 
-            var requestId = TestResultCollector.TestCallRequestID.Value;
+            var requestId = TestResultCollector.TestCallRequestID;
 
             // Check for compilation failure
             if (EditorUtility.scriptCompilationFailed)
             {
                 ClearPendingTestRun();
-                TestResultCollector.TestCallRequestID.Value = string.Empty;
+                TestResultCollector.TestCallRequestID = string.Empty;
 
                 var errorDetails = ScriptUtils.GetCompilationErrorDetails();
                 var response = ResponseCallValueTool<TestRunResponse>

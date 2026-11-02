@@ -25,6 +25,9 @@ namespace Feeder.MCP.Editor.API
 
             public static string PrefabStageIsAlreadyOpened()
                 => "Prefab stage is already opened. Use 'assets-prefab-close' to close it.";
+
+            public static string PrefabSaveFailed(string path)
+                => $"Saving prefab '{path}' failed (missing script, read-only or locked file?). See the Console for the reason; the prefab stage keeps its unsaved changes.";
         }
     }
 }

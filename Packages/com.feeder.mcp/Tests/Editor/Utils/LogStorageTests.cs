@@ -251,5 +251,46 @@ namespace Feeder.MCP.Editor.Tests.Utils
 
             public void Dispose() => Disposed = true;
         }
+
+        sealed class ReentrantLogger : Feeder.Logging.ILogger
+        {
+            public BufferedFileLogStorage? Target;
+            public bool Overflowed;
+            int _depth;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                if (Target == null)
+                    return;
+                if (_depth > 20)
+                {
+                    Overflowed = true;
+                    return;
+                }
+                _depth++;
+                try { Target.Append(Entry("from-logger")); }
+                finally { _depth--; }
+            }
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        }
+
+        [Test]
+        public void StorageLogs_ReenteringAppend_DoNotRecurseOrDuplicate()
+        {
+            var logger = new ReentrantLogger();
+            var storage = new BufferedFileLogStorage(logger, 1, _directory, FileName);
+            _owned.Add(storage);
+            logger.Target = storage;
+
+            storage.Clear();
+            storage.Append(Entry("after-clear"));
+            storage.Append(Entry("next"));
+
+            Assert.IsFalse(logger.Overflowed);
+            CollectionAssert.AreEqual(new[] { "after-clear", "next" }, Messages(storage.Query()).Where(m => m != "from-logger").ToArray());
+        }
     }
 }

@@ -30,17 +30,30 @@ namespace Feeder.MCP.Editor.Utils
             // Process any pending notifications after domain reload (successful compilation)
             ScheduleProcessPendingNotifications();
 
-            // Also listen for compilation event to handle both success and failure cases
+            CompilationPipeline.compilationStarted += OnCompilationStarted;
             CompilationPipeline.assemblyCompilationFinished += OnAssemblyCompilationFinished;
+            CompilationPipeline.compilationFinished += OnCompilationFinished;
+        }
+
+        // a successful compile is answered after the domain reload; this is the fallback when no reload follows
+        private const double NoReloadGraceSeconds = 2;
+        private static double _compilationFinishedAt;
+
+        private static void OnCompilationStarted(object context)
+        {
+            lock (_compilationMessagesLock)
+                _lastCompilationMessages.Clear();
         }
 
         private static void OnAssemblyCompilationFinished(string assemblyPath, CompilerMessage[] messages)
         {
             lock (_compilationMessagesLock)
-            {
-                _lastCompilationMessages.Clear();
                 _lastCompilationMessages.AddRange(messages);
-            }
+        }
+
+        private static void OnCompilationFinished(object context)
+        {
+            _compilationFinishedAt = EditorApplication.timeSinceStartup;
             ScheduleProcessPendingNotifications();
         }
 
@@ -55,7 +68,14 @@ namespace Feeder.MCP.Editor.Utils
 
         private static void ProcessPendingNotificationsOnce()
         {
+            if (EditorApplication.isCompiling)
+                return;
+            if (_compilationFinishedAt > 0 && !HasCompilationErrors() &&
+                EditorApplication.timeSinceStartup - _compilationFinishedAt < NoReloadGraceSeconds)
+                return;
+
             EditorApplication.update -= ProcessPendingNotificationsOnce;
+            _compilationFinishedAt = 0;
 
             if (!_processPendingScheduled)
                 return;
@@ -156,29 +176,8 @@ namespace Feeder.MCP.Editor.Utils
                     continue;
                 }
 
-                var requestId = parts[0];
-                var filePath = parts[1];
-                var operationType = parts[2];
-
-                ResponseCallTool response;
-                if (HasCompilationErrors())
-                {
-                    var errorDetails = GetCompilationErrorDetails();
-                    var message = $"[Warning] {operationType} completed: {filePath}, but compilation errors occurred. Details:\n{errorDetails}";
-                    response = ResponseCallTool.Success(message).SetRequestID(requestId);
-                }
-                else
-                {
-                    var message = $"[Success] {operationType} completed: {filePath}";
-                    response = ResponseCallTool.Success(message).SetRequestID(requestId);
-                }
-
                 // Send notification and mark for cleanup
-                _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
-                {
-                    RequestId = requestId,
-                    Result = response
-                });
+                NotifyCompleted(parts[0], parts[1], parts[2]);
                 processedKeys.Add(key);
             }
 
@@ -199,10 +198,55 @@ namespace Feeder.MCP.Editor.Utils
         }
 
         /// <summary>
+        /// Answers a scheduled notification right away when the refresh that followed it started no compilation
+        /// (unchanged content, a file outside any assembly), so the caller is not left waiting for a compile that never comes.
+        /// </summary>
+        public static void CompletePostCompilationNotificationIfIdle(string requestId)
+        {
+            if (EditorApplication.isCompiling)
+                return;
+
+            var notificationKey = $"Feeder_MCP_PendingNotification_{requestId}";
+            var parts = SessionState.GetString(notificationKey, string.Empty).Split(NotificationDataSeparator);
+            SessionState.EraseString(notificationKey);
+
+            var remainingKeys = SessionState.GetString(PendingNotificationKeysKey, string.Empty)
+                .Split(',')
+                .Where(k => !string.IsNullOrEmpty(k) && k != notificationKey)
+                .ToList();
+            if (remainingKeys.Count > 0)
+                SessionState.SetString(PendingNotificationKeysKey, string.Join(",", remainingKeys));
+            else
+                SessionState.EraseString(PendingNotificationKeysKey);
+
+            if (parts.Length == 3)
+                NotifyCompleted(parts[0], parts[1], parts[2]);
+        }
+
+        private static void NotifyCompleted(string requestId, string filePath, string operationType)
+        {
+            var message = HasCompilationErrors()
+                ? $"[Warning] {operationType} completed: {filePath}, but compilation errors occurred. Details:\n{GetCompilationErrorDetails()}"
+                : $"[Success] {operationType} completed: {filePath}";
+
+            _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
+            {
+                RequestId = requestId,
+                Result = ResponseCallTool.Success(message).SetRequestID(requestId)
+            });
+        }
+
+        /// <summary>
         /// Checks if there are any compilation errors by examining Unity's console and compilation pipeline.
         /// </summary>
         /// <returns>True if compilation errors exist</returns>
-        public static bool HasCompilationErrors() => EditorUtility.scriptCompilationFailed;
+        public static bool HasCompilationErrors()
+        {
+            if (EditorUtility.scriptCompilationFailed)
+                return true;
+            lock (_compilationMessagesLock)
+                return _lastCompilationMessages.Any(m => m.type == CompilerMessageType.Error);
+        }
 
         /// <summary>
         /// Retrieves detailed compilation error messages from the last compilation.

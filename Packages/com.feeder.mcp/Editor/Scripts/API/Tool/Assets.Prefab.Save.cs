@@ -27,7 +27,7 @@ namespace Feeder.MCP.Editor.API
             "## Behavior\n\n" +
             "Calls `PrefabUtility.SaveAsPrefabAsset` on the current prefab stage's contents root, clears the stage's " +
             "dirtiness flag, repaints editor windows, and returns an `AssetObjectRef` to the saved prefab. " +
-            "Throws when no prefab stage is currently open.")]
+            "Throws when no prefab stage is currently open, or when the save fails (the stage then stays dirty).")]
         [Description("Save a prefab. " +
             "Use it when you are in prefab editing mode in Unity Editor. " +
             "Use '" + AssetsPrefabOpenToolId + "' tool to open a prefab first.")]
@@ -44,7 +44,9 @@ namespace Feeder.MCP.Editor.API
             var assetPath = prefabStage.assetPath;
             var goName = prefabGo.name;
 
-            PrefabUtility.SaveAsPrefabAsset(prefabGo, assetPath);
+            PrefabUtility.SaveAsPrefabAsset(prefabGo, assetPath, out var saved);
+            if (!saved)
+                throw new InvalidOperationException(Error.PrefabSaveFailed(assetPath));
             prefabStage.ClearDirtiness();
 
             EditorUtils.RepaintAllEditorWindows();

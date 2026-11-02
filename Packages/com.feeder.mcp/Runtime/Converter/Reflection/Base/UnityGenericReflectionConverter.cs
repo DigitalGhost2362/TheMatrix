@@ -59,7 +59,8 @@ namespace Feeder.MCP.Reflection.Converter
                 fallbackName: fallbackName,
                 depth: depth,
                 logs: logs,
-                logger: logger);
+                logger: logger,
+                context: context);
         }
 
         protected override bool SetValue(

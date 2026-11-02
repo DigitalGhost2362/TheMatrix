@@ -53,7 +53,7 @@ namespace Feeder.MCP.Editor.Vfx
                 VfxSpec.Apply(root, spec, replace, result);
                 outcome.Log.AddRange(result.Log);
                 outcome.Errors.AddRange(result.Errors);
-                PrefabUtility.SaveAsPrefabAsset(root, path);
+                SavePrefab(root, path);
                 var after = VfxSpec.Read(root, new List<string>());
                 outcome.Version = VfxHistory.Snapshot(path, after, string.IsNullOrEmpty(note) ? (isNew ? "created" : "apply") : note!);
             }
@@ -134,20 +134,35 @@ namespace Feeder.MCP.Editor.Vfx
 
         static void CreateEmptyPrefab(string path)
         {
-            var dir = Path.GetDirectoryName(path)!.Replace('\\', '/');
-            Directory.CreateDirectory(dir);
-            AssetDatabase.Refresh();
+            CreateFolders(Path.GetDirectoryName(path)!.Replace('\\', '/'));
             var go = new GameObject(Path.GetFileNameWithoutExtension(path));
             try
             {
                 var ps = go.AddComponent<ParticleSystem>();
                 VfxSpec.ConfigureRoot(ps);
-                PrefabUtility.SaveAsPrefabAsset(go, path);
+                SavePrefab(go, path);
             }
             finally
             {
                 Object.DestroyImmediate(go);
             }
+        }
+
+        static void CreateFolders(string dir)
+        {
+            if (AssetDatabase.IsValidFolder(dir)) return;
+            var cut = dir.LastIndexOf('/');
+            if (cut <= 0) throw new ArgumentException($"cannot create folder '{dir}'");
+            var parent = dir.Substring(0, cut);
+            CreateFolders(parent);
+            if (string.IsNullOrEmpty(AssetDatabase.CreateFolder(parent, dir.Substring(cut + 1))))
+                throw new InvalidOperationException($"creating folder '{dir}' failed");
+        }
+
+        static void SavePrefab(GameObject root, string path)
+        {
+            PrefabUtility.SaveAsPrefabAsset(root, path, out var saved);
+            if (!saved) throw new InvalidOperationException($"saving prefab '{path}' failed (read-only or locked file?), see the Console");
         }
 
         #endregion

@@ -275,6 +275,10 @@ public abstract class BaseReflectionConverter<T> : IReflectionConverter
 			if (data.fields.Count > 0 && result == null)
 			{
 				result = CreateInstance(reflector, type);
+				if (result != null)
+				{
+					context?.Register(result);
+				}
 			}
 			if (logger != null && logger.IsEnabled(LogLevel.Trace))
 			{
@@ -312,6 +316,10 @@ public abstract class BaseReflectionConverter<T> : IReflectionConverter
 			if (data.props.Count > 0 && result == null)
 			{
 				result = CreateInstance(reflector, type);
+				if (result != null)
+				{
+					context?.Register(result);
+				}
 			}
 			if (logger != null && logger.IsEnabled(LogLevel.Trace))
 			{

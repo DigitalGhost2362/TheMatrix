@@ -128,12 +128,20 @@ namespace Feeder.MCP.Editor.API
             {
                 var reached = settled && EditorApplication.isPlaying == entry.IsPlaying &&
                               EditorApplication.isPlayingOrWillChangePlaymode == entry.IsPlaying;
+                // the request is made with isPlayingOrWillChangePlaymode already true, so seeing it false
+                // while not playing means Unity refused to enter (compile errors, a modal dialog)
+                var refused = settled && entry.IsPlaying && !EditorApplication.isPlaying &&
+                              !EditorApplication.isPlayingOrWillChangePlaymode;
                 var expired = new TimeSpan(now - entry.StartedTicks) > GiveUpAfter;
-                if (!reached && !expired)
+                if (!reached && !refused && !expired)
                     return true;
                 var response = reached
                     ? Result(entry.RequestId)
-                    : ResponseCallTool.Error($"Play mode did not become {(entry.IsPlaying ? "playing" : "stopped")} within {GiveUpAfter.TotalMinutes:0} minutes.").SetRequestID(entry.RequestId);
+                    : refused
+                        ? ResponseCallTool.Error(UnityEditor.EditorUtility.scriptCompilationFailed
+                            ? $"Unity refused to enter play mode: the project has compilation errors.\n{ScriptUtils.GetCompilationErrorDetails()}"
+                            : "Unity refused to enter play mode. Check the Console for the reason.").SetRequestID(entry.RequestId)
+                        : ResponseCallTool.Error($"Play mode did not become {(entry.IsPlaying ? "playing" : "stopped")} within {GiveUpAfter.TotalMinutes:0} minutes.").SetRequestID(entry.RequestId);
                 _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData { RequestId = entry.RequestId, Result = response });
                 return false;
             }).ToList();

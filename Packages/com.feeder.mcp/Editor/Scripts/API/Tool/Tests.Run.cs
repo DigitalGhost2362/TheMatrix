@@ -101,7 +101,7 @@ namespace Feeder.MCP.Editor.API
 
                 // Save display options to PlayerPrefs BEFORE AssetDatabase.Refresh —
                 // these must be persisted before a potential domain reload
-                TestResultCollector.TestCallRequestID.Value = requestId;
+                TestResultCollector.TestCallRequestID = requestId;
                 TestResultCollector.IncludePassingTests.Value = includePassingTests;
                 TestResultCollector.IncludeMessage.Value = includeMessages;
                 TestResultCollector.IncludeMessageStacktrace.Value = includeStacktrace;
@@ -138,7 +138,7 @@ namespace Feeder.MCP.Editor.API
                 // Check for pre-existing compilation errors (no new compilation triggered)
                 if (UnityEditor.EditorUtility.scriptCompilationFailed)
                 {
-                    TestResultCollector.TestCallRequestID.Value = string.Empty;
+                    TestResultCollector.TestCallRequestID = string.Empty;
                     var errorDetails = ScriptUtils.GetCompilationErrorDetails();
                     return ResponseCallValueTool<TestRunResponse>
                         .Error($"Cannot run tests: Unity project has compilation errors.\n\n{errorDetails}")
@@ -158,7 +158,10 @@ namespace Feeder.MCP.Editor.API
 
                     var validation = await ValidateTestFilters(TestRunnerApi, testMode, filterParams);
                     if (validation != null)
+                    {
+                        TestResultCollector.TestCallRequestID = string.Empty;
                         return ResponseCallValueTool<TestRunResponse>.Error(validation).SetRequestID(requestId);
+                    }
 
                     var filter = CreateTestFilter(testMode, filterParams);
 
@@ -169,6 +172,7 @@ namespace Feeder.MCP.Editor.API
                 }
                 catch (Exception ex)
                 {
+                    TestResultCollector.TestCallRequestID = string.Empty;
                     if (MatrixPlugin.IsLogEnabled(LogLevel.Error))
                     {
                         Debug.LogException(ex);
@@ -179,7 +183,7 @@ namespace Feeder.MCP.Editor.API
             }).Unwrap();
         }
 
-        static Filter CreateTestFilter(TestMode testMode, TestFilterParameters filterParams)
+        internal static Filter CreateTestFilter(TestMode testMode, TestFilterParameters filterParams)
         {
             var filter = new Filter
             {
@@ -189,28 +193,29 @@ namespace Feeder.MCP.Editor.API
             if (!string.IsNullOrEmpty(filterParams.TestAssembly))
                 filter.assemblyNames = new[] { filterParams.TestAssembly };
 
-            var groupNames = new List<string>();
-            var testNames = new List<string>();
-
             // Handle specific test method in FixtureName.TestName format
             if (!string.IsNullOrEmpty(filterParams.TestMethod))
-                testNames.Add(filterParams.TestMethod!);
+                filter.testNames = new[] { filterParams.TestMethod! };
 
-            // Handle namespace filtering with regex (shared pattern ensures validation sync)
-            if (!string.IsNullOrEmpty(filterParams.TestNamespace))
-                groupNames.Add(CreateNamespaceRegexPattern(filterParams.TestNamespace!));
-
-            // Handle class filtering with regex (shared pattern ensures validation sync)
-            if (!string.IsNullOrEmpty(filterParams.TestClass))
-                groupNames.Add(CreateClassRegexPattern(filterParams.TestClass!));
-
-            if (groupNames.Any())
-                filter.groupNames = groupNames.ToArray();
-
-            if (testNames.Any())
-                filter.testNames = testNames.ToArray();
+            // Unity ORs the entries of groupNames, so namespace and class share one pattern to be ANDed
+            var groupPattern = CreateGroupRegexPattern(filterParams);
+            if (groupPattern != null)
+                filter.groupNames = new[] { groupPattern };
 
             return filter;
+        }
+
+        static string? CreateGroupRegexPattern(TestFilterParameters filterParams)
+        {
+            var hasNamespace = !string.IsNullOrEmpty(filterParams.TestNamespace);
+            var hasClass = !string.IsNullOrEmpty(filterParams.TestClass);
+            if (hasNamespace && hasClass)
+                return $"^{EscapeRegex(filterParams.TestNamespace!)}\\.(.*\\.)?{EscapeRegex(filterParams.TestClass!)}\\.[^\\.]+$";
+            if (hasNamespace)
+                return CreateNamespaceRegexPattern(filterParams.TestNamespace!);
+            if (hasClass)
+                return CreateClassRegexPattern(filterParams.TestClass!);
+            return null;
         }
 
         /// <summary>
@@ -242,13 +247,14 @@ namespace Feeder.MCP.Editor.API
         static string EscapeRegex(string input)
             => Regex.Escape(input);
 
-        static async Task<int> GetMatchingTestCount(TestRunnerApi testRunnerApi, TestMode testMode, TestFilterParameters filterParams)
+        // null when the test list did not arrive in time: the count is unknown, not zero
+        static async Task<int?> GetMatchingTestCount(TestRunnerApi testRunnerApi, TestMode testMode, TestFilterParameters filterParams)
         {
-            try
-            {
-                var tcs = new TaskCompletionSource<int>();
+            var tcs = new TaskCompletionSource<int>();
 
-                testRunnerApi.RetrieveTestList(testMode, (testRoot) =>
+            testRunnerApi.RetrieveTestList(testMode, (testRoot) =>
+            {
+                try
                 {
                     var testCount = testRoot != null
                         ? CountFilteredTests(testRoot, filterParams)
@@ -257,22 +263,22 @@ namespace Feeder.MCP.Editor.API
                     if (MatrixPlugin.IsLogEnabled(LogLevel.Info))
                         Debug.Log($"[TestRunner] {testCount} {testMode} tests matched for {filterParams}");
 
-                    tcs.SetResult(testCount);
-                });
+                    tcs.TrySetResult(testCount);
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            });
 
-                // Wait for the test count result with timeout
-                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5));
-                var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
+            // Wait for the test count result with timeout
+            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5));
+            var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
 
-                if (completedTask == timeoutTask)
-                    throw new OperationCanceledException("Test list retrieval timed out");
+            if (completedTask == timeoutTask)
+                return null;
 
-                return await tcs.Task;
-            }
-            catch (Exception)
-            {
-                return 0;
-            }
+            return await tcs.Task;
         }
 
         static async Task<string?> ValidateTestFilters(TestRunnerApi testRunnerApi, TestMode testMode, TestFilterParameters filterParams)
@@ -280,6 +286,11 @@ namespace Feeder.MCP.Editor.API
             try
             {
                 var testCount = await GetMatchingTestCount(testRunnerApi, testMode, filterParams);
+                if (testCount == null)
+                {
+                    Debug.LogWarning($"[TestRunner] Test list for {testMode} did not arrive within 5 s, running without filter validation: {filterParams}");
+                    return null;
+                }
                 if (testCount == 0)
                     return Error.NoTestsFound(filterParams);
 
@@ -297,60 +308,38 @@ namespace Feeder.MCP.Editor.API
             if (!filterParams.HasAnyFilter)
                 return TestResultCollector.CountTests(test);
 
-            var count = 0;
+            var groupPattern = CreateGroupRegexPattern(filterParams);
+            var group = groupPattern == null ? null : new Regex(groupPattern);
+            return CountFilteredTests(test, filterParams, group, false, false, false);
+        }
 
-            // Check if this test matches the filters
-            if (!test.IsSuite)
-            {
-                var matches = false;
+        // mirrors Unity's Filter: assembly, group and test name filters are ANDed, and a test passes
+        // a filter when it or any of its parent suites matches it
+        static int CountFilteredTests(ITestAdaptor test, TestFilterParameters filterParams, Regex? group,
+            bool assemblyMatched, bool groupMatched, bool methodMatched)
+        {
+            assemblyMatched |= string.IsNullOrEmpty(filterParams.TestAssembly) || IsInAssembly(test, filterParams.TestAssembly!);
+            groupMatched |= group == null || group.IsMatch(test.FullName);
+            methodMatched |= string.IsNullOrEmpty(filterParams.TestMethod) || test.FullName == filterParams.TestMethod;
 
-                // Check assembly filter using UniqueName which contains assembly information
-                if (!string.IsNullOrEmpty(filterParams.TestAssembly))
-                {
-                    var dllIndex = test.UniqueName.ToLowerInvariant().IndexOf(".dll");
-                    if (dllIndex > 0)
-                    {
-                        var assemblyName = test.UniqueName[..dllIndex];
-                        if (assemblyName.Equals(filterParams.TestAssembly, StringComparison.OrdinalIgnoreCase))
-                            matches = true;
-                    }
-                }
+            var count = !test.IsSuite && assemblyMatched && groupMatched && methodMatched ? 1 : 0;
 
-                // Check namespace filter using same regex pattern as Filter.groupNames (ensures sync with Unity's execution)
-                if (!matches && !string.IsNullOrEmpty(filterParams.TestNamespace))
-                {
-                    var namespacePattern = CreateNamespaceRegexPattern(filterParams.TestNamespace!);
-                    if (Regex.IsMatch(test.FullName, namespacePattern))
-                        matches = true;
-                }
-
-                // Check class filter using same regex pattern as Filter.groupNames (ensures sync with Unity's execution)
-                if (!matches && !string.IsNullOrEmpty(filterParams.TestClass))
-                {
-                    var classPattern = CreateClassRegexPattern(filterParams.TestClass!);
-                    if (Regex.IsMatch(test.FullName, classPattern))
-                        matches = true;
-                }
-
-                // Check method filter (FixtureName.TestName format, same as Filter.testNames)
-                if (!matches && !string.IsNullOrEmpty(filterParams.TestMethod))
-                {
-                    if (test.FullName.Equals(filterParams.TestMethod, StringComparison.OrdinalIgnoreCase))
-                        matches = true;
-                }
-
-                if (matches)
-                    count = 1;
-            }
-
-            // Recursively check children
             if (test.HasChildren)
             {
                 foreach (var child in test.Children)
-                    count += CountFilteredTests(child, filterParams);
+                    count += CountFilteredTests(child, filterParams, group, assemblyMatched, groupMatched, methodMatched);
             }
 
             return count;
+        }
+
+        static bool IsInAssembly(ITestAdaptor test, string assemblyName)
+        {
+            if (string.Equals(test.Name, assemblyName + ".dll", StringComparison.OrdinalIgnoreCase))
+                return true;
+            var dllIndex = test.UniqueName.IndexOf(".dll", StringComparison.OrdinalIgnoreCase);
+            return dllIndex > 0 && test.UniqueName.Substring(0, dllIndex).TrimStart('[')
+                .Equals(assemblyName, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

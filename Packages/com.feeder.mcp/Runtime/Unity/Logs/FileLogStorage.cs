@@ -101,14 +101,13 @@ namespace Feeder.MCP
                 {
                     var filePath = Path.GetFullPath(Path.Combine(_directoryPath, currentFileName));
 
-                    _logger.LogDebug("Creating log file stream: {file}", filePath);
-
                     var stream = new FileStream(filePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite, bufferSize: _fileBufferSize, useAsync: false)
                         ?? throw new Exception("Failed to create file stream for log storage.");
 
                     resultFileName = currentFileName;
                     resultFilePath = filePath;
 
+                    _logger.LogDebug("Created log file stream: {file}", filePath);
                     return stream;
                 }
                 catch (Exception ex)
@@ -194,6 +193,9 @@ namespace Feeder.MCP
                     nameof(Append));
                 return;
             }
+            // a log written by the storage itself while it holds the lock comes back here through Debug.Log
+            if (System.Threading.Monitor.IsEntered(_fileMutex))
+                return;
             lock (_fileMutex)
             {
                 AppendInternal(entries);
@@ -242,9 +244,6 @@ namespace Feeder.MCP
                 return;
             }
 
-            _logger.LogInformation("Log file size limit reached ({maxSizeMB}MB). Resetting log file.",
-                _maxFileSizeBytes / (1024 * 1024));
-
             fileWriteStream?.Flush();
             fileWriteStream?.Dispose();
             fileWriteStream = null;
@@ -253,6 +252,9 @@ namespace Feeder.MCP
                 File.Delete(filePath);
 
             fileWriteStream = CreateWriteStream(_requestedFileName, out this.fileName, out filePath);
+
+            _logger.LogInformation("Log file size limit reached ({maxSizeMB}MB). Log file was reset.",
+                _maxFileSizeBytes / (1024 * 1024));
         }
 
         /// <summary>
