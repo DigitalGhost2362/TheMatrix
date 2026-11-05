@@ -183,7 +183,10 @@ namespace Feeder.MCP.Editor.Query
                     sb.Append(',');
                 WriteJson(sb, ToRow(items[i]), 0);
             }
-            sb.Append("]}");
+            sb.Append("],\"shown\":").Append(shown);
+            if (shown < total)
+                sb.Append(",\"truncated\":true,\"hint\":\"add '| skip ").Append(shown).Append(" | take ").Append(limit).Append("' for more\"");
+            sb.Append('}');
             return sb.ToString();
         }
 

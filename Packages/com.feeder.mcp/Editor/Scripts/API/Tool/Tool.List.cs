@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using Feeder.ToolHost;
 using Feeder.Reflect.Utils;
 using Feeder.MCP.Utils;
+using Feeder.MCP.Editor.UI;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -103,7 +104,7 @@ namespace Feeder.MCP.Editor.API
                             continue;
                     }
 
-                    var info = new ToolInfoData { Name = tool.Name, Enabled = tool.Enabled };
+                    var info = new ToolInfoData { Name = tool.Name, Enabled = tool.Enabled, Group = SkillCatalog.GroupName(tool.Title, tool.Name) };
 
                     if (descriptionRequested)
                         info.Description = tool.Description;

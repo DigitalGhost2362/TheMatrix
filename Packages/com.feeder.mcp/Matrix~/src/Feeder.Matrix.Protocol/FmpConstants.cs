@@ -40,6 +40,18 @@ public enum FmpEditorState
     Paused = 4,
 }
 
+/// <summary>Flags in <see cref="HeartbeatMessage.Phase"/>: what the editor is doing besides its <see cref="FmpEditorState"/>.</summary>
+public static class FmpPhases
+{
+    public const int None = 0;
+
+    /// <summary>A test run owns the editor.</summary>
+    public const int RunningTests = 1;
+
+    /// <summary>Entering or leaving play mode.</summary>
+    public const int PlaymodeTransition = 2;
+}
+
 /// <summary>Stable FMP error codes (see protocol spec §4).</summary>
 public static class FmpErrorCodes
 {

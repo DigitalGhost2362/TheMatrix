@@ -29,7 +29,8 @@ namespace Feeder.MCP.Editor.API
             "- `lineTo` (default -1 = end-of-file, 1-based) — inclusive end line; clamped into valid range.\n\n" +
             "## Behavior\n\n" +
             "Reads the file with `File.ReadAllLines` and slices `[lineFrom..lineTo]` (inclusive). The slice indices are " +
-            "clamped — passing out-of-range `lineFrom`/`lineTo` is forgiving (read returns at-most the whole file).")]
+            "clamped — passing out-of-range `lineFrom`/`lineTo` is forgiving (read returns at-most the whole file). " +
+            "`includeSha256` appends the sha256 of the whole file as a last line outside the content, for `expectedSha256` of '" + ScriptUpdateOrCreateToolId + "'.")]
         [Description("Reads the content of a script file and returns it as a string. " +
             "Use '" + ScriptUpdateOrCreateToolId + "' tool to update or create script files.")]
         public static string Read
@@ -39,7 +40,10 @@ namespace Feeder.MCP.Editor.API
             [Description("The line number to start reading from (1-based).")]
             int lineFrom = 1,
             [Description("The line number to stop reading at (1-based, -1 for all lines).")]
-            int lineTo = -1
+            int lineTo = -1,
+            [Description("When true, a last line \"[sha256 of the whole file: ...]\" is appended. It is not part of the file; " +
+                "pass the hash as expectedSha256 to " + ScriptUpdateOrCreateToolId + ".")]
+            bool includeSha256 = false
         )
         {
             if (string.IsNullOrEmpty(filePath))
@@ -65,7 +69,10 @@ namespace Feeder.MCP.Editor.API
             int startIndex = lineFrom - 1; // Convert from 1-based to 0-based indexing
             int count = lineTo - lineFrom + 1; // Inclusive range: count of lines to take
 
-            return string.Join("\n", lines.Skip(startIndex).Take(count));
+            var text = string.Join("\n", lines.Skip(startIndex).Take(count));
+            return includeSha256
+                ? text + $"\n[sha256 of the whole file: {Feeder.MCP.Editor.Utils.ScriptEdit.Sha256(File.ReadAllBytes(filePath))}]"
+                : text;
         }
     }
 }

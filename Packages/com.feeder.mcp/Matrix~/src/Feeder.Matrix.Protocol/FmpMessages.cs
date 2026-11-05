@@ -114,6 +114,10 @@ public sealed record HeartbeatMessage
     [Key(5)] public InFlightOperation[] InFlight { get; set; } = [];
     [Key(6)] public int ProcessId { get; init; }
     [Key(7)] public string? ConsoleLogPath { get; init; }
+    // Flags from FmpPhases; 0 from an older plugin.
+    [Key(8)] public int Phase { get; init; }
+    // Script compilations started this editor session; survives domain reloads. 0 from an older plugin.
+    [Key(9)] public int CompileCount { get; init; }
 }
 
 [MessagePackObject]

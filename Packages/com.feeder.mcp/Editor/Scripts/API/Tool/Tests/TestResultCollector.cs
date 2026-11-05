@@ -71,7 +71,9 @@ namespace Feeder.MCP.Editor.API.TestRunner
 
             startTime = DateTime.Now;
             TestRunGuard.Executing = true;
-            var testCount = CountTests(testsToRun);
+            var filter = TestRunStore.Read()?.Filter ?? default;
+            var testCount = filter.HasAnyFilter ? Tool_Tests.CountFilteredTests(testsToRun, filter) : CountTests(testsToRun);
+            TestRunStore.SetState(TestRunStore.Running);
 
             lock (_logsMutex)
             {
@@ -94,6 +96,7 @@ namespace Feeder.MCP.Editor.API.TestRunner
             MatrixPluginEditor.Instance.LogInfo("RunFinished", typeof(TestResultCollector));
 
             var requestId = TestCallRequestID;
+            var isAsync = TestRunStore.Read()?.isAsync == true;
             TestRunGuard.Clear();
 
             // Unsubscribe from log messages
@@ -101,7 +104,7 @@ namespace Feeder.MCP.Editor.API.TestRunner
 
             var duration = DateTime.Now - startTime;
             _summary.Duration = DateTime.Now - startTime;
-            _summary.TotalTests = CountTests(result.Test);
+            _summary.TotalTests = _results.Count > 0 ? _results.Count : CountTests(result.Test);
             if (_summary.FailedTests > 0)
             {
                 _summary.Status = TestRunStatus.Failed;
@@ -120,12 +123,21 @@ namespace Feeder.MCP.Editor.API.TestRunner
             MatrixPluginEditor.Instance.LogInfo("Final duration: {duration:mm\\:ss\\.fff}. Completed: {completed}/{total}",
                 typeof(TestResultCollector), duration, _results.Count, _summary.TotalTests);
 
+            TestRunStore.Finish(_summary, _results.Select(r => new TestResultData
+            {
+                Name = r.Name,
+                Status = r.Status,
+                Duration = r.Duration,
+                Message = IncludeMessage.Value ? r.Message : null,
+                StackTrace = IncludeMessageStacktrace.Value ? r.StackTrace : null
+            }));
+
             MatrixPluginEditor.Instance.BuildToolHostIfNeeded();
 
             if (!EnvironmentUtils.IsCi())
                 MatrixPluginEditor.ConnectIfNeeded();
 
-            if (string.IsNullOrEmpty(requestId) == false)
+            if (string.IsNullOrEmpty(requestId) == false && !isAsync)
             {
                 var structuredResponse = CreateStructuredResponse(
                     includePassingTests: IncludePassingTests.Value,

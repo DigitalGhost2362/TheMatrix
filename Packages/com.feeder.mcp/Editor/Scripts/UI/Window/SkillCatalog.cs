@@ -201,6 +201,9 @@ namespace Feeder.MCP.Editor.UI
             return group;
         }
 
+        public static string GroupName(string? title, string name)
+            => GroupOf(Segments(title, name), new Dictionary<string, SkillGroup>(), out _).Name;
+
         public static string LabelOf(string[] segments, int drop)
         {
             var kept = segments.Skip(drop).ToArray();

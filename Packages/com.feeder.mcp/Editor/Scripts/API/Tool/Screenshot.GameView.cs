@@ -23,10 +23,10 @@ namespace Feeder.MCP.Editor.API
         )]
         [AiSkillDescription("Capture a screenshot of the Unity Editor's Game View by reading its internal " +
             "render texture directly. Image size matches the current Game View resolution; the tool corrects Y-flip on " +
-            "DirectX / Metal so the output is always upright. Requires an open Game View window.")]
+            "DirectX / Metal so the output is always upright. Requires an open Game View window. Scaled to `maxResolution` (default 1024; 0 = full size).")]
         [AiSkillBody("Captures a screenshot from the Unity Editor Game View and returns it as an image. " +
             "Reads the Game View's own render texture directly via the Unity Editor API. " +
-            "The image size matches the current Game View resolution. " +
+            "The image size matches the current Game View resolution, scaled so its longest side is at most `maxResolution` (default 1024; pass 0 for full size). " +
             "Returns the image directly for visual inspection by the LLM.\n\n" +
             "## Behavior\n\n" +
             "Locates `UnityEditor.GameView`, repaints it, then reflects the `m_RenderTexture` field and reads back via " +
@@ -37,7 +37,12 @@ namespace Feeder.MCP.Editor.API
             "Reads the Game View's own render texture directly via the Unity Editor API. " +
             "The image size matches the current Game View resolution. " +
             "Returns the image directly for visual inspection by the LLM.")]
-        public ResponseCallTool ScreenshotGameView(string? nothing = null)
+        public ResponseCallTool ScreenshotGameView
+        (
+            string? nothing = null,
+            [Description("Longest side of the returned image in pixels; larger captures are scaled down to save tokens. Default: 1024. 0 = full size (still capped at 3840).")]
+            int maxResolution = 1024
+        )
         {
             return MainThread.Instance.Run(() =>
             {
@@ -75,7 +80,8 @@ namespace Feeder.MCP.Editor.API
                 var srcWidth = sourceRt.width;
                 var srcHeight = sourceRt.height;
 
-                var scale = Mathf.Min(1f, (float)MaxScreenshotDimension / Mathf.Max(srcWidth, srcHeight));
+                var limit = maxResolution > 0 ? Mathf.Min(maxResolution, MaxScreenshotDimension) : MaxScreenshotDimension;
+                var scale = Mathf.Min(1f, (float)limit / Mathf.Max(srcWidth, srcHeight));
                 var width = Mathf.Max(1, Mathf.RoundToInt(srcWidth * scale));
                 var height = Mathf.Max(1, Mathf.RoundToInt(srcHeight * scale));
 

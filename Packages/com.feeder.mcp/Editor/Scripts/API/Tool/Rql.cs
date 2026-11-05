@@ -58,7 +58,7 @@ namespace Feeder.MCP.Editor.API
             "## Output\n\n" +
             "- `table` (default): a header line, then one line per row with ` | ` between cells. GameObjects show `id | path | active | components`, " +
             "components `id | type | path | enabled`, assets `id | type | name | path`. `select` picks your own columns.\n" +
-            "- `json`: `{\"total\":N,\"items\":[...]}` with vectors as arrays and objects as `{id,name,type,path}`.\n" +
+            "- `json`: `{\"total\":N,\"items\":[...],\"shown\":S}` with vectors as arrays and objects as `{id,name,type,path}`; when `limit` cut rows it also has `\"truncated\":true` and a `hint` on how to page.\n" +
             "- Only `limit` rows are printed (default 100); the first line says how many matched and how to page with `skip`/`take`.\n" +
             "- A member that does not exist reads as `null` and adds a line under `warnings:`; check it when a filter matches nothing.\n\n" +
             "## Tips\n\n" +

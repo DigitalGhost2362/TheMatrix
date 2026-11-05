@@ -160,6 +160,8 @@ namespace Feeder.MCP.Editor.Matrix
         public InFlightOperation[] InFlight { get; set; } = Array.Empty<InFlightOperation>();
         public int ProcessId { get; set; }
         public string? ConsoleLogPath { get; set; }
+        public int Phase { get; set; }
+        public int CompileCount { get; set; }
     }
 
     [Serializable]
@@ -178,6 +180,12 @@ namespace Feeder.MCP.Editor.Matrix
         public string? Message { get; set; }
         public bool Deferred { get; set; }
         public long ExtendDeadlineMs { get; set; }
+    }
+
+    internal static class FmpPhases
+    {
+        public const int RunningTests = 1;
+        public const int PlaymodeTransition = 2;
     }
 
     internal enum FmpEditorState

@@ -100,7 +100,7 @@ namespace Feeder.MCP.Editor.API
             return refusal;
         }
 
-        static void ClearPendingTestRun()
+        internal static void ClearPendingTestRun()
         {
             SessionState.EraseString(PendingTestRunKey);
             SessionState.EraseInt(PendingTestModeKey);
@@ -124,6 +124,7 @@ namespace Feeder.MCP.Editor.API
             // Check for compilation failure
             if (EditorUtility.scriptCompilationFailed)
             {
+                var isAsync = TestRunStore.Read()?.isAsync == true;
                 ClearPendingTestRun();
                 TestRunGuard.Clear();
 
@@ -132,11 +133,13 @@ namespace Feeder.MCP.Editor.API
                     .Error($"Cannot run tests: compilation errors after script recompilation.\n\n{errorDetails}")
                     .SetRequestID(requestId);
 
-                _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
-                {
-                    RequestId = requestId,
-                    Result = response
-                });
+                TestRunStore.Fail("Compilation errors after script recompilation.\n" + errorDetails);
+                if (!isAsync)
+                    _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
+                    {
+                        RequestId = requestId,
+                        Result = response
+                    });
                 return;
             }
 
@@ -167,13 +170,16 @@ namespace Feeder.MCP.Editor.API
             }
             catch (Exception ex)
             {
+                var isAsync = TestRunStore.Read()?.isAsync == true;
                 TestRunGuard.Clear();
                 Debug.LogException(ex);
-                _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
-                {
-                    RequestId = requestId,
-                    Result = ResponseCallValueTool<TestRunResponse>.Error(Error.TestExecutionFailed(ex.Message)).SetRequestID(requestId)
-                });
+                TestRunStore.Fail(Error.TestExecutionFailed(ex.Message));
+                if (!isAsync)
+                    _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
+                    {
+                        RequestId = requestId,
+                        Result = ResponseCallValueTool<TestRunResponse>.Error(Error.TestExecutionFailed(ex.Message)).SetRequestID(requestId)
+                    });
             }
         }
 

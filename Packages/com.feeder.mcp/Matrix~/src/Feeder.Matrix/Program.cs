@@ -198,7 +198,7 @@ static ReadResourceResult throwResourceNotFound(string? uri)
 
 public static class MatrixVersion
 {
-    public const string Value = "0.6.0";
+    public const string Value = "0.7.0";
 }
 
 // Exposes the entry point to WebApplicationFactory-based integration tests.

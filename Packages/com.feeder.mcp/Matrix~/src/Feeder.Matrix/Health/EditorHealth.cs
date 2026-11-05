@@ -42,6 +42,51 @@ public sealed class EditorHealth(UnityLinkRegistry registry, IOptions<MatrixOpti
         return text.ToString();
     }
 
+    /// <summary>The machine-readable answer of <c>editor-health</c>: can a call go through now, and if not, why and when to ask again.</summary>
+    public Readiness GetReadiness() => ReadinessOf(Snapshot());
+
+    internal static Readiness ReadinessOf(Facts facts)
+    {
+        var link = facts.Link;
+        var heartbeat = link?.Heartbeat;
+        var compiles = heartbeat?.CompileCount ?? 0;
+        if (link is null)
+            return new Readiness(false, "not_linked", 0, compiles);
+        if (!link.Connected)
+        {
+            if (facts.ProcessAlive == false)
+                return new Readiness(false, "not_linked", 0, compiles);
+            var down = facts.Now - link.LastSeen;
+            if (down > facts.ReconnectGrace)
+                return new Readiness(false, "not_linked", 0, compiles);
+            return link.EditorState == FmpEditorState.Reloading
+                ? new Readiness(false, "reloading", 3000, compiles)
+                : new Readiness(false, "reconnecting", 3000, compiles);
+        }
+        if (heartbeat is null)
+            return new Readiness(true, "ready", 0, compiles);
+        if (facts.Now - link.HeartbeatAt > HeartbeatStaleAfter)
+            return new Readiness(false, "reloading", 3000, compiles);
+        if (facts.MainTickAge > StallAfter)
+            return new Readiness(false, "stalled", 10000, compiles);
+        if ((heartbeat.Phase & FmpPhases.RunningTests) != 0)
+            return new Readiness(false, "running_tests", 10000, compiles);
+        if ((heartbeat.Phase & FmpPhases.PlaymodeTransition) != 0)
+            return new Readiness(false, "playmode_transition", 1000, compiles);
+        if (link.EditorState == FmpEditorState.Compiling)
+            return new Readiness(false, "compiling", 2000, compiles);
+        if (link.EditorState == FmpEditorState.Reloading)
+            return new Readiness(false, "reloading", 3000, compiles);
+        if (heartbeat.Updating)
+            return new Readiness(false, "importing", 2000, compiles);
+        return new Readiness(true, link.EditorState switch
+        {
+            FmpEditorState.Playing => "playing",
+            FmpEditorState.Paused => "paused",
+            _ => "ready",
+        }, 0, compiles);
+    }
+
     /// <summary>The full <c>editor-health</c> report.</summary>
     public string Report()
     {
@@ -81,6 +126,8 @@ public sealed class EditorHealth(UnityLinkRegistry registry, IOptions<MatrixOpti
         }
         return text.ToString().TrimEnd();
     }
+
+    public sealed record Readiness(bool Ready, string Phase, int RetryAfterMs, int CompileCount);
 
     internal sealed record Facts(
         DateTimeOffset Now,
@@ -182,6 +229,10 @@ public sealed class EditorHealth(UnityLinkRegistry registry, IOptions<MatrixOpti
             return $"Main thread stalled {Seconds(facts.MainTickAge)}{busy} ({state}); Matrix tools in flight: {InFlightList(facts)}.{cause}";
         }
 
+        if ((heartbeat.Phase & FmpPhases.RunningTests) != 0)
+            return $"Busy: running tests (main thread ticked {Seconds(facts.MainTickAge)} ago).";
+        if ((heartbeat.Phase & FmpPhases.PlaymodeTransition) != 0)
+            return $"Busy: switching play mode (main thread ticked {Seconds(facts.MainTickAge)} ago).";
         if (link.EditorState == FmpEditorState.Compiling)
             return $"Busy: compiling scripts (main thread ticked {Seconds(facts.MainTickAge)} ago).";
         if (heartbeat.Updating)

@@ -54,6 +54,34 @@ namespace Feeder.MCP.Editor.API.TestRunner
             return age > timeout ? SlotState.Stale : SlotState.Busy;
         }
 
+        // lets a test borrow the slot without wiping a live run it is executing inside of
+        public readonly struct Snapshot
+        {
+            internal readonly string RequestId;
+            internal readonly string Started;
+            internal readonly bool Executing;
+
+            internal Snapshot(string requestId, string started, bool executing)
+            {
+                RequestId = requestId;
+                Started = started;
+                Executing = executing;
+            }
+        }
+
+        public static Snapshot Capture()
+            => new(TestResultCollector.TestCallRequestID, SessionState.GetString(StartedKey, string.Empty), Executing);
+
+        public static void Restore(Snapshot snapshot)
+        {
+            TestResultCollector.TestCallRequestID = snapshot.RequestId;
+            if (string.IsNullOrEmpty(snapshot.Started))
+                SessionState.EraseString(StartedKey);
+            else
+                SessionState.SetString(StartedKey, snapshot.Started);
+            Executing = snapshot.Executing;
+        }
+
         public static int RetryAfterMs(bool executing) => executing ? ExecutingRetryMs : StartingRetryMs;
 
         public static string FormatRefusal(string requestId, TimeSpan age, bool deferred, bool executing)

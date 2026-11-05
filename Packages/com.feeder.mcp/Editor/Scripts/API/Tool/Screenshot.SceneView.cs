@@ -20,11 +20,12 @@ namespace Feeder.MCP.Editor.API
             Enabled = false
         )]
         [AiSkillDescription("Capture a screenshot from the Unity Editor Scene View at the requested size. " +
-            "Renders via the Scene View's active camera onto a temporary `RenderTexture`. Requires an open Scene View.")]
+            "Renders via the Scene View's active camera onto a temporary `RenderTexture`. Requires an open Scene View. Scaled to `maxResolution` (default 1024; 0 = full size).")]
         [AiSkillBody("Captures a screenshot from the Unity Editor Scene View and returns it as an image. " +
             "Returns the image directly for visual inspection by the LLM.\n\n" +
             "## Inputs\n\n" +
-            "- `width` (default 1920) / `height` (default 1080) — output pixels. Must be > 0 and ≤ `MaxDimension`.\n\n" +
+            "- `width` (default 1920) / `height` (default 1080) — output pixels. Must be > 0 and ≤ `MaxDimension`.\n" +
+            "- `maxResolution` (default 1024) — longest side of the returned image; bigger captures are scaled down to save tokens. `0` returns the full size.\n\n" +
             "## Behavior\n\n" +
             "Uses `SceneView.lastActiveSceneView` (falls back to the first window in `SceneView.sceneViews`). Allocates " +
             "a temporary `RenderTexture`, swaps it onto the Scene View's camera, calls `Render`, reads back with " +
@@ -37,7 +38,9 @@ namespace Feeder.MCP.Editor.API
             [Description("Width of the screenshot in pixels.")]
             int width = 1920,
             [Description("Height of the screenshot in pixels.")]
-            int height = 1080
+            int height = 1080,
+            [Description("Longest side of the returned image in pixels; larger captures are scaled down to save tokens. Default: 1024. 0 = full size (still capped at 3840).")]
+            int maxResolution = 1024
         )
         {
             if (width <= 0 || height <= 0)
@@ -48,6 +51,7 @@ namespace Feeder.MCP.Editor.API
             // Keep the encoded PNG within the MCP transport limit so the screenshot is not
             // dropped in transit; an oversized request is scaled down (aspect preserved).
             (width, height) = ClampToTransportLimit(width, height);
+            (width, height) = ApplyMaxResolution(width, height, maxResolution);
 
             return MainThread.Instance.Run(() =>
             {

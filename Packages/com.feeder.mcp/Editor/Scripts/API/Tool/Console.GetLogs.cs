@@ -32,7 +32,8 @@ namespace Feeder.MCP.Editor.API
             "- `sinceUtc` — ISO 8601 time; only logs from then on. Note the time before your step and pass it to see only what the step logged.\n" +
             "- `include` / `exclude` — regular expressions on the message; `exclude: \"^\\\\[Matrix\"` hides Matrix's own lines.\n" +
             "- `groupDuplicates` — one entry per identical message with its `Count`.\n\n" +
-            "Entries come oldest first. Without the new inputs the result holds the same entries as before.")]
+            "Entries come oldest first. Without the new inputs the result holds the same entries as before. " +
+            "To read only what is new since your last call, or to learn when `maxEntries` cut the result, use 'console-get-logs-page'.")]
         [Description("Retrieves Unity Editor logs. " +
             "Useful for debugging and monitoring Unity Editor activity.")]
         public LogEntry[] GetLogs

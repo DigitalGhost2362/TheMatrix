@@ -69,6 +69,9 @@ namespace Feeder.MCP.Editor.UI
             return $"{agent.AgentName}\n{path}";
         }
 
+        public static string GetConfigText(AgentConfig.AiAgentConfigurator agent)
+            => Config(agent, AgentConfiguratorSettingsFactory.Create(), MatrixPluginEditor.TransportMethod).ExpectedFileContent;
+
         public static void Toggle(AgentConfig.AiAgentConfigurator agent)
         {
             if (GetState(agent) == AgentWiring.Wired)

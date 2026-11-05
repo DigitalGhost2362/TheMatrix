@@ -25,6 +25,21 @@ namespace Feeder.MCP.Editor.API
 
         // Scale (width, height) so the longest edge is at most MaxScreenshotDimension, preserving
         // aspect ratio. Returns the input unchanged when it is already within the limit.
+        // Default longest side of a returned image. Keeps token cost low; callers pass 0 for full size.
+        private const int DefaultMaxResolution = 1024;
+
+        // Scale (width, height) down so the longest edge is at most maxResolution; 0 or less means no cap.
+        internal static (int width, int height) ApplyMaxResolution(int width, int height, int maxResolution)
+        {
+            var longest = Mathf.Max(width, height);
+            if (maxResolution <= 0 || longest <= maxResolution)
+                return (width, height);
+
+            var scale = (float)maxResolution / longest;
+            return (Mathf.Max(1, Mathf.RoundToInt(width * scale)),
+                    Mathf.Max(1, Mathf.RoundToInt(height * scale)));
+        }
+
         private static (int width, int height) ClampToTransportLimit(int width, int height)
         {
             var longest = Mathf.Max(width, height);

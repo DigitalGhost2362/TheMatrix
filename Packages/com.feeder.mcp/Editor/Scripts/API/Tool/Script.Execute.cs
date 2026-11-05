@@ -44,9 +44,16 @@ namespace Feeder.MCP.Editor.API
             "(a bake, a long simulation) pass `timeoutSeconds`; the server caps it (30 minutes by default). " +
             "A domain reload cuts the call off: the error says so, and the code may have run in part.\n\n" +
             "## Keeping data between calls\n\n" +
-            "Each call loads a fresh copy of your code, so its `static` fields start empty every time. To keep a value " +
-            "until the next call, store it in the domain: `AppDomain.CurrentDomain.SetData(\"my-key\", value)` and " +
-            "`AppDomain.CurrentDomain.GetData(\"my-key\")`. A domain reload (compile, entering play mode) clears it.\n\n" +
+            "Running the same code again reuses the assembly loaded for it, so its `static` fields keep their values between " +
+            "those runs (a counter goes 1, 2, 3) until a domain reload (compile, entering play mode) clears them. Any change to " +
+            "the code or to the loaded assemblies compiles a new assembly with empty statics. Pass `freshAssembly=true` when the " +
+            "code must start from empty statics every time; that loads a new assembly per call, which Unity only frees on a " +
+            "domain reload. To share a value between different pieces of code, store it in the domain: " +
+            "`AppDomain.CurrentDomain.SetData(\"my-key\", value)` and `AppDomain.CurrentDomain.GetData(\"my-key\")`.\n\n" +
+            "## Replaying a run\n\n" +
+            "The last 20 runs are kept until the Editor closes; '" + ScriptExecuteHistoryToolId + "' lists them with an id. " +
+            "Pass that id as `replayId` (leave `csharpCode` empty) to run it again with the same class, method, mode and parameters; " +
+            "parameters you pass now replace the stored ones.\n\n" +
             "## Watching something change over time\n\n" +
             "The time between two calls includes your own thinking, often seconds, so polling from outside misses fast " +
             "changes. Record inside Unity instead: register a callback that samples every frame, removes itself after N " +
@@ -70,7 +77,9 @@ namespace Feeder.MCP.Editor.API
             "Supports two modes: full code mode (default) requires a complete class definition, " +
             "while body-only mode (isMethodBody=true) auto-generates the boilerplate so you only " +
             "provide the method body. Unity objects (GameObject, Component, etc.) can be passed as " +
-            "parameters using their Ref types (GameObjectRef, ComponentRef, etc.) or directly by type.")]
+            "parameters using their Ref types (GameObjectRef, ComponentRef, etc.) or directly by type. " +
+            "Running the same code again reuses its loaded assembly, so static fields persist between identical runs " +
+            "(pass freshAssembly=true to avoid that). replayId repeats a run listed by script-execute-history.")]
         public static SerializedMember? Execute
         (
             [Description("C# code to compile and execute. " +
@@ -82,7 +91,7 @@ namespace Feeder.MCP.Editor.API
                 "Example body: 'go.SetActive(false);'. A body may 'return' a value (e.g. 'return go.name;'), which becomes the result. " +
                 "Custom helper classes can still be defined inline in the body-only string after the main logic, " +
                 "but for complex additional class definitions use full code mode instead.")]
-            string csharpCode,
+            string csharpCode = "",
             [Description("The name of the class containing the method to execute. " +
                 "In body-only mode this becomes the generated class name.")]
             string className = "Script",
@@ -109,10 +118,32 @@ namespace Feeder.MCP.Editor.API
             [Description("Seconds this call may run before it times out. 0 (default) keeps the project's tool timeout. " +
                 "Set it for code that runs long on purpose; the server caps it (30 minutes by default).")]
             int timeoutSeconds = 0,
+            [Description("When true, the code is loaded as a new assembly for this call, so its static fields start empty. " +
+                "Default false: identical code reuses its loaded assembly and static fields persist between runs until a domain reload.")]
+            bool freshAssembly = false,
+            [Description("Id of an earlier run (see script-execute-history). Repeats that run; csharpCode may then be empty. " +
+                "Passed 'parameters' replace the stored ones. 0 = off.")]
+            int replayId = 0,
             [RequestID]
             string? requestId = null
         )
         {
+            if (replayId > 0)
+            {
+                var past = MainThread.Instance.Run(() => ScriptRunHistory.Get(replayId));
+                if (past == null)
+                    throw new ToolCallerException($"[replay_not_found] No run with id {replayId}. List the runs with '{ScriptExecuteHistoryToolId}'.");
+                if (past.tooLarge)
+                    throw new ToolCallerException($"[replay_not_found] Run {replayId} was too large to keep.");
+                csharpCode = past.code;
+                className = past.className;
+                methodName = past.methodName;
+                isMethodBody = past.isMethodBody;
+                if (parameters == null && !string.IsNullOrEmpty(past.parametersJson))
+                    parameters = Feeder.Json.JsonSerializer.Deserialize<SerializedMemberList>(
+                        past.parametersJson, (MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.")).JsonSerializerOptions);
+            }
+
             if (string.IsNullOrEmpty(csharpCode))
                 throw new ToolCallerException($"'{nameof(csharpCode)}' is null or empty. Please provide valid C# code to execute.");
 
@@ -158,11 +189,17 @@ namespace Feeder.MCP.Editor.API
                 var waitMs = timer.ElapsedMilliseconds - compileMs;
                 using var timing = new Timing(logger, compileMs, cached, waitMs, timer);
 
+                if (replayId <= 0)
+                    ScriptRunHistory.Add(csharpCode, className, methodName, isMethodBody, parameters == null || parameters.Count == 0
+                        ? string.Empty
+                        : Feeder.Json.JsonSerializer.Serialize(parameters, MatrixPluginEditor.Instance.Reflector?.JsonSerializerOptions));
+
                 // load the assembly the server compiled and execute it immediately
                 if (!ExecuteCSharpCode(
                     className: className,
                     methodName: methodName,
                     assemblyBytes: assemblyBytes,
+                    freshAssembly: freshAssembly,
                     parameters: parameters,
                     returnValue: out var result,
                     returnType: out var returnType,
@@ -371,6 +408,10 @@ namespace Feeder.MCP.Editor.API
         const int CompileCacheSize = 32;
         static readonly System.Collections.Generic.List<(string Key, byte[] Image)> compileCache = new();
 
+        // The compile cache hands out the same byte[] for the same code, so that array identifies the assembly loaded from it.
+        // Entries go when the cache evicts the bytes, and a domain reload empties the table.
+        static readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], Assembly> LoadedAssemblies = new();
+
         static byte[] CompileOnServer(string code, out bool cached)
         {
             var references = GetReferencePaths();
@@ -443,6 +484,7 @@ namespace Feeder.MCP.Editor.API
             string className,
             string methodName,
             byte[] assemblyBytes,
+            bool freshAssembly,
             SerializedMemberList? parameters,
             out object? returnValue,
             out Type? returnType,
@@ -472,7 +514,7 @@ namespace Feeder.MCP.Editor.API
                     logger: logger))
                 ?.ToArray();
 
-            var assembly = Assembly.Load(assemblyBytes);
+            var assembly = freshAssembly ? Assembly.Load(assemblyBytes) : LoadedAssemblies.GetValue(assemblyBytes, Assembly.Load);
             var type = assembly.GetType(className);
             if (type == null)
             {

@@ -20,6 +20,10 @@ namespace Feeder.MCP.Data
         [Description("Whether the tool is enabled. A disabled tool is registered but cannot be called until tool-set-enabled-state turns it on.")]
         public bool Enabled { get; set; }
 
+        [JsonInclude, JsonPropertyName("group")]
+        [Description("Skill group the tool belongs to. tool-set-enabled-state accepts 'group:<Name>' to switch the whole group.")]
+        public string? Group { get; set; }
+
         [JsonInclude, JsonPropertyName("description")]
         [Description("Tool description.")]
         public string? Description { get; set; }

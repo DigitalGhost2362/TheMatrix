@@ -47,7 +47,10 @@ namespace Feeder.MCP.Editor.API
             Bottom,
             [Description("Produces a single 2x2 grid image with Front, Right, Back, and Top views. "
                        + "Each sub-view uses the specified resolution, so final image is resolution*2 x resolution*2.")]
-            Composite
+            Composite,
+            [Description("Produces one 3x2 contact sheet with Front, Right, Back, Left, Top and Bottom views, so one image shows the object from all sides. "
+                       + "Each tile is square; the sheet's longest side stays within maxResolution.")]
+            Surround
         }
 
         public enum BackgroundMode
@@ -88,8 +91,8 @@ namespace Feeder.MCP.Editor.API
             Enabled = true
         )]
         [AiSkillDescription("Render a target GameObject from a chosen camera angle with optional layer-based " +
-            "isolation, configurable background (solid/skybox/transparent), multi-light setup via JSON, and Composite " +
-            "(2x2 Front/Right/Back/Top) mode. Returns a PNG image. When isolated=true, inactive children may briefly " +
+            "isolation, configurable background (solid/skybox/transparent), multi-light setup via JSON, Composite " +
+            "(2x2 Front/Right/Back/Top) and Surround (3x2, all six sides) modes. Returns a PNG image. When isolated=true, inactive children may briefly " +
             "fire OnEnable — see the body for side-effect notes.")]
         [AiSkillBody("Renders a screenshot of a target GameObject with configurable isolation, background, "
                    + "camera angle, and lighting. When isolated=true (default), only the target object is "
@@ -101,7 +104,10 @@ namespace Feeder.MCP.Editor.API
             "## Camera views\n\n" +
             "`Front` (-Z), `Back` (+Z), `Left` (-X), `Right` (+X), `Top` (+Y), `Bottom` (-Y). " +
             "`Composite` produces a single 2x2 image (Front, Right, Back, Top) where each sub-view uses the requested " +
-            "`resolution`, so the final image is `resolution*2 x resolution*2`.\n\n" +
+            "`resolution`, so the final image is `resolution*2 x resolution*2`. `Surround` produces one 3x2 contact sheet (Front, Right, Back / Left, Top, Bottom) " +
+            "so a single image shows the object from all sides.\n\n" +
+            "## Image size\n\n" +
+            "`maxResolution` (default 1024) caps the longest side of the returned image; `resolution` is lowered to fit, so Composite and Surround tiles shrink. Pass `0` for no cap (still limited to 3840).\n\n" +
             "## Background modes\n\n" +
             "- `SolidColor` — flat color from `backgroundColor` (hex string).\n" +
             "- `Skybox` — current scene skybox.\n" +
@@ -152,7 +158,9 @@ namespace Feeder.MCP.Editor.API
                        + "Example: [{\"type\":\"Directional\",\"color\":\"#FFF4E5\",\"intensity\":1.2,\"rotation\":[45,-45,0]}]")]
             string? lights = null,
             [Description("Output image resolution in pixels (width = height). Default: 512.")]
-            int? resolution = 512
+            int? resolution = 512,
+            [Description("Longest side of the returned image in pixels; larger renders are scaled down to save tokens. Default: 1024. 0 = no cap (still limited to 3840).")]
+            int maxResolution = 1024
         )
         {
             var resolvedResolution = resolution ?? 512;
@@ -176,9 +184,11 @@ namespace Feeder.MCP.Editor.API
             // Keep the encoded PNG within the MCP transport limit so the screenshot is not
             // dropped in transit. Composite emits a resolution*2 x resolution*2 grid, so its
             // per-axis budget is half the cap; single views use the full cap.
-            var maxResolutionForMode = resolvedCameraView == CameraView.Composite
-                ? MaxScreenshotDimension / 2
-                : MaxScreenshotDimension;
+            var cols = resolvedCameraView == CameraView.Surround ? 3 : resolvedCameraView == CameraView.Composite ? 2 : 1;
+            var rows = cols == 1 ? 1 : 2;
+            var maxResolutionForMode = MaxScreenshotDimension / cols;
+            if (maxResolution > 0)
+                maxResolutionForMode = Math.Min(maxResolutionForMode, Math.Max(1, maxResolution / cols));
             if (resolvedResolution > maxResolutionForMode)
                 resolvedResolution = maxResolutionForMode;
 
@@ -260,9 +270,12 @@ namespace Feeder.MCP.Editor.API
                     var rtFormat = RenderTextureFormat.ARGB32;
 
                     byte[] pngBytes;
-                    if (resolvedCameraView == CameraView.Composite)
+                    if (cols > 1)
                     {
                         pngBytes = RenderComposite(
+                            resolvedCameraView == CameraView.Surround ? SurroundViews : CompositeViews,
+                            cols,
+                            rows,
                             bounds,
                             resolvedResolution,
                             resolvedIsolated,
@@ -299,7 +312,7 @@ namespace Feeder.MCP.Editor.API
                     }
 
                     return ResponseCallTool.Image(pngBytes, Feeder.ToolHost.Common.Consts.MimeType.ImagePng,
-                        $"Isolated screenshot of '{target.name}' ({resolvedCameraView}, {resolvedResolution}x{resolvedResolution}, isolated={resolvedIsolated}, backgroundMode={resolvedBackgroundMode})");
+                        $"Isolated screenshot of '{target.name}' ({resolvedCameraView}, {resolvedResolution * cols}x{resolvedResolution * rows}, isolated={resolvedIsolated}, backgroundMode={resolvedBackgroundMode})");
                 }
                 finally
                 {
@@ -612,7 +625,13 @@ namespace Feeder.MCP.Editor.API
             }
         }
 
+        private static readonly CameraView[] CompositeViews = { CameraView.Front, CameraView.Right, CameraView.Back, CameraView.Top };
+        private static readonly CameraView[] SurroundViews = { CameraView.Front, CameraView.Right, CameraView.Back, CameraView.Left, CameraView.Top, CameraView.Bottom };
+
         private static byte[] RenderComposite(
+            CameraView[] quadrantViews,
+            int cols,
+            int rows,
             Bounds bounds,
             int subResolution,
             bool isolated,
@@ -626,16 +645,16 @@ namespace Feeder.MCP.Editor.API
             List<GameObject> temporaryObjects,
             RenderTextureFormat rtFormat)
         {
-            var quadrantViews = new[] { CameraView.Front, CameraView.Right, CameraView.Back, CameraView.Top };
-            var compositeSize = subResolution * 2;
+            var compositeWidth = subResolution * cols;
+            var compositeHeight = subResolution * rows;
             var format = backgroundMode == BackgroundMode.Transparent ? TextureFormat.ARGB32 : TextureFormat.RGB24;
 
             SetUpLights(lightConfigs, bounds, isolated, temporaryObjects);
 
-            var compositeTex = new Texture2D(compositeSize, compositeSize, format, false);
+            var compositeTex = new Texture2D(compositeWidth, compositeHeight, format, false);
             try
             {
-                var clearPixels = new Color32[compositeSize * compositeSize];
+                var clearPixels = new Color32[compositeWidth * compositeHeight];
                 var fill = backgroundMode == BackgroundMode.Transparent ? new Color32(0, 0, 0, 0) : (Color32)clearColor;
                 for (var i = 0; i < clearPixels.Length; i++) clearPixels[i] = fill;
                 compositeTex.SetPixels32(clearPixels);
@@ -670,7 +689,7 @@ namespace Feeder.MCP.Editor.API
                             RenderTexture.active = prev;
                         }
 
-                        var (dstX, dstY) = QuadrantOffset(i, subResolution);
+                        var (dstX, dstY) = QuadrantOffset(i, subResolution, cols, rows);
                         var srcPixels = subTex.GetPixels32();
                         compositeTex.SetPixels32(dstX, dstY, subResolution, subResolution, srcPixels);
                     }
@@ -701,19 +720,13 @@ namespace Feeder.MCP.Editor.API
             }
         }
 
-        private static (int x, int y) QuadrantOffset(int index, int sub)
+        // Tiles fill the grid left to right, top row first (Unity texture origin = bottom-left).
+        // Composite: Front, Right / Back, Top. Surround: Front, Right, Back / Left, Top, Bottom.
+        internal static (int x, int y) QuadrantOffset(int index, int sub, int cols, int rows)
         {
-            // Layout (Unity texture origin = bottom-left):
-            //   top-left = Front,   top-right = Right
-            //   bot-left = Back,    bot-right = Top
-            switch (index)
-            {
-                case 0: return (0, sub);       // Front -> top-left
-                case 1: return (sub, sub);     // Right -> top-right
-                case 2: return (0, 0);         // Back  -> bottom-left
-                case 3: return (sub, 0);       // Top   -> bottom-right
-                default: throw new ArgumentOutOfRangeException(nameof(index), index, "Quadrant index must be 0..3.");
-            }
+            if (index < 0 || index >= cols * rows)
+                throw new ArgumentOutOfRangeException(nameof(index), index, $"Tile index must be 0..{cols * rows - 1}.");
+            return (index % cols * sub, (rows - 1 - index / cols) * sub);
         }
     }
 }

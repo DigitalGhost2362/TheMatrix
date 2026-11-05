@@ -82,6 +82,21 @@ namespace Feeder.MCP
             return _logStorage.Query(maxEntries, logTypeFilter, includeStackTrace, lastMinutes, since, filter);
         }
 
+        static long _lastSeq;
+
+        /// <summary>UTC ticks, bumped by one when two logs land in the same tick, so ids only grow even after a domain reload resets the counter.</summary>
+        static long NextSeq()
+        {
+            var now = DateTime.UtcNow.Ticks;
+            while (true)
+            {
+                var last = System.Threading.Interlocked.Read(ref _lastSeq);
+                var next = Math.Max(last + 1, now);
+                if (System.Threading.Interlocked.CompareExchange(ref _lastSeq, next, last) == last)
+                    return next;
+            }
+        }
+
         void OnLogMessageReceived(string message, string stackTrace, LogType type)
         {
             try
@@ -97,6 +112,7 @@ namespace Feeder.MCP
                     message: cleanMessage,
                     stackTrace: type == LogType.Log ? null : stackTrace,
                     logType: type);
+                logEntry.Seq = NextSeq();
 
                 _logStorage.Append(logEntry);
             }

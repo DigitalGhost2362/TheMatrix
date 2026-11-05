@@ -70,7 +70,18 @@ public sealed class ServerTools(
     public async ValueTask<CallToolResult> CallAsync(CallToolRequestParams request, string? sessionId, IUnityBackend backend, CancellationToken ct)
     {
         if (request.Name == EditorHealth.ToolName)
-            return Text(health.Report());
+        {
+            var result = Text(health.Report());
+            var readiness = health.GetReadiness();
+            result.StructuredContent = JsonSerializer.SerializeToElement(new Dictionary<string, object?>
+            {
+                ["ready"] = readiness.Ready,
+                ["phase"] = readiness.Phase,
+                ["retry_after_ms"] = readiness.RetryAfterMs,
+                ["compile_count"] = readiness.CompileCount,
+            });
+            return result;
+        }
         if (EditorLock.IsLockTool(request.Name))
             return await editorLock.CallAsync(request, sessionId, ct);
         return await ProxyAsync(request, sessionId, backend, ct);

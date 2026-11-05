@@ -14,6 +14,9 @@ namespace Feeder.MCP
         /// <summary>How many identical entries this one stands for; set only when duplicates are grouped.</summary>
         public int? Count { get; set; }
 
+        /// <summary>Increasing id given when the entry is collected; it keeps growing across domain reloads. Null for entries written before it existed.</summary>
+        public long? Seq { get; set; }
+
         public LogEntry()
         {
             LogType = LogType.Log;

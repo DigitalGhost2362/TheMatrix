@@ -42,6 +42,30 @@ All notable changes to this package are documented here.
   containing a text.
 - `FEEDER_MATRIX_SERVER_PATH`, read from the environment or a `.env` file at the project root, runs a
   server build from that path instead of the bundled one, without install or version check.
+- `tests-run async=true` answers at once with a job id. **`tests-result`** returns the state, summary
+  and failures of the last run, kept in `Library/` so it survives domain reloads and a client that gave
+  up waiting. `tests-list` lists tests by assembly, namespace and class. `tests-clear` frees a run slot
+  left stuck. `tests-list` and `tests-clear` are off by default.
+- `script-update-or-create` edits part of a file with `oldText`/`newText` (`replaceAll` for several
+  matches), refuses to write when `expectedSha256` no longer matches the file (`stale_file` with the
+  current hash), writes atomically keeping the BOM and line endings, and returns the new hash.
+  `validate: "semantic"` blocks a write that would not compile. `script-read includeSha256` gives the hash.
+- **`script-validate`** (off by default) compiles a file or a snippet against the project's assemblies
+  and lists errors with line and column, without writing anything.
+- `script-execute` reuses the assembly of identical code instead of loading a new one each run, so
+  statics persist between identical runs (`freshAssembly: true` for the old behavior). The last 20 runs
+  are kept; `replayId` runs one again and `script-execute-history` (off by default) lists them.
+- **`batch-execute`** (off by default) runs up to 100 tool calls in order in one request, with
+  `stopOnError` and `atomic` (one undo step; reverted on failure).
+- **`editor-undo`** (off by default) undoes or redoes steps and names the undo groups.
+- **`console-get-logs-page`** reads the console with a cursor: pass `nextCursor` as `afterCursor` to get
+  only newer logs, in order. It says when results were cut.
+- `screenshot-isolated cameraView: "Surround"` renders six views in one 3x2 sheet.
+- `tool-set-enabled-state` takes `group:<Name>` to switch a whole group. `unity-tool-list` shows each
+  tool's group, and the Skills window enables or disables a group from its right-click menu.
+- `editor-health` also answers with structured data: `ready`, `phase` (adds `running_tests` and
+  `playmode_transition`), `retry_after_ms` and a compile counter that survives reloads.
+- The Matrix Bridge window copies an agent's MCP config JSON: right-click a chip, or the **+N** menu.
 
 ### Changed
 
@@ -51,6 +75,11 @@ All notable changes to this package are documented here.
   `retry_after_ms`. Timeouts and a lost editor are now tool errors instead of protocol errors.
 - `matrix-shared-editor` waits in the lock queue instead of retrying, and releases right after each
   burst.
+- Screenshot tools scale images to `maxResolution` (longest side, default 1024; 0 = full size). A
+  1920x1080 capture now returns 1024x576.
+- `rql-query format: json` adds `shown`, and `truncated` plus a `hint` when rows were cut.
+- Tool parameters also match in snake_case or kebab-case (`max_entries` for `maxEntries`).
+- Server 0.7.0.
 - Server 0.6.0. It mirrors the lock to `Temp/agent-editor-lock/lock.json`, so sessions on the lock-file
   scripts still see it, and treats a live lock file of such a session as busy.
 - `matrix-shared-editor` claims the editor with the new tools. The lock-file scripts remain, for an
@@ -75,6 +104,9 @@ All notable changes to this package are documented here.
 - The server rejects `/mcp` and `/fmp` requests whose `Origin` header is not a loopback address, so a
   web page can no longer call the editor through localhost.
 - `assets-prefab-instantiate` and `reflection-method-call` record undo steps.
+- `script-update-or-create` called without `content` no longer empties the file.
+- A filtered `tests-run` reports the number of tests that matched the filter as `TotalTests`, not the
+  whole tree.
 - The bridge link no longer drops when Play mode stops. It used to close and wait for the return to
   Edit mode to reconnect, so a package whose Play mode handler threw an exception left it down until
   the next domain reload.

@@ -54,6 +54,9 @@ namespace Feeder.MCP.Editor.Matrix
         long _lastMainTickUnixMs;
         volatile bool _updating;
         volatile bool _focused;
+        volatile int _phase;
+        volatile int _compileCount;
+        const string CompileCountKey = "Feeder_Matrix_CompileCount";
         readonly int _processId = System.Diagnostics.Process.GetCurrentProcess().Id;
         readonly string _consoleLogPath = Application.consoleLogPath;
         readonly string _projectRoot = MatrixPluginEditor.ProjectRootPath;
@@ -80,8 +83,10 @@ namespace Feeder.MCP.Editor.Matrix
             _logger = UnityLoggerFactory.LoggerFactory.CreateLogger<FeederMatrixAdapter>();
             _unityVersion = Application.unityVersion;
             EnsureIdentity();
+            _compileCount = SessionState.GetInt(CompileCountKey, 0);
             UpdateEditorState();
             EditorApplication.update += UpdateEditorState;
+            UnityEditor.Compilation.CompilationPipeline.compilationStarted += OnCompilationStarted;
             // a pool thread, so the matrix still hears from the editor while its main thread is held
             _heartbeatTimer = new Timer(_ => _ = SendHeartbeat(), null, HeartbeatInterval, HeartbeatInterval);
         }
@@ -110,6 +115,8 @@ namespace Feeder.MCP.Editor.Matrix
                     }).ToArray(),
                     ProcessId = _processId,
                     ConsoleLogPath = _consoleLogPath,
+                    Phase = _phase,
+                    CompileCount = _compileCount,
                 };
                 return connection.SendAsync("Heartbeat", FmpJson.Arguments(message)).ContinueWith(
                     _ => Interlocked.Exchange(ref _heartbeatBusy, 0), TaskScheduler.Default);
@@ -831,10 +838,23 @@ namespace Feeder.MCP.Editor.Matrix
             Interlocked.Exchange(ref _lastMainTickUnixMs, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             _updating = EditorApplication.isUpdating;
             _focused = UnityEditorInternal.InternalEditorUtility.isApplicationActive;
+            _phase = ComputePhase(
+                !string.IsNullOrEmpty(API.TestRunner.TestResultCollector.TestCallRequestID) || API.TestRunner.TestRunGuard.Executing,
+                EditorApplication.isPlayingOrWillChangePlaymode != EditorApplication.isPlaying);
             if (EditorApplication.isCompiling) _lastEditorState = FmpEditorState.Compiling;
             else if (EditorApplication.isPaused) _lastEditorState = FmpEditorState.Paused;
             else if (EditorApplication.isPlaying) _lastEditorState = FmpEditorState.Playing;
             else _lastEditorState = FmpEditorState.Ready;
+        }
+
+        internal static int ComputePhase(bool runningTests, bool playmodeTransition)
+            => (runningTests ? FmpPhases.RunningTests : 0) | (playmodeTransition ? FmpPhases.PlaymodeTransition : 0);
+
+        void OnCompilationStarted(object _)
+        {
+            var count = SessionState.GetInt(CompileCountKey, 0) + 1;
+            SessionState.SetInt(CompileCountKey, count);
+            _compileCount = count;
         }
 
         static string MatrixHubUrl => $"http://127.0.0.1:{MatrixPluginEditor.Port}/fmp";
@@ -856,6 +876,7 @@ namespace Feeder.MCP.Editor.Matrix
             _disposed = true;
             Interlocked.Increment(ref _reconnectGeneration);
             EditorApplication.update -= UpdateEditorState;
+            UnityEditor.Compilation.CompilationPipeline.compilationStarted -= OnCompilationStarted;
             StopHeartbeat();
             _lifetime.Cancel();
             _toolsUpdatedSubscription?.Dispose();

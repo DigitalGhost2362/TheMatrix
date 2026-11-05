@@ -23,7 +23,7 @@ public class EditorHealthTests
             HeartbeatAt = Now - TimeSpan.FromSeconds(1),
         };
 
-    private static HeartbeatMessage Beat(TimeSpan tickAge, bool focused = true, bool updating = false)
+    private static HeartbeatMessage Beat(TimeSpan tickAge, bool focused = true, bool updating = false, int phase = 0, int compileCount = 0)
         => new()
         {
             UnityInstanceId = "i",
@@ -31,6 +31,8 @@ public class EditorHealthTests
             Focused = focused,
             Updating = updating,
             ProcessId = 42,
+            Phase = phase,
+            CompileCount = compileCount,
         };
 
     private static string Conclude(UnityLink? link, TimeSpan? tickAge = null, bool? alive = true, params PendingOperation[] inFlight)
@@ -126,6 +128,52 @@ public class EditorHealthTests
     {
         Assert.StartsWith("Busy: importing", Conclude(Link(heartbeat: Beat(TimeSpan.FromSeconds(1), updating: true)), TimeSpan.FromSeconds(1)));
         Assert.StartsWith("Busy: compiling", Conclude(Link(state: FmpEditorState.Compiling, heartbeat: Beat(TimeSpan.FromSeconds(1))), TimeSpan.FromSeconds(1)));
+    }
+
+    private static EditorHealth.Readiness Ready(UnityLink? link, TimeSpan? tickAge = null, bool? alive = true)
+        => EditorHealth.ReadinessOf(new EditorHealth.Facts(Now, link, tickAge ?? TimeSpan.Zero, alive, true, [], [], Grace));
+
+    [Fact]
+    public void Running_tests_and_play_transition_are_busy_even_when_unfocused()
+    {
+        var tests = Link(heartbeat: Beat(TimeSpan.FromSeconds(1), focused: false, phase: FmpPhases.RunningTests));
+        var transition = Link(heartbeat: Beat(TimeSpan.FromSeconds(1), focused: false, phase: FmpPhases.PlaymodeTransition));
+        Assert.StartsWith("Busy: running tests", Conclude(tests, TimeSpan.FromSeconds(1)));
+        Assert.StartsWith("Busy: switching play mode", Conclude(transition, TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
+    public void Readiness_names_the_phase_and_when_to_retry()
+    {
+        var tick = TimeSpan.FromMilliseconds(50);
+        var ready = Ready(Link(heartbeat: Beat(tick, compileCount: 3)), tick);
+        Assert.True(ready.Ready);
+        Assert.Equal("ready", ready.Phase);
+        Assert.Equal(0, ready.RetryAfterMs);
+        Assert.Equal(3, ready.CompileCount);
+
+        Assert.Equal("playing", Ready(Link(state: FmpEditorState.Playing, heartbeat: Beat(tick)), tick).Phase);
+        Assert.True(Ready(Link(state: FmpEditorState.Playing, heartbeat: Beat(tick)), tick).Ready);
+
+        var tests = Ready(Link(heartbeat: Beat(tick, phase: FmpPhases.RunningTests)), tick);
+        Assert.False(tests.Ready);
+        Assert.Equal("running_tests", tests.Phase);
+        Assert.True(tests.RetryAfterMs > 0);
+
+        Assert.Equal("playmode_transition", Ready(Link(heartbeat: Beat(tick, phase: FmpPhases.PlaymodeTransition)), tick).Phase);
+        Assert.Equal("compiling", Ready(Link(state: FmpEditorState.Compiling, heartbeat: Beat(tick)), tick).Phase);
+        Assert.Equal("importing", Ready(Link(heartbeat: Beat(tick, updating: true)), tick).Phase);
+        Assert.Equal("stalled", Ready(Link(heartbeat: Beat(TimeSpan.FromSeconds(60))), TimeSpan.FromSeconds(60)).Phase);
+        Assert.Equal("not_linked", Ready(null).Phase);
+        Assert.Equal("reloading", Ready(Link(connected: false, state: FmpEditorState.Reloading, downFor: TimeSpan.FromSeconds(5))).Phase);
+    }
+
+    [Fact]
+    public void Older_plugin_without_phase_reads_as_before()
+    {
+        var tick = TimeSpan.FromMilliseconds(50);
+        Assert.StartsWith("Responsive", Conclude(Link(heartbeat: Beat(tick, phase: 0)), tick));
+        Assert.True(Ready(Link(heartbeat: Beat(tick, phase: 0)), tick).Ready);
     }
 
     [Fact]

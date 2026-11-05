@@ -474,6 +474,7 @@ namespace Feeder.MCP.Editor.UI
                     continue;
                 chip.userData = agent;
                 chip.RegisterCallback<ClickEvent>(OnChipClicked);
+                chip.RegisterCallback<ContextClickEvent>(OnChipContextClicked);
                 _chips.Add(chip);
                 _chipViews.Add(chip);
             }
@@ -545,6 +546,47 @@ namespace Feeder.MCP.Editor.UI
             RefreshChips();
         }
 
+        private void OnChipContextClicked(ContextClickEvent evt)
+        {
+            if (evt.currentTarget is not VisualElement chip || chip.userData is not AgentConfig.AiAgentConfigurator agent)
+                return;
+            var menu = new GenericMenu();
+            AddCopyConfigItem(menu, "Copy config JSON", agent);
+            menu.DropDown(chip.worldBound);
+        }
+
+        private void AddCopyConfigItem(GenericMenu menu, string path, AgentConfig.AiAgentConfigurator agent)
+        {
+            var text = string.Empty;
+            try { text = BridgeAgents.GetConfigText(agent); }
+            catch (Exception ex) { Logger.LogError(ex, "{method} could not build the config of '{agent}'.", nameof(AddCopyConfigItem), agent.AgentId); }
+            if (string.IsNullOrEmpty(text))
+                menu.AddDisabledItem(new GUIContent(path));
+            else
+                menu.AddItem(new GUIContent(path), false, CopyAgentConfig, agent);
+        }
+
+        private void CopyAgentConfig(object agent)
+        {
+            if (agent is not AgentConfig.AiAgentConfigurator configurator)
+                return;
+            try
+            {
+                var text = BridgeAgents.GetConfigText(configurator);
+                if (string.IsNullOrEmpty(text))
+                {
+                    ShowNotification(new GUIContent($"{configurator.AgentName} has no MCP config file (it uses skills only)"));
+                    return;
+                }
+                GUIUtility.systemCopyBuffer = text;
+                ShowNotification(new GUIContent($"{configurator.AgentName} config copied"));
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "{method} could not build the config of '{agent}'.", nameof(CopyAgentConfig), configurator.AgentId);
+            }
+        }
+
         private void ToggleAgentFromMenu(object agent)
         {
             if (agent is AgentConfig.AiAgentConfigurator configurator)
@@ -564,6 +606,9 @@ namespace Feeder.MCP.Editor.UI
                 catch (Exception ex) { Logger.LogError(ex, "{method} could not read '{agent}'.", nameof(OnMoreClicked), agent.AgentId); }
                 menu.AddItem(new GUIContent(agent.AgentName), wired, ToggleAgentFromMenu, agent);
             }
+            menu.AddSeparator(string.Empty);
+            foreach (var agent in BridgeAgents.Overflow())
+                AddCopyConfigItem(menu, "Copy config JSON/" + agent.AgentName, agent);
             menu.DropDown(chip.worldBound);
         }
 

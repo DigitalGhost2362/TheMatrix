@@ -100,6 +100,34 @@ public sealed class EditorLockTests : IDisposable
     }
 
     [Fact]
+    public void Tests_run_is_refused_to_others_while_a_session_holds_the_lock()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude-catwalk", "run edit mode tests");
+
+        Assert.Null(_lock.Refusal("sid-a", "tests-run"));
+        var refusal = _lock.Refusal("sid-b", "tests-run");
+        Assert.NotNull(refusal);
+        Assert.Contains("claude-catwalk", refusal);
+    }
+
+    [Fact]
+    public void A_running_tests_call_keeps_the_claim_past_the_idle_timeout()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude-catwalk", "run play mode tests");
+
+        using (_lock.Track("sid-a"))
+        {
+            _time.Advance(_options.EditorLockIdleTimeout + TimeSpan.FromMinutes(5));
+            Assert.NotNull(_lock.Refusal("sid-b", "tests-run"));
+        }
+
+        _time.Advance(_options.EditorLockIdleTimeout + TimeSpan.FromSeconds(1));
+        Assert.Null(_lock.Refusal("sid-b", "tests-run"));
+    }
+
+    [Fact]
     public void Free_editor_refuses_nobody()
     {
         Link();

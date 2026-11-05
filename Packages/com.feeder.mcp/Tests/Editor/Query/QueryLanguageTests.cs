@@ -161,9 +161,17 @@ namespace Feeder.MCP.Editor.Tests.Query
         {
             Assert.AreEqual("2 rows\nvalue\n1\n2", MatrixQuery.Run("[1, 2]").Text);
             Assert.That(MatrixQuery.Run("[1, 2, 3]", limit: 2).Text, Does.StartWith("3 rows (showing 2;"));
-            Assert.AreEqual("{\"total\":2,\"items\":[{\"value\":1},{\"value\":\"a\"}]}", MatrixQuery.Run("[1, \"a\"]", format: "json").Text);
+            Assert.AreEqual("{\"total\":2,\"items\":[{\"value\":1},{\"value\":\"a\"}],\"shown\":2}", MatrixQuery.Run("[1, \"a\"]", format: "json").Text);
             Assert.AreEqual("0 rows", MatrixQuery.Run("[] | where $ > 1").Text);
             Assert.Throws<QueryException>(() => MatrixQuery.Run("[1]", format: "xml"));
+        }
+
+        [Test]
+        public void JsonOutput_SaysWhenRowsWereCut()
+        {
+            var cut = MatrixQuery.Run("[1, 2, 3]", limit: 2, format: "json").Text;
+            Assert.That(cut, Does.Contain("\"total\":3").And.Contain("\"shown\":2").And.Contain("\"truncated\":true").And.Contain("\"hint\":"));
+            Assert.That(MatrixQuery.Run("[1, 2]", limit: 2, format: "json").Text, Does.Not.Contain("truncated"));
         }
 
         [Test]

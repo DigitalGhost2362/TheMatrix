@@ -39,6 +39,22 @@ namespace Feeder.MCP.Editor.Tests
                 Directory.Delete(_root, true);
         }
 
+        [Test]
+        public void GetConfigText_SkillsOnlyAgent_IsEmpty()
+        {
+            Assert.IsTrue(string.IsNullOrEmpty(BridgeAgents.GetConfigText(_deepSeek)));
+        }
+
+        [Test]
+        public void GetConfigText_Claude_IsNonEmptyJsonWithTheServerEntry()
+        {
+            var text = BridgeAgents.GetConfigText(_claude);
+
+            Assert.IsFalse(string.IsNullOrWhiteSpace(text));
+            Assert.IsTrue(text.TrimStart().StartsWith("{"), text);
+            Assert.IsTrue(text.Contains("mcpServers"), text);
+        }
+
         [TestCase(TransportMethod.stdio)]
         [TestCase(TransportMethod.streamableHttp)]
         public void WiringClaude_LeavesDeepSeekOff(TransportMethod transport)

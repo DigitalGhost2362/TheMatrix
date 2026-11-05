@@ -324,6 +324,14 @@ namespace Feeder.MCP.Editor.UI
             var view = new GroupView(group, button, count);
             button.userData = view;
             button.RegisterCallback<ClickEvent>(OnGroupClicked);
+            if (group != null)
+            {
+                button.AddManipulator(new ContextualMenuManipulator(evt =>
+                {
+                    evt.menu.AppendAction("Enable all in group", _ => SetGroupEnabled(group, true));
+                    evt.menu.AppendAction("Disable all in group", _ => SetGroupEnabled(group, false));
+                }));
+            }
             _groups.Add(button);
             _groupViews.Add(view);
         }
@@ -605,6 +613,21 @@ namespace Feeder.MCP.Editor.UI
 
             if (!manager.SetToolEnabled(row.Info.Name, evt.newValue))
                 Logger.LogError("{method} could not switch '{tool}': it is not registered.", nameof(OnToggled), row.Info.Name);
+            Refresh();
+            ScheduleSync();
+        }
+
+        private void SetGroupEnabled(SkillGroup group, bool enabled)
+        {
+            var manager = _manager;
+            if (manager == null)
+                return;
+
+            foreach (var info in _infos.Where(info => info.Group == group))
+            {
+                if (!manager.SetToolEnabled(info.Name, enabled))
+                    Logger.LogError("{method} could not switch '{tool}': it is not registered.", nameof(SetGroupEnabled), info.Name);
+            }
             Refresh();
             ScheduleSync();
         }

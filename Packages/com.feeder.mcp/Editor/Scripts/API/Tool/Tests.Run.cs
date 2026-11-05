@@ -82,6 +82,9 @@ namespace Feeder.MCP.Editor.API
             [Description("Include stack traces for console logs in the test results (default: false). This is huge amount of data, use only if really needed.")]
             bool includeLogsStacktrace = false,
 
+            [Description("Return a job id immediately instead of waiting for the run to finish (default: false). Poll with 'tests-result'; the result is kept in Library, so it survives a domain reload and a client timeout.")]
+            bool async = false,
+
             [RequestID]
             string? requestId = null
         )
@@ -106,6 +109,7 @@ namespace Feeder.MCP.Editor.API
                 // Save display options to PlayerPrefs BEFORE AssetDatabase.Refresh —
                 // these must be persisted before a potential domain reload
                 TestRunGuard.Begin(requestId);
+                TestRunStore.Begin(requestId, testMode.ToString(), new TestFilterParameters(testAssembly, testNamespace, testClass, testMethod), async);
                 TestResultCollector.IncludePassingTests.Value = includePassingTests;
                 TestResultCollector.IncludeMessage.Value = includeMessages;
                 TestResultCollector.IncludeMessageStacktrace.Value = includeStacktrace;
@@ -133,10 +137,11 @@ namespace Feeder.MCP.Editor.API
                     // If compilation succeeds, domain reload destroys this registration,
                     // but the static constructor re-registers it after reload.
                     UnityEditor.EditorApplication.update += ResumePendingTestRunOnce;
+                    TestRunStore.SetState(TestRunStore.Deferred);
 
-                    return ResponseCallValueTool<TestRunResponse>
-                        .Processing()
-                        .SetRequestID(requestId);
+                    return async
+                        ? JobStarted(requestId)
+                        : ResponseCallValueTool<TestRunResponse>.Processing().SetRequestID(requestId);
                 }
 
                 // Check for pre-existing compilation errors (no new compilation triggered)
@@ -144,6 +149,7 @@ namespace Feeder.MCP.Editor.API
                 {
                     TestRunGuard.Clear();
                     var errorDetails = ScriptUtils.GetCompilationErrorDetails();
+                    TestRunStore.Fail("Project has compilation errors.\n" + errorDetails);
                     return ResponseCallValueTool<TestRunResponse>
                         .Error($"Cannot run tests: Unity project has compilation errors.\n\n{errorDetails}")
                         .SetRequestID(requestId);
@@ -164,6 +170,7 @@ namespace Feeder.MCP.Editor.API
                     if (validation != null)
                     {
                         TestRunGuard.Clear();
+                        TestRunStore.Fail(validation);
                         return ResponseCallValueTool<TestRunResponse>.Error(validation).SetRequestID(requestId);
                     }
 
@@ -172,11 +179,14 @@ namespace Feeder.MCP.Editor.API
                     // Delay test running, first need to return response to caller
                     MainThread.Instance.Run(() => TestRunnerApi.Execute(new ExecutionSettings(filter)));
 
-                    return ResponseCallValueTool<TestRunResponse>.Processing().SetRequestID(requestId);
+                    return async
+                        ? JobStarted(requestId)
+                        : ResponseCallValueTool<TestRunResponse>.Processing().SetRequestID(requestId);
                 }
                 catch (Exception ex)
                 {
                     TestRunGuard.Clear();
+                    TestRunStore.Fail(Error.TestExecutionFailed(ex.Message));
                     if (MatrixPlugin.IsLogEnabled(LogLevel.Error))
                     {
                         Debug.LogException(ex);
@@ -186,6 +196,11 @@ namespace Feeder.MCP.Editor.API
                 }
             }).Unwrap();
         }
+
+        static ResponseCallValueTool<TestRunResponse> JobStarted(string requestId)
+            => ResponseCallValueTool<TestRunResponse>
+                .Success($"[job_started job_id={requestId}] The run continues in the Editor. Poll '{TestsResultToolId}' until state is finished or failed.")
+                .SetRequestID(requestId);
 
         internal static Filter CreateTestFilter(TestMode testMode, TestFilterParameters filterParams)
         {
@@ -306,7 +321,7 @@ namespace Feeder.MCP.Editor.API
             }
         }
 
-        static int CountFilteredTests(ITestAdaptor test, TestFilterParameters filterParams)
+        internal static int CountFilteredTests(ITestAdaptor test, TestFilterParameters filterParams, List<(string Assembly, string Name)>? sink = null)
         {
             // If no filters are specified, count all tests
             if (!filterParams.HasAnyFilter)
@@ -314,27 +329,35 @@ namespace Feeder.MCP.Editor.API
 
             var groupPattern = CreateGroupRegexPattern(filterParams);
             var group = groupPattern == null ? null : new Regex(groupPattern);
-            return CountFilteredTests(test, filterParams, group, false, false, false);
+            return CountFilteredTests(test, filterParams, group, false, false, false, sink);
         }
 
         // mirrors Unity's Filter: assembly, group and test name filters are ANDed, and a test passes
         // a filter when it or any of its parent suites matches it
         static int CountFilteredTests(ITestAdaptor test, TestFilterParameters filterParams, Regex? group,
-            bool assemblyMatched, bool groupMatched, bool methodMatched)
+            bool assemblyMatched, bool groupMatched, bool methodMatched, List<(string Assembly, string Name)>? sink = null)
         {
             assemblyMatched |= string.IsNullOrEmpty(filterParams.TestAssembly) || IsInAssembly(test, filterParams.TestAssembly!);
             groupMatched |= group == null || group.IsMatch(test.FullName);
             methodMatched |= string.IsNullOrEmpty(filterParams.TestMethod) || test.FullName == filterParams.TestMethod;
 
             var count = !test.IsSuite && assemblyMatched && groupMatched && methodMatched ? 1 : 0;
+            if (count == 1)
+                sink?.Add((AssemblyOf(test), test.FullName));
 
             if (test.HasChildren)
             {
                 foreach (var child in test.Children)
-                    count += CountFilteredTests(child, filterParams, group, assemblyMatched, groupMatched, methodMatched);
+                    count += CountFilteredTests(child, filterParams, group, assemblyMatched, groupMatched, methodMatched, sink);
             }
 
             return count;
+        }
+
+        static string AssemblyOf(ITestAdaptor test)
+        {
+            var dllIndex = test.UniqueName.IndexOf(".dll", StringComparison.OrdinalIgnoreCase);
+            return dllIndex > 0 ? test.UniqueName.Substring(0, dllIndex).TrimStart('[') : string.Empty;
         }
 
         static bool IsInAssembly(ITestAdaptor test, string assemblyName)
