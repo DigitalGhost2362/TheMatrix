@@ -10,7 +10,8 @@
         "Feeder.Json",
         "Feeder.Logging",
         "Feeder.Rx",
-        "Feeder.Fmp"
+        "Feeder.Fmp",
+        "Feeder.MCP.Player"
     ],
     "includePlatforms": [
         "Editor"

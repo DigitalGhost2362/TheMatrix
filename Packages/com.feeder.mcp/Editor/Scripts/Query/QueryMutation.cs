@@ -214,6 +214,8 @@ namespace Feeder.MCP.Editor.Query
             for (var i = leafIndex - 1; i >= 0; i--)
             {
                 var child = walk.Holders[i + 1];
+                if (IsParticleModule(child.GetType()))
+                    break;
                 if (!child.GetType().IsValueType && !walk.Steps[i].ReturnsCopy)
                     break;
                 if (walk.Steps[i].Write == null)
@@ -222,6 +224,10 @@ namespace Feeder.MCP.Editor.Query
             }
             return receivers;
         }
+
+        // ParticleSystem.MainModule and friends are handles onto the system: their setters write straight through, so no write-back
+        static bool IsParticleModule(Type type) =>
+            type.IsValueType && type.DeclaringType == typeof(ParticleSystem) && type.Name.EndsWith("Module", StringComparison.Ordinal);
 
         (List<object> Holders, List<Step> Steps) Walk(object root, QueryContext ctx)
         {

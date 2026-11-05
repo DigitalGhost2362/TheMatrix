@@ -60,6 +60,8 @@ public sealed record ToolDescriptor
     [Key(5)] public bool Destructive { get; init; }
     [Key(6)] public bool Idempotent { get; init; }
     [Key(7)] public bool ThreadSafe { get; init; }
+    // Where the tool runs: null or "Editor" for the editor link, "Runtime" for a player link. Absent from older plugins.
+    [Key(8)] public string? Target { get; init; }
 }
 
 [MessagePackObject]

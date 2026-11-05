@@ -28,6 +28,15 @@ public sealed class MatrixOptions
     /// <summary>While a session or a person holds the editor lock, refuse other sessions' editor-changing tools. Off only reports the holder.</summary>
     public bool EnforceEditorLock { get; set; } = true;
 
+    /// <summary>
+    /// An editor-changing tool from a session without a lock claims the editor itself when it is free, or waits in the queue
+    /// when it is taken. Off (<c>FeederMatrix:ImplicitLock=false</c>): such a call runs while nobody holds the lock and is refused while someone does.
+    /// </summary>
+    public bool ImplicitLock { get; set; } = true;
+
+    /// <summary>An implicit claim with no tool call for this long is freed.</summary>
+    public TimeSpan EditorLockImplicitIdle { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>An agent's editor claim with no tool call for this long is freed.</summary>
     public TimeSpan EditorLockIdleTimeout { get; set; } = TimeSpan.FromMinutes(10);
 

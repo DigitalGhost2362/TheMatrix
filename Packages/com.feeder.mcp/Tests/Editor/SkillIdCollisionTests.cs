@@ -50,6 +50,32 @@ namespace Feeder.MCP.Editor.Tests
         }
 
         [Test]
+        public void Every_skill_description_fits_the_1024_character_cap()
+        {
+            const int cap = 1024;
+            var tooLong = new List<string>();
+            foreach (var method in TypeCache.GetMethodsWithAttribute<AiToolAttribute>())
+            {
+                var text = method.GetCustomAttribute<AiSkillDescriptionAttribute>()?.Description;
+                if (text != null && text.Length > cap)
+                    tooLong.Add($"tool {method.GetCustomAttribute<AiToolAttribute>()!.Name}: {text.Length}");
+            }
+
+            foreach (var type in TypeCache.GetTypesWithAttribute<AiSkillTypeAttribute>())
+            {
+                foreach (var member in type.GetMembers(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+                {
+                    var skill = member.GetCustomAttribute<AiSkillAttribute>();
+                    var text = skill?.SkillDescription ?? skill?.Description;
+                    if (skill != null && text != null && text.Length > cap)
+                        tooLong.Add($"guide skill {skill.Name}: {text.Length}");
+                }
+            }
+
+            Assert.IsEmpty(tooLong, "Skill descriptions over " + cap + " characters:\n" + string.Join("\n", tooLong));
+        }
+
+        [Test]
         public void Finds_the_tool_and_guide_skills()
         {
             var folders = SkillFolders().Select(entry => entry.Folder).ToArray();

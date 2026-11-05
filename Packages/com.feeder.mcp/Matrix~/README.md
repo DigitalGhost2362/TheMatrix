@@ -29,19 +29,26 @@ dotnet test  Feeder.Matrix.slnx
 
 ## Rebuild the payload
 
-The package ships the server as `Server~/win-x64/server-payload.zip`, built from this folder:
+The package ships the server as `Server~/<rid>/server-payload.zip` for `win-x64`, `osx-x64`, `osx-arm64` and
+`linux-x64`. Build them all, or some with `-Rids`:
 
 ```
-dotnet publish src/Feeder.Matrix -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o out
+pwsh -File tools/publish-payloads.ps1 [-Rids osx-arm64,linux-x64]
 ```
 
-The zip holds the published `feeder-mcp-server.exe` renamed to `matrix-server.exe`,
-`feeder-mcp-server.staticwebassets.endpoints.json`, `web.config` and a `version` file with the server
+Each zip holds the published `feeder-mcp-server[.exe]` renamed to `matrix-server[.exe]`,
+`feeder-mcp-server.staticwebassets.endpoints.json`, `web.config` (Windows only) and a `version` file with the server
 version. Change that version in `src/Feeder.Matrix/Feeder.Matrix.csproj`, in `src/Feeder.Matrix/Program.cs`
-and in `McpServerManager.ServerVersion` together.
+and in `McpServerManager.ServerVersion` together, then run the script and put the printed hashes below.
 
-Shipped payload 0.7.0, `matrix-server.exe` SHA-256:
-`ae88b3ad61307b3a60f8a74414b3d0630c15828df646ce7214ed89a527f4a283`
+Shipped payload 0.8.0, `matrix-server` SHA-256:
+
+| rid | SHA-256 |
+| --- | --- |
+| win-x64 | `44613353bfa1eaf98b0c1b04397095694d1465ab0db052dec1577b6f407183b6` |
+| osx-x64 | `f354b63e7e7d3a803c1364e25e9bee207da9d3abcb6a32e592056c7ee67f5adf` |
+| osx-arm64 | `f8ca5d80ee3d3ce742a2c65ff51b997e09d749d5e18b411a1c6d3d9148f05093` |
+| linux-x64 | `ff5b355b7e2c2d4a118f6e799d211cd5a8bfd4b94e215c0a7da2f36b017d1db3` |
 
 ## Run (matrix-only, mock backend)
 

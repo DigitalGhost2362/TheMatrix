@@ -10,6 +10,7 @@
         "Feeder.Logging",
         "Feeder.Rx",
         "Feeder.Fmp",
+        "Feeder.MCP.Player",
         "UnityEngine.UI",
         "Unity.InputSystem"
     ],

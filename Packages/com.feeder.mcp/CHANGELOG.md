@@ -6,6 +6,39 @@ All notable changes to this package are documented here.
 
 ### Added
 
+- **Runtime tools:** a build, or Play mode, links to the project's server as a player next to the Editor, and
+  `[MatrixRuntimeTool]` methods run there. The server keeps both links at once; a player never replaces the Editor and
+  an older Editor or server keeps working. Samples: `runtime-ping`, `runtime-scene-info`. Play mode links through
+  `Tools > Feeder > Server > Link Play Mode As Player`.
+- **Server for macOS and Linux:** payloads for `osx-x64`, `osx-arm64` and `linux-x64` next to `win-x64`;
+  `Matrix~/tools/publish-payloads.ps1` builds them all.
+- **Batch entry** `Feeder.MCP.Editor.MatrixBatch.Run` for `-batchmode` and CI: installs and starts the server, links the
+  Editor, writes `Temp/matrix-batch.ready.json`, and exits on idle, a quit file or a time limit.
+- Tools for project settings (off by default): `settings-get`, `settings-set` (one undo step), `settings-tags` (tags,
+  layers, sorting layers) and `settings-build-scenes`.
+- `scriptableobject-create`, `scriptableobject-get` and `scriptableobject-set` (off by default): create a
+  ScriptableObject asset, read its serialized fields, private ones included, and set values or resize arrays.
+- `physics-query` (raycasts, shape casts, overlaps) and `physics-simulate` (steps physics in Edit mode and restores the
+  scene unless `apply`) (off by default).
+- Lighting and rendering tools (off by default): `lighting-bake` as a background job, `lighting-environment-get/set`
+  (skybox, ambient, fog, sun), `rendering-volume-get/set` (Volume overrides) and `rendering-features-list/set` (URP
+  renderer features).
+- UI Toolkit tools (off by default): `uitoolkit-write` (UXML/USS with a syntax check), `uitoolkit-document-attach`
+  (UIDocument and PanelSettings) and `uitoolkit-render` (renders a document to an image).
+- Animation tools (off by default): `animation-clip-create/get/set-curve/set-events` and
+  `animation-controller-create/get/edit` (parameters, layers, states, transitions with conditions, blend trees).
+- `build-start`, `build-status` and `build-cancel` (off by default) build the player as a background job that survives
+  domain reloads.
+- `vfx-scene-read`, `vfx-scene-apply` and `vfx-control` (off by default) work on ParticleSystems placed in the scene;
+  `vfx-control` plays, stops and simulates them. `rql-mutate` can set ParticleSystem module values such as
+  `ParticleSystem.main.duration`.
+- `profiler-memory-snapshot`, `profiler-memory-compare` and `profiler-frame-debugger` (off by default).
+- MCP resources: `matrix://editor/state`, `matrix://editor/selection`, `matrix://editor/scenes`,
+  `matrix://console/errors`, and the templates `matrix://rql/{query}` and `matrix://console/{type}/{count}`.
+- The editor checks once a day for a newer version of a package installed from Git and shows it once per version.
+  Turn it off for yourself or the whole project under Tools > Feeder > Update Check.
+- `AGENTS.md` for contributors.
+
 - **Editor lock kept by the server** - agent sessions sharing one editor take turns through
   `editor-lock-acquire`, `editor-lock-release` and `editor-lock-status`:
   - while a session holds the editor, the other sessions' tools that are not read-only are refused
@@ -79,7 +112,11 @@ All notable changes to this package are documented here.
   1920x1080 capture now returns 1024x576.
 - `rql-query format: json` adds `shown`, and `truncated` plus a `hint` when rows were cut.
 - Tool parameters also match in snake_case or kebab-case (`max_entries` for `maxEntries`).
-- Server 0.7.0.
+- Server 0.8.0.
+- Editor-changing tools from a session that holds no editor lock no longer run unchecked: with the editor free the
+  session gets an implicit claim (freed after 30 s without a call), and while another session holds it the call waits
+  in the queue like `editor-lock-acquire`, then runs, or answers `lock_queued` when the wait slice ends. Read-only and
+  runtime tools never wait. `FeederMatrix:ImplicitLock=false` restores the old behavior.
 - Server 0.6.0. It mirrors the lock to `Temp/agent-editor-lock/lock.json`, so sessions on the lock-file
   scripts still see it, and treats a live lock file of such a session as busy.
 - `matrix-shared-editor` claims the editor with the new tools. The lock-file scripts remain, for an

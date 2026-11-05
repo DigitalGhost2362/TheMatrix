@@ -606,6 +606,7 @@ namespace Feeder.MCP.Editor.Matrix
 
         async Task InvokeToolAsync(ToolInvoke invoke)
         {
+            MatrixBatch.NoteToolCall();
             var deferred = false;
             var cts = CreateOperationCancellation(invoke);
             _operations[invoke.OperationId] = new Operation(cts, invoke.ToolName);

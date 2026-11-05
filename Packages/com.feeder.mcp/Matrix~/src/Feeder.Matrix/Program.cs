@@ -60,6 +60,7 @@ try
     builder.Services.AddSingleton<EditorLock>();
     builder.Services.AddHostedService<EditorLockMonitor>();
     builder.Services.AddSingleton<ServerTools>();
+    builder.Services.AddSingleton<MatrixResources>();
 
     builder.Services
         .AddSignalR(options => options.MaximumReceiveMessageSize = matrixOptions.MaxRequestBodyBytes)
@@ -102,10 +103,13 @@ try
         .WithListPromptsHandler((_, _) => ValueTask.FromResult(new ListPromptsResult()))
         .WithGetPromptHandler((context, _) =>
             ValueTask.FromResult<GetPromptResult>(throwPromptNotFound(context.Params?.Name)))
-        .WithListResourcesHandler((_, _) => ValueTask.FromResult(new ListResourcesResult()))
-        .WithListResourceTemplatesHandler((_, _) => ValueTask.FromResult(new ListResourceTemplatesResult()))
-        .WithReadResourceHandler((context, _) =>
-            ValueTask.FromResult<ReadResourceResult>(throwResourceNotFound(context.Params?.Uri)));
+        .WithListResourcesHandler((context, _) =>
+            ValueTask.FromResult(context.Services!.GetRequiredService<MatrixResources>().List()))
+        .WithListResourceTemplatesHandler((context, _) =>
+            ValueTask.FromResult(context.Services!.GetRequiredService<MatrixResources>().Templates()))
+        .WithReadResourceHandler((context, ct) =>
+            context.Services!.GetRequiredService<MatrixResources>()
+                .ReadAsync(context.Params?.Uri, context.Services!.GetRequiredService<IUnityBackend>(), ct));
 
     var app = builder.Build();
     var mcpClientTracker = app.Services.GetRequiredService<McpClientTracker>();
@@ -172,6 +176,14 @@ try
             lastSeen = l.LastSeen.UtcDateTime,
             toolCount = l.Registry?.Tools.Length ?? 0,
         }),
+        playerLinks = registry.Players.Select(l => new
+        {
+            l.ProjectId,
+            l.UnityInstanceId,
+            l.Connected,
+            lastSeen = l.LastSeen.UtcDateTime,
+            toolCount = l.Registry?.Tools.Length ?? 0,
+        }),
     }));
 
     Log.Information("Feeder Local Matrix {Version} listening on 127.0.0.1:{Port} (MCP {McpPath}, FMP {HubPath})",
@@ -193,12 +205,9 @@ finally
 static GetPromptResult throwPromptNotFound(string? name)
     => throw new ModelContextProtocol.McpProtocolException($"Unknown prompt: '{name}'", ModelContextProtocol.McpErrorCode.InvalidParams);
 
-static ReadResourceResult throwResourceNotFound(string? uri)
-    => throw new ModelContextProtocol.McpProtocolException($"Unknown resource: '{uri}'", ModelContextProtocol.McpErrorCode.InvalidParams);
-
 public static class MatrixVersion
 {
-    public const string Value = "0.7.0";
+    public const string Value = "0.8.0";
 }
 
 // Exposes the entry point to WebApplicationFactory-based integration tests.

@@ -24,7 +24,7 @@ public sealed class FmpHub(
     IOptions<MatrixOptions> options,
     ILogger<FmpHub> logger) : Hub<IFmpUnityClient>
 {
-    public UnityRegisterResponse Register(UnityRegisterRequest request)
+    private UnityRegisterResponse? Reject(UnityRegisterRequest request)
     {
         if (request.ProtocolVersion != FmpConstants.ProtocolVersion &&
             !request.SupportedProtocolVersions.Contains(FmpConstants.ProtocolVersion))
@@ -56,6 +56,14 @@ public sealed class FmpHub(
             };
         }
 
+        return null;
+    }
+
+    public UnityRegisterResponse Register(UnityRegisterRequest request)
+    {
+        if (Reject(request) is { } rejected)
+            return rejected;
+
         var link = registry.Register(request, Context.ConnectionId);
         logger.LogInformation(
             "Unity registered: project {ProjectId}, instance {InstanceId}, editor {EditorState}, plugin {PluginVersion}, unity {UnityVersion}",
@@ -79,7 +87,24 @@ public sealed class FmpHub(
             ChosenProtocolVersion = FmpConstants.ProtocolVersion,
             RegistryUpToDate = link.Registry?.RegistryHash == request.ToolRegistryHash,
             AwaitedOperations = registry.AwaitedOperationIds,
-            Capabilities = [FmpCapabilities.Compile, FmpCapabilities.EditorLock, FmpCapabilities.EditorLockQueue],
+            Capabilities = [FmpCapabilities.Compile, FmpCapabilities.EditorLock, FmpCapabilities.EditorLockQueue, FmpCapabilities.PlayerLink],
+        };
+    }
+
+    /// <summary>Links a built player beside the editor. An older matrix has no such method, so a player never replaces its editor there.</summary>
+    public UnityRegisterResponse RegisterPlayer(UnityRegisterRequest request)
+    {
+        if (Reject(request) is { } rejected)
+            return rejected;
+
+        var link = registry.RegisterPlayer(request, Context.ConnectionId);
+        logger.LogInformation("Player linked: project {ProjectId}, instance {InstanceId}, plugin {PluginVersion}, unity {UnityVersion}",
+            request.ProjectId, request.UnityInstanceId, request.PluginVersion, request.UnityVersion);
+        return new UnityRegisterResponse
+        {
+            SessionId = link.SessionId,
+            ChosenProtocolVersion = FmpConstants.ProtocolVersion,
+            Capabilities = [FmpCapabilities.PlayerLink],
         };
     }
 
@@ -115,7 +140,7 @@ public sealed class FmpHub(
 
     public void PublishRegistry(RegistrySnapshot snapshot)
     {
-        var link = registry.GetLink(snapshot.ProjectId);
+        var link = registry.GetPlayerByConnection(Context.ConnectionId) ?? registry.GetLink(snapshot.ProjectId);
         if (link is null)
         {
             logger.LogWarning("Registry snapshot for unknown project {ProjectId} dropped", snapshot.ProjectId);
@@ -170,8 +195,11 @@ public sealed class FmpHub(
 
     public override Task OnDisconnectedAsync(Exception? exception)
     {
+        var wasPlayer = registry.GetPlayerByConnection(Context.ConnectionId) is not null;
         registry.MarkDisconnected(Context.ConnectionId);
         logger.LogInformation(exception, "Unity link disconnected ({ConnectionId})", Context.ConnectionId);
+        if (wasPlayer)
+            _ = mcpClients.NotifyToolListChangedAsync();
         foreach (var link in registry.Links.Where(l => l.ConnectionId == Context.ConnectionId))
             _ = AnnounceIfGoneAsync(link, link.LastSeen);
         return base.OnDisconnectedAsync(exception);

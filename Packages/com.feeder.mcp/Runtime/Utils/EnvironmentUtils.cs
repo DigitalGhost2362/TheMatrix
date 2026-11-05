@@ -123,11 +123,17 @@ namespace Feeder.MCP.Runtime.Utils
             }
         }
 
+        /// <summary>Set by the batch entry (<c>MatrixBatch.Run</c>): the run asked for Matrix, so a CI environment no longer switches it off.</summary>
+        public const string BatchEntryVariable = "FEEDER_MATRIX_BATCH";
+
         /// <summary>
         /// Checks if the current environment is a CI environment.
         /// </summary>
         public static bool IsCi()
         {
+            if (Environment.GetEnvironmentVariable(BatchEntryVariable) == "1")
+                return false;
+
             var commandLineArgs = ArgsUtils.ParseCommandLineArguments();
 
             var ci = commandLineArgs.GetValueOrDefault("CI") ?? Environment.GetEnvironmentVariable("CI");

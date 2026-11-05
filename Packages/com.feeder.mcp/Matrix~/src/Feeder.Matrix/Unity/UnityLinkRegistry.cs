@@ -26,6 +26,9 @@ public sealed class UnityLink
 
     /// <summary>Set once the link stayed down past the reconnect grace and clients were told its tools are gone.</summary>
     public bool ListedAsGone { get; set; }
+
+    /// <summary>True for a built player that runs the Runtime tools; false for the Unity editor.</summary>
+    public bool IsPlayer { get; init; }
 }
 
 /// <summary>An MCP tool call waiting for Unity. Its deadline moves when Unity defers or asks for more time.</summary>
@@ -65,6 +68,8 @@ public sealed class UnityLinkRegistry
 {
     private readonly ConcurrentDictionary<string, UnityLink> _linksByProject = new();
     private readonly ConcurrentDictionary<string, PendingOperation> _pendingOps = new();
+    // Players never take the editor's slot: several can be linked to one project, keyed by instance.
+    private readonly ConcurrentDictionary<string, UnityLink> _players = new();
 
     public UnityLink Register(UnityRegisterRequest request, string connectionId)
     {
@@ -103,8 +108,51 @@ public sealed class UnityLinkRegistry
         return _linksByProject[request.ProjectId];
     }
 
+    /// <summary>Links a built player. It lives beside the editor link of its project and never replaces it.</summary>
+    public UnityLink RegisterPlayer(UnityRegisterRequest request, string connectionId)
+    {
+        var link = new UnityLink
+        {
+            ConnectionId = connectionId,
+            ProjectId = request.ProjectId,
+            UnityInstanceId = request.UnityInstanceId,
+            SessionId = Guid.NewGuid().ToString("N"),
+            EditorState = request.EditorState,
+            PluginVersion = request.PluginVersion,
+            Features = request.Features ?? [],
+            IsPlayer = true,
+        };
+        return _players.AddOrUpdate(request.UnityInstanceId, link, (_, existing) =>
+        {
+            existing.ConnectionId = connectionId;
+            existing.Connected = true;
+            existing.LastSeen = DateTimeOffset.UtcNow;
+            return existing;
+        });
+    }
+
+    /// <summary>The newest connected player, preferring one of the given project.</summary>
+    public UnityLink? GetPlayerLink(string? projectId = null)
+        => _players.Values.Where(p => p.Connected)
+            .OrderByDescending(p => p.ProjectId == projectId)
+            .ThenByDescending(p => p.LastSeen)
+            .FirstOrDefault();
+
+    public IReadOnlyCollection<UnityLink> Players => _players.Values.ToArray();
+
+    public UnityLink? GetPlayerByConnection(string connectionId)
+        => _players.Values.FirstOrDefault(p => p.Connected && p.ConnectionId == connectionId);
+
+    /// <summary>True when a connected player offers a Runtime tool of this name.</summary>
+    public bool IsRuntimeTool(string? toolName)
+        => !string.IsNullOrEmpty(toolName) && _players.Values.Any(p => p.Connected && p.Registry?.Tools.Any(t =>
+            t.Target == FmpToolTargets.Runtime && string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase)) == true);
+
     public void MarkDisconnected(string connectionId)
     {
+        // a player has no domain reload to wait out: its link is gone with its connection
+        foreach (var player in _players.Values.Where(p => p.ConnectionId == connectionId))
+            _players.TryRemove(player.UnityInstanceId, out _);
         foreach (var link in _linksByProject.Values)
         {
             if (link.ConnectionId == connectionId)
@@ -117,6 +165,7 @@ public sealed class UnityLinkRegistry
 
     public void Unregister(string projectId, string unityInstanceId)
     {
+        _players.TryRemove(unityInstanceId, out _);
         if (_linksByProject.TryGetValue(projectId, out var link) && link.UnityInstanceId == unityInstanceId)
             _linksByProject.TryRemove(projectId, out _);
     }

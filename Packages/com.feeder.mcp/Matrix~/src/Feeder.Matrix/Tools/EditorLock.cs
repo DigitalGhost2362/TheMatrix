@@ -52,7 +52,7 @@ public sealed class EditorLock
     readonly object _gate = new();
     Holder? _holder;
     FileLock? _outside;
-    (string SessionId, string Reason)? _lastDropped;
+    (string SessionId, string Reason, bool Implicit)? _lastDropped;
     EditorLockState _published = new();
     readonly List<Waiter> _queue = [];
     readonly Dictionary<string, DateTimeOffset> _removed = [];
@@ -89,6 +89,7 @@ public sealed class EditorLock
         public int InFlight { get; set; }
         public DateTimeOffset GrantedAt { get; init; }
         public bool AwaitingFirstCall { get; set; }
+        public bool Implicit { get; set; }
     }
 
     sealed class Waiter
@@ -103,6 +104,8 @@ public sealed class EditorLock
         public TaskCompletionSource? Pending { get; set; }
         public bool Granted { get; set; }
         public bool Removed { get; set; }
+        public bool Implicit { get; set; }
+        public bool PlayOk { get; init; }
     }
 
     sealed record FileLock(string Owner, string Task, string Acquired, long Heartbeat, bool Matrix, string Session, DateTimeOffset Created);
@@ -172,9 +175,9 @@ public sealed class EditorLock
     }
 
     /// <summary>Claims the editor, or waits in the queue for at most one slice and answers queued.</summary>
-    public async Task<CallToolResult> AcquireAsync(string? sessionId, string? owner, string? task, bool wait, string? ticket, CancellationToken ct)
+    public async Task<CallToolResult> AcquireAsync(string? sessionId, string? owner, string? task, bool wait, string? ticket, CancellationToken ct, string? implicitTool = null)
     {
-        var result = Enter(sessionId, owner, task, wait, ticket, out var waiter, out var signal);
+        var result = Enter(sessionId, owner, task, wait, ticket, out var waiter, out var signal, implicitTool);
         _ = PublishAsync();
         if (result is not null)
             return result;
@@ -199,7 +202,7 @@ public sealed class EditorLock
     }
 
     // null: the caller is queued and must wait on signal
-    CallToolResult? Enter(string? sessionId, string? owner, string? task, bool wait, string? ticket, out Waiter? waiter, out Task? signal)
+    CallToolResult? Enter(string? sessionId, string? owner, string? task, bool wait, string? ticket, out Waiter? waiter, out Task? signal, string? implicitTool = null)
     {
         waiter = null;
         signal = null;
@@ -222,6 +225,13 @@ public sealed class EditorLock
             if (_holder is { } held && held.SessionId == sessionId)
             {
                 _queue.RemoveAll(w => w.SessionId == sessionId);
+                if (implicitTool is not null)
+                {
+                    held.LastActivity = now;
+                    held.AwaitingFirstCall = false;
+                    return Acquired($"acquired (you already hold it). {EditorLine(link)}", held.Task, held.Owner, link, TimeSpan.Zero);
+                }
+                held.Implicit = false;
                 held.Owner = owner;
                 held.Task = task;
                 held.Acquired = now;
@@ -236,15 +246,18 @@ public sealed class EditorLock
             waiter = _queue.Find(w => w.SessionId == sessionId);
             if (waiter is null)
             {
-                if (_queue.Count == 0 && Blocker(link, now) is null)
+                var playOk = implicitTool is not null && _lastDropped is { Implicit: true } dropped && dropped.SessionId == sessionId;
+                if (_queue.Count == 0 && Blocker(link, now, playOk) is null)
                 {
-                    Grant(sessionId, owner, task, link, now, fromQueue: false);
+                    Grant(sessionId, owner, task, link, now, fromQueue: false, implicitTool is not null);
                     return Acquired($"acquired for \"{task}\". {EditorLine(link)} {Reminder}", task, owner, link, TimeSpan.Zero);
                 }
                 if (!wait)
                     return Busy(Blocker(link, now));
                 waiter = new Waiter
                 {
+                    Implicit = implicitTool is not null,
+                    PlayOk = playOk,
                     Ticket = Guid.NewGuid().ToString("N")[..12],
                     SessionId = sessionId,
                     Owner = owner,
@@ -254,10 +267,11 @@ public sealed class EditorLock
                 };
                 _queue.Add(waiter);
             }
-            else
+            else if (implicitTool is null)
             {
                 waiter.Owner = owner;
                 waiter.Task = task;
+                waiter.Implicit = false;
             }
             waiter.LastCall = now;
             if (!wait)
@@ -304,7 +318,9 @@ public sealed class EditorLock
         var blocker = Blocker(link, now) ?? "The editor is free and your turn comes next.";
         var result = ToolErrors.Create(ToolErrors.LockQueued,
             $"queued: position {position} ({position - 1} ahead). {char.ToUpperInvariant(blocker[0])}{blocker[1..]} " +
-            $"Call {AcquireName} again at once with ticket \"{waiter.Ticket}\" to keep your place.",
+            (waiter.Implicit
+                ? "The tool did not run. Call the same tool again at once to keep your place."
+                : $"Call {AcquireName} again at once with ticket \"{waiter.Ticket}\" to keep your place."),
             retryAfterMs: 0,
             new Dictionary<string, object?>
             {
@@ -339,7 +355,7 @@ public sealed class EditorLock
             new Dictionary<string, object?> { ["holder"] = _holder?.Owner ?? _outside?.Owner, ["queue_length"] = _queue.Count });
 
     // caller holds _gate
-    void Grant(string sessionId, string owner, string task, UnityLink? link, DateTimeOffset now, bool fromQueue)
+    void Grant(string sessionId, string owner, string task, UnityLink? link, DateTimeOffset now, bool fromQueue, bool isImplicit = false)
     {
         var client = _clients.ClientOf(sessionId);
         _holder = new Holder
@@ -354,6 +370,7 @@ public sealed class EditorLock
             LastActivity = now,
             GrantedAt = now,
             AwaitingFirstCall = fromQueue,
+            Implicit = isImplicit,
         };
         _outside = null;
         if (_lastDropped?.SessionId == sessionId)
@@ -363,7 +380,7 @@ public sealed class EditorLock
     }
 
     // caller holds _gate; why nobody can be granted the lock now, or null
-    string? Blocker(UnityLink? link, DateTimeOffset now)
+    string? Blocker(UnityLink? link, DateTimeOffset now, bool playOk = false)
     {
         if (_holder is { } other)
             return Describe(other, now);
@@ -374,7 +391,7 @@ public sealed class EditorLock
         }
         if (_paused)
             return "a person paused the editor lock queue in the Unity editor; nobody is granted the lock until they resume it.";
-        if (link is { Connected: true, EditorState: FmpEditorState.Playing or FmpEditorState.Paused })
+        if (!playOk && link is { Connected: true, EditorState: FmpEditorState.Playing or FmpEditorState.Paused })
             return "the editor is in play mode and nobody holds the lock, so a person is playing (or a session left play mode on); do not stop it. The queue waits until play mode ends.";
         return null;
     }
@@ -385,11 +402,11 @@ public sealed class EditorLock
         if (_queue.Count == 0)
             return false;
         var link = _registry.GetLatestLink();
-        if (Blocker(link, now) is not null || _queue.Find(w => w.Pending is not null) is not { } next)
+        if (_queue.Find(w => w.Pending is not null) is not { } next || Blocker(link, now, next.PlayOk) is not null)
             return false;
         _queue.Remove(next);
         next.Granted = true;
-        Grant(next.SessionId, next.Owner, next.Task, link, now, fromQueue: true);
+        Grant(next.SessionId, next.Owner, next.Task, link, now, fromQueue: true, next.Implicit);
         next.Pending!.TrySetResult();
         return true;
     }
@@ -544,6 +561,25 @@ public sealed class EditorLock
                 new Dictionary<string, object?> { ["holder"] = _holder?.Owner, ["queue_length"] = _queue.Count });
     }
 
+    /// <summary>
+    /// The gate every Unity tool call passes. With the implicit lock on, an editor-changing tool from a session that holds
+    /// no lock claims the editor on the spot when it is free, or waits in the queue like <see cref="AcquireName"/> and runs
+    /// when granted; when the slice ends the tool does not run and the answer is the structured <c>lock_queued</c> error.
+    /// Null means the tool may run. Read-only and exempt tools never wait.
+    /// </summary>
+    public async Task<CallToolResult?> GateAsync(string? sessionId, string toolName, CancellationToken ct)
+    {
+        if (!_options.Value.ImplicitLock || string.IsNullOrEmpty(sessionId))
+            return RefusalResult(sessionId, toolName);
+        if (!_options.Value.EnforceEditorLock || Exempt.Contains(toolName) || IsReadOnly(toolName))
+            return null;
+        var result = await AcquireAsync(sessionId, null, $"{toolName} (implicit)", wait: true, ticket: null, ct, toolName);
+        if (result.StructuredContent is { ValueKind: JsonValueKind.Object } body && body.TryGetProperty("acquired", out var granted) && granted.ValueKind == JsonValueKind.True)
+            return null;
+        result.IsError = true;
+        return result;
+    }
+
     /// <summary>Counts a Unity call of the holder as activity, so a long call never reads as idle.</summary>
     public IDisposable Track(string? sessionId)
     {
@@ -558,8 +594,9 @@ public sealed class EditorLock
         }
     }
 
+    // runtime tools act on a player build, never on the Editor
     bool IsReadOnly(string toolName)
-        => _registry.GetLatestLink()?.Registry?.Tools
+        => _registry.IsRuntimeTool(toolName) || _registry.GetLatestLink()?.Registry?.Tools
             .FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.OrdinalIgnoreCase))?.ReadOnly == true;
 
     sealed class TrackedCall(EditorLock owner, Holder holder) : IDisposable
@@ -717,7 +754,7 @@ public sealed class EditorLock
     {
         if (_holder is { } held)
         {
-            var idle = IdleLimit();
+            var idle = IdleLimit(held);
             return new EditorLockState
             {
                 Held = true,
@@ -783,7 +820,11 @@ public sealed class EditorLock
         => (a with { Waiting = [] }) == (b with { Waiting = [] }) && a.Waiting.SequenceEqual(b.Waiting);
 
     // shorter while other sessions wait
-    TimeSpan IdleLimit() => _queue.Count > 0 ? _options.Value.EditorLockWaitingIdleTimeout : _options.Value.EditorLockIdleTimeout;
+    TimeSpan IdleLimit(Holder held)
+    {
+        var limit = _queue.Count > 0 ? _options.Value.EditorLockWaitingIdleTimeout : _options.Value.EditorLockIdleTimeout;
+        return held.Implicit && _options.Value.EditorLockImplicitIdle < limit ? _options.Value.EditorLockImplicitIdle : limit;
+    }
 
     // caller holds _gate; true when it freed a claim
     bool ExpireIfIdle(DateTimeOffset now)
@@ -795,7 +836,7 @@ public sealed class EditorLock
             Free($"no tool call within {Age(_options.Value.EditorLockFirstCallDeadline)} of being granted its turn");
             return true;
         }
-        if (held.InFlight == 0 && now - held.LastActivity > IdleLimit())
+        if (held.InFlight == 0 && now - held.LastActivity > IdleLimit(held))
         {
             Free($"no call for {Age(now - held.LastActivity)}");
             return true;
@@ -814,7 +855,7 @@ public sealed class EditorLock
         if (_holder is not { } held)
             return;
         _holder = null;
-        _lastDropped = (held.SessionId, reason);
+        _lastDropped = (held.SessionId, reason, held.Implicit);
         DeleteMirror(held);
         _logger.LogInformation("Editor lock of {Owner} ended: {Reason}", held.Owner, reason);
         Pump(_time.GetUtcNow());

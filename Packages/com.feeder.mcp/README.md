@@ -205,16 +205,46 @@ Restart Claude Code once after the first enable so it picks up `.claude/agents/`
 
 ## Platform support
 
-The package currently includes the local server binary for Windows x64. The Unity editor code
-can be imported on other platforms, but starting the bundled server requires a matching payload
-under `Server~/<platform>-<architecture>`.
+The package ships the local server for Windows x64, macOS (Intel and Apple silicon) and Linux x64, as
+`Server~/<platform>-<architecture>/server-payload.zip`. The editor picks the one that matches the machine, installs
+it as `Library/feeder-matrix/<platform>-<architecture>/matrix-server[.exe]`, sets the exec bit on macOS and Linux, and
+reaches it only on `127.0.0.1`. The Git package stores each payload as a zip to remain below GitHub's per-file limit;
+installation and updates are handled automatically by the editor package. Updating from 0.87 or earlier stops the
+project's old Matrix server, removes the files it left in `Library` (only when they are Matrix's own), and rewrites
+the config of every wired agent; restart the agent session afterwards. Other platforms need a payload published
+with `Matrix~/tools/publish-payloads.ps1`.
 
-The Windows payload is the Feeder MCP Server, installed as `Library/feeder-matrix/win-x64/matrix-server.exe`
-and reachable only on `127.0.0.1`. The Git package stores this payload as `server-payload.zip` to
-remain below GitHub's per-file limit; installation and updates are handled automatically by the
-editor package. Updating from 0.87 or earlier stops the project's old Matrix server, removes the files
-it left in `Library` (only when they are Matrix's own), and rewrites the config of every wired agent;
-restart the agent session afterwards.
+## Batch mode and CI
+
+Start Matrix from the command line, with no window and nobody to click:
+
+```
+Unity -batchmode -nographics -projectPath <project> -executeMethod Feeder.MCP.Editor.MatrixBatch.Run
+      [-matrixIdleSeconds 900] [-matrixMaxSeconds 0] [-matrixReadyTimeoutSeconds 180]
+      [-matrixQuitFile <path>] [-matrixReadyFile <path>]
+```
+
+Leave out `-quit`; Unity would exit as soon as the method returns. The entry installs and starts the project's
+server (even when `CI=true`), links the Editor and writes `Temp/matrix-batch.ready.json` with the `mcpUrl` to give
+the agent. The Editor exits when no tool was called for `-matrixIdleSeconds` (0 = never), after `-matrixMaxSeconds`
+in total (0 = no limit), when the quit file appears (default `Temp/matrix-batch.quit`), or with exit code 2 when
+the server is not ready within `-matrixReadyTimeoutSeconds`. Batch mode does not write agent config files.
+
+## Runtime tools
+
+A game build, or Play mode, can link to the project's server as a player beside the Editor. The Editor link stays
+up, and runtime tools run in the player. Mark a static method:
+
+```csharp
+[Preserve]
+[MatrixRuntimeTool("runtime-hello", ReadOnly = true, Description = "Greets from the running game.")]
+static string Hello([Description("Who to greet.")] string name = "world") => "hello " + name;
+```
+
+- **Play mode:** switch on `Tools > Feeder > Server > Link Play Mode As Player`; each Play session then links.
+- **Builds:** start the game with `-matrixPort <port> -matrixToken <token> [-matrixHost <host>] [-matrixProject <id>]`,
+  or call `Feeder.MCP.Player.MatrixPlayer.Connect(host, port, token)`. The port is the one in the project's
+  `.mcp.json`. Desktop and mobile players only (no WebGL). `runtime-ping` and `runtime-scene-info` ship as samples.
 
 ## Shared projects
 

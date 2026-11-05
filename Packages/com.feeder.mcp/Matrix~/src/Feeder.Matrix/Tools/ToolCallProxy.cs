@@ -90,7 +90,7 @@ public sealed class ServerTools(
     /// <summary>Runs a Unity tool for a session, unless another session or a person holds the editor lock.</summary>
     public async ValueTask<CallToolResult> CallUnityAsync(CallToolRequestParams request, string? sessionId, IUnityBackend backend, CancellationToken ct)
     {
-        if (editorLock.RefusalResult(sessionId, request.Name) is { } refusal)
+        if (await editorLock.GateAsync(sessionId, request.Name, ct) is { } refusal)
         {
             logger.LogInformation("{Tool} refused for session {SessionId}: editor lock", request.Name, sessionId);
             return refusal;

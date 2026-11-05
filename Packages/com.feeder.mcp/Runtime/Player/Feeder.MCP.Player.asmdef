@@ -1,0 +1,19 @@
+{
+    "name": "Feeder.MCP.Player",
+    "rootNamespace": "Feeder.MCP.Player",
+    "references": [
+        "Feeder.Json",
+        "Feeder.Fmp"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [
+        "WebGL"
+    ],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

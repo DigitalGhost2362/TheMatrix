@@ -108,7 +108,7 @@ public class McpEndpointTests : IClassFixture<MatrixFactory>
     }
 
     [Fact]
-    public async Task PromptsList_and_ResourcesList_return_empty()
+    public async Task PromptsList_is_empty_and_resources_are_listed_read_and_refused_when_unknown()
     {
         var (client, sessionId) = await InitializeAsync();
 
@@ -118,7 +118,29 @@ public class McpEndpointTests : IClassFixture<MatrixFactory>
 
         var (resources, _) = await PostAsync(client, """{"jsonrpc":"2.0","id":6,"method":"resources/list"}""", sessionId);
         using (resources)
-            Assert.Empty(resources.RootElement.GetProperty("result").GetProperty("resources").EnumerateArray());
+        {
+            var uris = resources.RootElement.GetProperty("result").GetProperty("resources").EnumerateArray()
+                .Select(r => r.GetProperty("uri").GetString()).ToArray();
+            Assert.Contains("matrix://editor/state", uris);
+            Assert.Contains("matrix://editor/selection", uris);
+            Assert.Contains("matrix://editor/scenes", uris);
+            Assert.Contains("matrix://console/errors", uris);
+        }
+
+        var (templates, _) = await PostAsync(client, """{"jsonrpc":"2.0","id":8,"method":"resources/templates/list"}""", sessionId);
+        using (templates)
+            Assert.Equal(2, templates.RootElement.GetProperty("result").GetProperty("resourceTemplates").GetArrayLength());
+
+        var (state, _) = await PostAsync(client, """{"jsonrpc":"2.0","id":9,"method":"resources/read","params":{"uri":"matrix://editor/state"}}""", sessionId);
+        using (state)
+        {
+            var text = state.RootElement.GetProperty("result").GetProperty("contents")[0].GetProperty("text").GetString()!;
+            Assert.Contains("\"linked\"", text);
+        }
+
+        var (unknown, _) = await PostAsync(client, """{"jsonrpc":"2.0","id":10,"method":"resources/read","params":{"uri":"matrix://nope"}}""", sessionId);
+        using (unknown)
+            Assert.True(unknown.RootElement.TryGetProperty("error", out _));
     }
 
     [Fact]

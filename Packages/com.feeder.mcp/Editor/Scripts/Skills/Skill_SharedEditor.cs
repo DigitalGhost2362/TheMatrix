@@ -9,7 +9,7 @@ namespace Feeder.MCP.Editor.API
         public const string SkillId = "matrix-shared-editor";
 
         [AiSkill(SkillId,
-@"Protocol for a Unity Editor shared by several AI sessions and humans at once: which Matrix tools need exclusive use of the Editor, the editor lock Matrix keeps (editor-lock-acquire / editor-lock-release / editor-lock-status; held by one MCP session for one burst of Editor work - a compile, one play session - and released between bursts, never for a whole task; other sessions' editor-changing tools are refused while it is held; others wait in line for it; freed on release, when the session closes or after 10 idle minutes (2 while others wait); shown to people in the Matrix Bridge window), the state check that catches a human in play mode, and the test-case handoff - when the Editor is busy the author writes TestCases/<stamp>-<slug>.md and stops, and a later verifier session runs the pending cases. Use BEFORE entering play mode, compiling, opening or saving a scene, wiping prefs or save data, clearing the console or running tests, and when asked to run pending test cases.")]
+@"Protocol for a Unity Editor shared by several AI sessions and humans: which Matrix tools need exclusive use of the Editor, the editor lock (editor-lock-acquire / editor-lock-release / editor-lock-status; held by one MCP session for one burst of Editor work, released between bursts; other sessions' editor-changing tools wait in line, and a tool called with no lock takes an implicit claim for 30 idle seconds; freed on release, session close or 10 idle minutes, 2 while others wait), the check that catches a human in play mode, and the test-case handoff - when the Editor is busy write TestCases/<stamp>-<slug>.md and stop; a verifier session runs pending cases later. Use BEFORE entering play mode, compiling, opening or saving a scene, wiping prefs or save data, clearing the console or running tests, and when asked to run pending test cases.")]
         public static string Markdown => @"
 # Shared Editor
 
@@ -22,9 +22,10 @@ Claim the Editor here before each compile or play session, compile, read the con
 collect evidence the way the project's own workflow says, then give the Editor back at once. The lock
 is for the Editor, not for your task: while you think, code or wait, other sessions must be able to play.
 
-Matrix keeps the lock. While another session holds it, Matrix refuses your editor-changing tools
-and names the holder; read-only tools always run. While nobody holds it, nothing is refused -
-claiming first is still your job. People see the holder in the Matrix Bridge window and as a green
+Matrix keeps the lock. While another session holds it, your editor-changing tools wait in line for
+their turn (and answer `queued` when the wait runs out); read-only tools always run. While nobody
+holds it, an editor-changing tool claims the Editor for you by itself (an implicit claim, see Rule 2)
+- but claiming first with `editor-lock-acquire` for a whole burst is still your job. People see the holder in the Matrix Bridge window and as a green
 frame around the Scene view, and can free a claim from the window. A person who wants the Editor
 tells the agents to stop; when the user asks you to stop, release at once and do no more
 Editor-exclusive work until they say so. Tools that
@@ -97,6 +98,22 @@ Three tools, served by the Matrix server itself (they answer even while Unity re
 - **`editor-lock-status`** - who holds it, for what, since when, whether it is you, who waits in the
   queue and your own position. Read-only.
 
+Implicit claim (on by default; `FeederMatrix:ImplicitLock=false` in the server settings turns it off,
+then a tool is refused at once while someone else holds the lock and runs freely while nobody does).
+Every editor-changing tool (`tool-call`, `batch-execute` and the tools they run included; read-only
+tools never) follows one rule when your session holds no lock:
+
+- Editor free and nobody waiting -> the tool runs and your session gets an **implicit claim**, shown in
+  the Matrix Bridge window as `<tool> (implicit)`. It is freed after **30 seconds** without a call
+  from you (a running call keeps it), or when your session closes. Keep calling and it stays yours.
+  For a play session or several steps in a row, still claim with `editor-lock-acquire`.
+- Editor taken, or others waiting -> the call waits in the same first-come queue as
+  `editor-lock-acquire` (about 50 seconds) and the tool runs the moment you are granted the Editor.
+  When the wait runs out the tool did **not** run: the answer is the error `lock_queued` with your
+  position; call **the same tool again at once** to keep your place.
+- A claim you made with `editor-lock-acquire` is never shortened by this; acquiring explicitly while
+  you hold an implicit claim turns it into a normal one.
+
 How the claim behaves:
 
 - It belongs to your MCP session. Subagents that run inside your session share it: never let two of
@@ -124,8 +141,10 @@ Outcomes:
 - **Busy** (only with `wait: false`, or a removal by a person) -> go to Rule 4. A claim past the 15-minute cap is still live: report
   its owner, task and start time so the user can tell that session to release, or free it from the
   Matrix Bridge window.
-- **A tool refused with ""Refused '<tool>': held by ...""** -> someone else holds the Editor. Stop all
-  Editor-exclusive work. If you thought you held it, your claim was freed (idle, session closed, freed
+- **A tool answers `lock_queued` (""queued: position N ... The tool did not run"")** -> call the same
+  tool again at once; same limits as Queued above.
+- **A tool refused with ""Refused '<tool>': held by ...""** (only when the implicit claim is switched
+  off) -> someone else holds the Editor. Stop all Editor-exclusive work. If you thought you held it, your claim was freed (idle, session closed, freed
   by a person): `editor-lock-status` says so. Report it; acquire again only from a clean start (Rule 3).
 - **Release answers ""your claim was already freed (<reason>)""** -> same: the Editor may have changed
   under you. Treat the burst's evidence as suspect.

@@ -21,27 +21,34 @@ public sealed class UnityLinkBackend(
     private static readonly TimeSpan Slice = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan LinkPoll = TimeSpan.FromMilliseconds(250);
 
-    /// <summary>Unity's tools while a link is up or briefly down (a reload keeps its tools listed); empty otherwise.</summary>
+    /// <summary>Unity's tools while a link is up or briefly down (a reload keeps its tools listed), plus the Runtime tools of a linked player; empty otherwise.</summary>
     public ValueTask<IReadOnlyList<Tool>> ListToolsAsync(CancellationToken ct)
     {
+        var tools = new List<Tool>();
         var link = registry.GetLatestLink();
-        if (link?.Registry is not { } snapshot || IsGone(link))
-            return ValueTask.FromResult<IReadOnlyList<Tool>>([]);
-
-        // Registry-hash-keyed conversion cache lands in Phase 6; snapshot conversion is already reflection-free.
-        IReadOnlyList<Tool> tools = snapshot.Tools.Select(t => new Tool
-        {
-            Name = t.Name,
-            Title = t.Title,
-            Description = t.Description,
-            InputSchema = JsonSerializer.Deserialize<JsonElement>(t.InputSchemaJsonUtf8),
-        }).ToArray();
-        return ValueTask.FromResult(tools);
+        if (link?.Registry is { } snapshot && !IsGone(link))
+            tools.AddRange(snapshot.Tools.Select(ToTool));
+        if (registry.GetPlayerLink(link?.ProjectId)?.Registry is { } playerSnapshot)
+            tools.AddRange(playerSnapshot.Tools
+                .Where(t => t.Target == FmpToolTargets.Runtime && tools.All(known => known.Name != t.Name))
+                .Select(ToTool));
+        return ValueTask.FromResult<IReadOnlyList<Tool>>(tools);
     }
+
+    // Registry-hash-keyed conversion cache lands in Phase 6; snapshot conversion is already reflection-free.
+    private static Tool ToTool(ToolDescriptor t) => new()
+    {
+        Name = t.Name,
+        Title = t.Title,
+        Description = t.Description,
+        InputSchema = JsonSerializer.Deserialize<JsonElement>(t.InputSchemaJsonUtf8),
+    };
 
     public async ValueTask<CallToolResult> CallToolAsync(CallToolRequestParams request, CancellationToken ct)
     {
         var settings = options.Value;
+        if (IsPlayerTool(request.Name))
+            return await CallPlayerToolAsync(request, ct);
         var (link, waited) = await WaitForLinkAsync(ct);
         if (link is null)
             return Unavailable(waited, $"No Unity editor is connected to the matrix, so '{request.Name}' cannot run. {health.Summary()}", null);
@@ -112,6 +119,60 @@ public sealed class UnityLinkBackend(
                         ? ToolErrors.Create(ToolErrors.CompilingOrReloading, message, ToolErrors.ReloadRetryMs)
                         : ToolErrors.Create(ToolErrors.Timeout, message, ToolErrors.TimeoutRetryMs);
                 }
+            }
+        }
+        finally
+        {
+            registry.AbandonOperation(operationId);
+        }
+    }
+
+    // a Runtime tool goes to the player, unless the editor has a tool of that name itself
+    private bool IsPlayerTool(string name)
+        => registry.IsRuntimeTool(name) &&
+           registry.GetLatestLink()?.Registry?.Tools.Any(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase)) != true;
+
+    // A player has no domain reload to wait out: the call ends when the player answers, its link drops, or the deadline passes.
+    private async ValueTask<CallToolResult> CallPlayerToolAsync(CallToolRequestParams request, CancellationToken ct)
+    {
+        var settings = options.Value;
+        var player = registry.GetPlayerLink(registry.GetLatestLink()?.ProjectId);
+        if (player is null)
+            return ToolErrors.Create(ToolErrors.UnityUnavailable, $"No player is linked to the matrix, so '{request.Name}' cannot run. Start a build or Play session with the Matrix player link.", null);
+
+        var operationId = Guid.NewGuid().ToString("N");
+        var argsJson = request.Arguments is null ? "{}"u8.ToArray() : JsonSerializer.SerializeToUtf8Bytes(request.Arguments);
+        var operation = registry.CreateOperation(operationId, request.Name, player.ProjectId, settings.DefaultToolTimeout);
+        operation.SentOnConnectionId = player.ConnectionId;
+        try
+        {
+            await hub.Clients.Client(player.ConnectionId).InvokeTool(new ToolInvoke
+            {
+                OperationId = operationId,
+                ToolName = request.Name,
+                ArgumentsJsonUtf8 = argsJson,
+                DeadlineUnixMs = operation.Deadline.ToUnixTimeMilliseconds(),
+            });
+            while (true)
+            {
+                try
+                {
+                    return ToCallToolResult(request.Name, await operation.Completion.Task.WaitAsync(Slice, ct));
+                }
+                catch (TimeoutException)
+                {
+                }
+                catch (OperationCanceledException)
+                {
+                    try { await hub.Clients.Client(player.ConnectionId).CancelTool(operationId); }
+                    catch (Exception e) { logger.LogWarning(e, "Failed to send cancel for operation {OperationId}", operationId); }
+                    throw;
+                }
+
+                if (registry.GetPlayerByConnection(player.ConnectionId) is null)
+                    return ToolErrors.Create(ToolErrors.UnityUnavailable, $"Tool '{request.Name}' lost its player: the player disconnected from the matrix.", ToolErrors.TimeoutRetryMs);
+                if (DateTimeOffset.UtcNow > operation.Deadline)
+                    return ToolErrors.Create(ToolErrors.Timeout, $"Tool '{request.Name}' timed out after {EditorHealth.Seconds(DateTimeOffset.UtcNow - operation.Started)} on the player.", ToolErrors.TimeoutRetryMs);
             }
         }
         finally

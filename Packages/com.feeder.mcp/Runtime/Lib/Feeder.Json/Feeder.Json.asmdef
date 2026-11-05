@@ -2,9 +2,7 @@
     "name": "Feeder.Json",
     "rootNamespace": "Feeder.Json",
     "references": [],
-    "includePlatforms": [
-        "Editor"
-    ],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": true,

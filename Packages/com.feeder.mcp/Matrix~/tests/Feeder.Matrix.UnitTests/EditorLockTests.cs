@@ -343,7 +343,7 @@ public sealed class EditorLockTests : IDisposable
     private Task<CallToolResult> Wait(string sessionId, string? ticket = null, CancellationToken ct = default)
         => _lock.AcquireAsync(sessionId, null, "task of " + sessionId, true, ticket, ct);
 
-    private static Task<CallToolResult> Done(Task<CallToolResult> call) => call.WaitAsync(TimeSpan.FromSeconds(5));
+    private static Task<T> Done<T>(Task<T> call) => call.WaitAsync(TimeSpan.FromSeconds(5));
 
     private static string Ticket(CallToolResult queued) => queued.StructuredContent!.Value.GetProperty("error").GetProperty("ticket").GetString()!;
 
@@ -711,6 +711,174 @@ public sealed class EditorLockTests : IDisposable
         Assert.True(waiter.Attached);
         Assert.Equal(_time.GetUtcNow().ToUnixTimeMilliseconds(), waiter.WaitingSinceUnixMs);
     }
+
+    #region Implicit lock
+
+    private Task<CallToolResult?> Gate(string sessionId, string tool = "script-execute", CancellationToken ct = default)
+        => _lock.GateAsync(sessionId, tool, ct);
+
+    [Fact]
+    public async Task Implicit_claim_is_taken_by_an_editor_changing_tool_when_the_editor_is_free()
+    {
+        Link();
+
+        Assert.Null(await Done(Gate("sid-a")));
+
+        var state = _lock.Snapshot();
+        Assert.True(state.Held);
+        Assert.Equal("script-execute (implicit)", state.Task);
+        Assert.Null(await Done(Gate("sid-a")));
+        Assert.Equal("sid-a", _lock.Snapshot().SessionId);
+    }
+
+    [Fact]
+    public async Task Read_only_and_exempt_tools_never_wait_or_claim()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+
+        Assert.Null(await Done(Gate("sid-b", "rql-query")));
+        Assert.Null(await Done(Gate("sid-b", "tool-set-enabled-state")));
+        Assert.Empty(_lock.Snapshot().Waiting);
+        Assert.Equal("sid-a", _lock.Snapshot().SessionId);
+    }
+
+    [Fact]
+    public async Task Implicit_claim_is_freed_after_a_short_idle_and_not_when_a_call_is_running()
+    {
+        Link();
+        await Gate("sid-a");
+
+        using (_lock.Track("sid-a"))
+        {
+            _time.Advance(_options.EditorLockImplicitIdle + TimeSpan.FromMinutes(1));
+            Assert.Equal("sid-a", _lock.Snapshot().SessionId);
+        }
+
+        _time.Advance(_options.EditorLockImplicitIdle + TimeSpan.FromSeconds(1));
+        Assert.Null(await Done(Gate("sid-b")));
+        Assert.Equal("sid-b", _lock.Snapshot().SessionId);
+    }
+
+    [Fact]
+    public async Task Non_holder_waits_in_the_queue_and_runs_when_the_holder_releases()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+
+        var call = Gate("sid-b");
+        await Task.Delay(50);
+        Assert.False(call.IsCompleted);
+        Assert.Equal(["codex"], Order(_lock.Snapshot()));
+
+        _lock.Release("sid-a");
+
+        Assert.Null(await Done(call));
+        Assert.Equal("sid-b", _lock.Snapshot().SessionId);
+        Assert.Empty(_lock.Snapshot().Waiting);
+    }
+
+    [Fact]
+    public async Task Slice_that_runs_out_returns_the_queued_error_and_the_next_call_keeps_the_place()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        _options.EditorLockWaitSlice = TimeSpan.FromMilliseconds(100);
+
+        var queued = (await Done(Gate("sid-b")))!;
+
+        Assert.True(queued.IsError);
+        Assert.Contains("queued: position 1", Text(queued));
+        Assert.Contains("The tool did not run", Text(queued));
+        Assert.Equal("lock_queued", queued.StructuredContent!.Value.GetProperty("error").GetProperty("code").GetString());
+
+        var again = (await Done(Gate("sid-b")))!;
+        Assert.Contains("queued: position 1", Text(again));
+        Assert.Equal(["codex"], Order(_lock.Snapshot()));
+    }
+
+    [Fact]
+    public async Task Queued_sessions_get_the_editor_in_order_whether_they_come_through_tools_or_acquire()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        var b = Gate("sid-b");
+        await Task.Delay(30);
+        var c = Wait("sid-c");
+        await Task.Delay(30);
+
+        _lock.Release("sid-a");
+        Assert.Null(await Done(b));
+        Assert.False(c.IsCompleted);
+
+        _lock.Release("sid-b");
+        Assert.StartsWith("acquired", Text(await Done(c)));
+    }
+
+    [Fact]
+    public async Task Human_in_play_mode_queues_the_tool_but_not_a_session_whose_implicit_claim_just_ended()
+    {
+        Link();
+        await Gate("sid-a");
+        _time.Advance(_options.EditorLockImplicitIdle + TimeSpan.FromSeconds(1));
+        Link(FmpEditorState.Playing);
+
+        // sid-a started that play session itself
+        Assert.Null(await Done(Gate("sid-a")));
+
+        // a stranger waits until play mode ends
+        _options.EditorLockWaitSlice = TimeSpan.FromMilliseconds(100);
+        _lock.Release("sid-a");
+        var queued = (await Done(Gate("sid-b")))!;
+        Assert.True(queued.IsError);
+        Assert.Contains("play mode", Text(queued));
+    }
+
+    [Fact]
+    public async Task Explicit_acquire_turns_an_implicit_claim_into_a_normal_one()
+    {
+        Link();
+        await Gate("sid-a");
+
+        _lock.Acquire("sid-a", "claude", "burst");
+        _time.Advance(_options.EditorLockImplicitIdle + TimeSpan.FromSeconds(1));
+
+        Assert.Equal("sid-a", _lock.Snapshot().SessionId);
+        Assert.Equal("burst", _lock.Snapshot().Task);
+    }
+
+    [Fact]
+    public async Task Switched_off_the_gate_refuses_at_once_and_never_claims()
+    {
+        Link();
+        _options.ImplicitLock = false;
+
+        Assert.Null(await Done(Gate("sid-a")));
+        Assert.False(_lock.Snapshot().Held);
+
+        _lock.Acquire("sid-a", "claude", "first");
+        var refusal = (await Done(Gate("sid-b")))!;
+        Assert.True(refusal.IsError);
+        Assert.Contains("Refused 'script-execute'", Text(refusal));
+        Assert.Empty(_lock.Snapshot().Waiting);
+    }
+
+    [Fact]
+    public async Task Session_that_closes_while_its_tool_waits_leaves_the_queue()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        using var cts = new CancellationTokenSource();
+        var call = Gate("sid-b", ct: cts.Token);
+        await Task.Delay(30);
+
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call);
+        Assert.Empty(_lock.Snapshot().Waiting);
+    }
+
+    #endregion
 
     private sealed class ManualTimeProvider : TimeProvider
     {

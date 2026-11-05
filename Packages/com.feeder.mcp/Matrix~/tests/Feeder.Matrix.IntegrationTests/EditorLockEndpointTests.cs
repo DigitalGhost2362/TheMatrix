@@ -7,7 +7,19 @@ namespace Feeder.Matrix.IntegrationTests;
 public sealed class EditorLockFactory : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
-        => builder.UseSetting("FeederMatrix:EnableMockBackend", "true");
+    {
+        builder.UseSetting("FeederMatrix:EnableMockBackend", "true");
+        builder.UseSetting("FeederMatrix:ImplicitLock", "false");
+    }
+}
+
+public sealed class ImplicitLockFactory : WebApplicationFactory<Program>
+{
+    protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
+    {
+        builder.UseSetting("FeederMatrix:EnableMockBackend", "true");
+        builder.UseSetting("FeederMatrix:EditorLockWaitSlice", "00:00:01");
+    }
 }
 
 public class EditorLockEndpointTests(EditorLockFactory factory) : IClassFixture<EditorLockFactory>
@@ -62,6 +74,76 @@ public class EditorLockEndpointTests(EditorLockFactory factory) : IClassFixture<
     {
         var (json, _) = await PostAsync(session.Client,
             $"{{\"jsonrpc\":\"2.0\",\"id\":{Interlocked.Increment(ref _id) + 1},\"method\":\"{method}\",\"params\":{parameters}}}", session.Id);
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.GetProperty("result").Clone();
+    }
+
+    private static async Task<(string json, string? sessionId)> PostAsync(HttpClient client, string body, string? sessionId)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Accept.ParseAdd("application/json");
+        request.Headers.Accept.ParseAdd("text/event-stream");
+        if (sessionId is not null)
+            request.Headers.Add("Mcp-Session-Id", sessionId);
+
+        var response = await client.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        var newSessionId = response.Headers.TryGetValues("Mcp-Session-Id", out var values) ? values.FirstOrDefault() : sessionId;
+        var text = await response.Content.ReadAsStringAsync();
+        var json = response.Content.Headers.ContentType?.MediaType == "text/event-stream"
+            ? text.Split('\n').Last(l => l.StartsWith("data:"))["data:".Length..].Trim()
+            : text;
+        return (json, newSessionId);
+    }
+}
+
+public class ImplicitLockEndpointTests(ImplicitLockFactory factory) : IClassFixture<ImplicitLockFactory>
+{
+    [Fact]
+    public async Task Editor_changing_call_of_a_session_without_a_lock_claims_it_and_makes_the_others_queue()
+    {
+        var a = await InitializeAsync("claude-code");
+        var b = await InitializeAsync("codex");
+
+        // free editor: the call runs and leaves an implicit claim behind
+        Assert.Equal("pong", Text(await CallAsync(a, "ping", "{}")));
+        Assert.Contains("ping (implicit)", Text(await CallAsync(b, "editor-lock-status", "{}")));
+
+        // the other session waits one slice, then gets the structured queued answer, for the tool and for tool-call
+        var queued = await CallAsync(b, "ping", "{}");
+        Assert.True(queued.GetProperty("isError").GetBoolean());
+        Assert.Contains("queued: position 1", Text(queued));
+        Assert.Contains("The tool did not run", Text(queued));
+        var proxied = await CallAsync(b, "tool-call", """{"name":"ping"}""");
+        Assert.Contains("queued: position 1", string.Join("\n", proxied.GetProperty("content").EnumerateArray().Select(c => c.GetProperty("text").GetString())));
+
+        // the holder keeps working; an explicit release hands the editor over
+        Assert.Equal("pong", Text(await CallAsync(a, "ping", "{}")));
+        Assert.StartsWith("released", Text(await CallAsync(a, "editor-lock-release", "{}")));
+        Assert.Equal("pong", Text(await CallAsync(b, "ping", "{}")));
+    }
+
+    private static string Text(JsonElement result) => result.GetProperty("content")[0].GetProperty("text").GetString()!;
+
+    private sealed record Session(HttpClient Client, string Id);
+
+    private int _id;
+
+    private async Task<Session> InitializeAsync(string clientName)
+    {
+        var client = factory.CreateClient();
+        var (_, sessionId) = await PostAsync(client,
+            """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"CLIENT","version":"1"}}}""".Replace("CLIENT", clientName), null);
+        return new Session(client, sessionId!);
+    }
+
+    private async Task<JsonElement> CallAsync(Session session, string name, string arguments)
+    {
+        var (json, _) = await PostAsync(session.Client,
+            $"{{\"jsonrpc\":\"2.0\",\"id\":{Interlocked.Increment(ref _id) + 1},\"method\":\"tools/call\",\"params\":{{\"name\":\"{name}\",\"arguments\":{arguments}}}}}", session.Id);
         using var document = JsonDocument.Parse(json);
         return document.RootElement.GetProperty("result").Clone();
     }
