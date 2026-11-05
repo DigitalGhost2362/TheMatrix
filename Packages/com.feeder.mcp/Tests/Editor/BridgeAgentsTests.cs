@@ -140,6 +140,17 @@ namespace Feeder.MCP.Editor.Tests
             Assert.AreEqual(other, File.ReadAllText(path));
         }
 
+        // Claude Code reads only .claude/skills; the others read the shared .agents/skills
+        [TestCase(ClaudeId, ".claude/skills")]
+        [TestCase("codex", ".agents/skills")]
+        [TestCase("cursor", ".agents/skills")]
+        [TestCase("gemini", ".agents/skills")]
+        [TestCase(DeepSeekAiAgentConfigurator.Id, ".agents/skills")]
+        public void SkillsPath_IsTheFolderTheAgentReads(string agentId, string expected)
+        {
+            Assert.AreEqual(expected, Agent(agentId).SkillsPath);
+        }
+
         [Test]
         public void CanRewrite_OnlyPlainJsonOrNoFile()
         {

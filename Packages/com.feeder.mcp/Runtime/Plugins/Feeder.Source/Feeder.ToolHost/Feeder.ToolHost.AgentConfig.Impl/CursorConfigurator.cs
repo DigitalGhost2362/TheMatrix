@@ -13,7 +13,7 @@ public sealed class CursorConfigurator : AiAgentConfigurator
 
 	public override string DownloadUrl => "https://cursor.com/download";
 
-	public override string? SkillsPath => ".cursor/skills";
+	public override string? SkillsPath => ".agents/skills";
 
 	public override string? IconName => "cursor-64.png";
 

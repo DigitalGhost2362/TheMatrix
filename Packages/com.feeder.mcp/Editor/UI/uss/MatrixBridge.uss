@@ -173,9 +173,8 @@
 
 .mb-queue {
     display: none;
-    margin: 6px 0 0 0;
-    max-width: 94%;
-    min-width: 60%;
+    margin: 10px 0 0 0;
+    width: 94%;
 }
 
 .mb-queue--visible {
@@ -187,23 +186,201 @@
     align-items: center;
     justify-content: space-between;
     margin: 1px 0 0 0;
-    font-size: 10px;
-    color: rgb(255, 209, 99);
+    font-size: 9.5px;
+    letter-spacing: 2px;
+    color: rgb(63, 143, 93);
     text-shadow: 0 0 5px rgba(2, 6, 4, 0.95);
 }
 
-.mb-queue__task {
-    flex-grow: 1;
-    flex-shrink: 1;
+.mb-track {
+    height: 70px;
+    margin: 2px 0 0 0;
+    overflow: hidden;
+}
+
+.mb-track__rail {
+    position: absolute;
+    left: 0;
+    top: 66px;
+    height: 1px;
+    -unity-background-scale-mode: stretch-to-fill;
+}
+
+.mb-track__label {
+    position: absolute;
+    top: 1px;
+    -unity-font-style: bold;
+    margin: 0;
+    padding: 0;
+    font-size: 9.5px;
+    letter-spacing: 2px;
+}
+
+.mb-track__label--lock {
+    color: rgb(255, 196, 64);
+}
+
+.mb-track__label--queue {
+    color: rgb(63, 143, 93);
+}
+
+.mb-track__drop {
+    position: absolute;
+    top: 14px;
+    width: 1px;
+    height: 14px;
+    -unity-background-scale-mode: stretch-to-fill;
+}
+
+.mb-car {
+    position: absolute;
+    left: 0;
+    top: 18px;
+    width: 118px;
+    height: 40px;
+    padding: 4px 9px 4px 7px;
+    border-width: 1px 0 1px 2px;
+    border-left-color: rgb(0, 255, 65);
+    border-top-color: rgba(0, 255, 65, 0.22);
+    border-bottom-color: rgba(0, 255, 65, 0.08);
+    background-color: rgb(1, 12, 5);
+    transition-property: translate, opacity, scale, border-color, background-color;
+    transition-duration: 0.36s, 0.26s, 0.2s, 0.2s, 0.2s;
+    transition-timing-function: ease-out-cubic;
+}
+
+.mb-car__clip {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    -unity-background-scale-mode: stretch-to-fill;
+}
+
+.mb-car__glow {
+    display: none;
+    position: absolute;
+    left: -14px;
+    top: -13px;
+    right: -12px;
+    bottom: -13px;
+}
+
+.mb-car--holder .mb-car__glow {
+    display: flex;
+}
+
+.mb-car__rain {
+    position: absolute;
+    top: 0;
+    width: 10px;
+    margin: 0;
+    padding: 0;
+    font-size: 9px;
+    -unity-text-align: upper-center;
+    color: rgba(0, 255, 65, 0.2);
+}
+
+.mb-car--holder .mb-car__rain {
+    color: rgba(255, 196, 64, 0.22);
+}
+
+.mb-car__name,
+.mb-car__sub {
+    margin: 0;
+    text-shadow: 0 0 3px rgb(0, 0, 0);
+    padding: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    letter-spacing: 1px;
+    transition-property: color;
+    transition-duration: 0.2s;
 }
 
-.mb-queue__age {
-    margin: 0 8px 0 8px;
-    color: rgb(79, 174, 120);
+.mb-car__name {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: rgb(176, 255, 196);
+}
+
+.mb-car__sub {
+    font-size: 11px;
+    color: rgb(63, 143, 93);
+}
+
+.mb-car__x {
+    display: none;
+    position: absolute;
+    top: 1px;
+    right: 2px;
+    padding: 0 3px 0 3px;
+    margin: 0;
+    font-size: 10px;
+    color: rgb(255, 209, 99);
+    background-color: rgb(1, 12, 5);
+}
+
+.mb-car--waiter:hover .mb-car__x {
+    display: flex;
+}
+
+.mb-car__x:hover {
+    background-color: rgba(255, 209, 99, 0.3);
+}
+
+.mb-car--holder {
+    border-left-color: rgb(255, 196, 64);
+    border-top-color: rgba(255, 196, 64, 0.3);
+    border-bottom-color: rgba(0, 0, 0, 0);
+    background-color: rgb(13, 8, 0);
+}
+
+.mb-car--holder .mb-car__name {
+    text-shadow: 0 0 8px rgba(255, 196, 64, 0.55);
+}
+
+.mb-car--holder .mb-car__sub {
+    text-shadow: 0 0 3px rgb(0, 0, 0);
+}
+
+.mb-car--holder .mb-car__name {
+    color: rgb(255, 196, 64);
+}
+
+.mb-car--holder .mb-car__sub {
+    color: rgb(184, 145, 58);
+}
+
+.mb-car--holder:hover {
+    background-color: rgb(30, 20, 2);
+}
+
+.mb-car--over {
+    border-left-color: rgb(255, 124, 96);
+}
+
+.mb-car--over .mb-car__name {
+    color: rgb(255, 124, 96);
+}
+
+.mb-car--blocking {
+    border-left-color: rgb(255, 84, 64);
+    border-left-width: 3px;
+}
+
+.mb-car--blocking .mb-car__name {
+    color: rgb(255, 84, 64);
+}
+
+.mb-car--pop {
+    scale: 1.07 1.07;
+}
+
+.mb-car--leaving {
+    scale: 0.92 0.92;
+    transition-timing-function: ease-in-cubic;
 }
 
 .mb-queue__button {

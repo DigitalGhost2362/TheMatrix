@@ -13,7 +13,7 @@ public sealed class GeminiConfigurator : AiAgentConfigurator
 
 	public override string DownloadUrl => "https://geminicli.com/docs/get-started/installation/";
 
-	public override string? SkillsPath => ".gemini/skills";
+	public override string? SkillsPath => ".agents/skills";
 
 	public override string? IconName => "gemini-64.png";
 

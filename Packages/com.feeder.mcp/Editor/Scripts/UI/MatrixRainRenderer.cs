@@ -42,7 +42,7 @@ namespace Feeder.MCP.Editor.UI
         public static readonly Color TrailColor = new Color(0.13f, 0.94f, 0.27f, 1f);
 
         // Digits + half-width katakana, the classic Matrix glyph set.
-        private const string Glyphs =
+        internal const string Glyphs =
             "0123456789ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ";
 
         private struct RainColumn

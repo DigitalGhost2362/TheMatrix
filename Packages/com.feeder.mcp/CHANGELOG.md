@@ -102,6 +102,9 @@ All notable changes to this package are documented here.
 
 ### Changed
 
+- Cursor and Gemini CLI get their skills in the shared `.agents/skills`, next to Codex and DeepSeek, instead of
+  `.cursor/skills` and `.gemini/skills`. The skills Matrix wrote to the old folders are removed on the next
+  regeneration, so Cursor no longer lists them twice. Claude Code still reads only `.claude/skills`.
 - Failed and refused tool calls carry a structured error next to the text: `structuredContent.error`
   with `code` (`editor_locked`, `interrupted`, `compiling_or_reloading`, `timeout`, `unity_unavailable`,
   `tool_not_found`, `tests_running`, `invalid_arguments`...), `message` and, when a retry makes sense,

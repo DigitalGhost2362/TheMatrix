@@ -272,11 +272,10 @@ namespace Feeder.MCP.Editor.UI
                 return;
 
             var state = _previewActive ? null : BridgeLock.State.CurrentValue;
-            _lock.EnableInClassList("mb-lock--visible", state != null);
+            var trackShown = _queue != null && BridgeLock.ShowQueue(_queue, state);
+            _lock.EnableInClassList("mb-lock--visible", state != null && !trackShown);
             foreach (var lockClass in _lockClasses)
                 _lock.EnableInClassList(lockClass, false);
-            if (_queue != null)
-                BridgeLock.ShowQueue(_queue, state);
             if (state == null)
             {
                 _lockTick?.Pause();

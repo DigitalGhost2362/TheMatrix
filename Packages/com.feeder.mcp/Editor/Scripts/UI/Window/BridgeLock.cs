@@ -143,67 +143,502 @@ namespace Feeder.MCP.Editor.UI
             }
         }
 
-        static VisualElement? _queueView;
-        static string _queueKey = string.Empty;
-        static readonly List<(Label Age, EditorLockWaiter Waiter)> _ages = new();
+        const float CarWidth = 118f;
+        const float CarPitch = CarWidth + 10f;
+        const float EnterFrom = 140f;
+        const float LeaveTo = -36f;
+        const long StaggerMs = 60;
+        const long LeaveMs = 300;
+        const long PopMs = 200;
+        const int RainColumns = 6;
+        const int RainRows = 16;
+        const float RainRowHeight = 10f;
+        const float RainColumnPitch = 19f;
+        const long RainStepMs = 40;
+        const float DropTravel = 36f;
+        const float DropMs = 1100f;
+        const float DropStepMs = 170f;
+        const float DropDelayMs = 260f;
+        const int GlowSize = 12;
+        static readonly Color Green = new(0f, 1f, 65f / 255f);
+        static readonly Color Amber = new(1f, 196f / 255f, 64f / 255f);
+        const int DecodeSteps = 6;
+        const long DecodeStepMs = 60;
 
-        /// <summary>Lists the sessions waiting for the editor under the holder line; rebuilt only when the queue changes.</summary>
-        public static void ShowQueue(VisualElement view, EditorLockState? state)
+        sealed class Car
         {
-            var visible = state != null && (state.Waiting.Length > 0 || state.QueuePaused);
+            public readonly VisualElement Root = new();
+            public readonly Label Name = new();
+            public readonly Label Sub = new();
+            public readonly Label Remove = new("X");
+            public readonly VisualElement Glow = new() { pickingMode = PickingMode.Ignore };
+            public readonly VisualElement Clip = new() { pickingMode = PickingMode.Ignore };
+            public readonly Label[] Rain = new Label[RainColumns];
+            public readonly float[] RainY = new float[RainColumns];
+            public readonly float[] RainSpeed = new float[RainColumns];
+            public EditorLockWaiter? Waiter;
+            public string NameText = string.Empty;
+            public string SubText = string.Empty;
+            public int Decode;
+            public float X = float.NaN;
+            public bool Entering;
+        }
+
+        static readonly System.Random _rng = new();
+
+        static VisualElement? _queueView;
+        static VisualElement? _header;
+        static Label? _title;
+        static Label? _pause;
+        static VisualElement? _track;
+        static VisualElement? _rail;
+        static Label? _lockLabel;
+        static Label? _queueLabel;
+        static readonly List<VisualElement> _drops = new();
+        static Texture2D? _railTexture, _tintGreen, _tintAmber, _dropTexture, _glowTexture;
+        static readonly Dictionary<string, Car> _cars = new();
+        static readonly List<Car> _order = new();
+
+        /// <summary>
+        /// Draws the holder and the sessions waiting for the editor as cars on one track: the holder is the
+        /// first car, a new waiter drives in from the right, and the line moves up when the editor is freed.
+        /// Returns false when there is nothing to draw, so the caller shows its one-line lock text instead.
+        /// </summary>
+        public static bool ShowQueue(VisualElement view, EditorLockState? state)
+        {
+            var visible = state != null && (state.Held || state.Waiting.Length > 0 || state.QueuePaused);
             view.EnableInClassList("mb-queue--visible", visible);
+            if (!ReferenceEquals(view, _queueView))
+                Build(view);
             if (!visible || state == null)
             {
-                _queueKey = string.Empty;
+                ClearCars();
+                return false;
+            }
+
+            ShowHeader(state);
+            ShowCars(state);
+            Layout();
+            return true;
+        }
+
+        static void Build(VisualElement view)
+        {
+            view.Clear();
+            _cars.Clear();
+            _order.Clear();
+            _queueView = view;
+
+            _header = new VisualElement();
+            _header.AddToClassList("mb-queue__row");
+            _title = new Label { name = "mb-queue-title" };
+            _pause = new Label();
+            _pause.AddToClassList("mb-queue__button");
+            _pause.RegisterCallback<ClickEvent>(_ => SetPaused(_state.Value is not { QueuePaused: true }));
+            _header.Add(_title);
+            _header.Add(_pause);
+            view.Add(_header);
+
+            _track = new VisualElement();
+            _track.AddToClassList("mb-track");
+            _rail = new VisualElement { pickingMode = PickingMode.Ignore };
+            _rail.AddToClassList("mb-track__rail");
+            _track.Add(_rail);
+            _lockLabel = TrackLabel("◆ LOCK", "mb-track__label--lock");
+            _queueLabel = TrackLabel("QUEUE  ›", "mb-track__label--queue");
+            _drops.Clear();
+            _track.RegisterCallback<GeometryChangedEvent>(_ => Layout());
+            _track.schedule.Execute(TickRain).Every(RainStepMs);
+            view.Add(_track);
+        }
+
+        static void ShowHeader(EditorLockState state)
+        {
+            if (_header == null || _title == null || _pause == null)
+                return;
+            var queued = state.Waiting.Length > 0 || state.QueuePaused;
+            _header.style.display = queued ? DisplayStyle.Flex : DisplayStyle.None;
+            var note = state.QueuePaused ? "  -  PAUSED" : state.QueueHeldByPlayMode ? "  -  WAITING FOR PLAY MODE TO END" : string.Empty;
+            _title.text = $"QUEUE  {state.Waiting.Length} waiting{note}";
+            _pause.text = state.QueuePaused ? "RESUME" : "PAUSE";
+            _pause.tooltip = state.QueuePaused ? "Let the first in line have the editor" : "Nobody is granted the editor until you resume";
+        }
+
+        static void ShowCars(EditorLockState state)
+        {
+            if (_track == null)
+                return;
+
+            // cars are keyed by session, so the waiter that gets the editor stays the same car and becomes the holder
+            var seen = new HashSet<string>();
+            _order.Clear();
+            if (state.Held)
+                AddCar(HolderKey(state), null, state, seen);
+            foreach (var waiter in state.Waiting)
+                AddCar(WaiterKey(waiter), waiter, state, seen);
+
+            var gone = new List<string>();
+            foreach (var pair in _cars)
+                if (!seen.Contains(pair.Key))
+                    gone.Add(pair.Key);
+            foreach (var key in gone)
+            {
+                Leave(_cars[key]);
+                _cars.Remove(key);
+            }
+        }
+
+        static void AddCar(string key, EditorLockWaiter? waiter, EditorLockState state, HashSet<string> seen)
+        {
+            if (!seen.Add(key))
+                return;
+            var isNew = !_cars.TryGetValue(key, out var car);
+            if (isNew)
+            {
+                car = NewCar();
+                _cars[key] = car;
+                _track!.Add(car.Root);
+            }
+
+            var holder = waiter == null;
+            if (holder && !isNew && !car!.Root.ClassListContains("mb-car--holder"))
+                Pop(car);
+            Fill(car!, waiter, state);
+            _order.Add(car!);
+        }
+
+        static Car NewCar()
+        {
+            var car = new Car();
+            car.Root.AddToClassList("mb-car");
+            car.Name.AddToClassList("mb-car__name");
+            car.Sub.AddToClassList("mb-car__sub");
+            car.Remove.AddToClassList("mb-car__x");
+            car.Glow.AddToClassList("mb-car__glow");
+            car.Glow.style.backgroundImage = GlowTexture();
+            car.Glow.style.unitySliceLeft = car.Glow.style.unitySliceRight = GlowSize;
+            car.Glow.style.unitySliceTop = car.Glow.style.unitySliceBottom = GlowSize;
+            car.Clip.AddToClassList("mb-car__clip");
+            car.Root.Add(car.Glow);
+            car.Root.Add(car.Clip);
+            for (var i = 0; i < RainColumns; i++)
+            {
+                var column = new Label(RandomColumn()) { pickingMode = PickingMode.Ignore };
+                column.AddToClassList("mb-car__rain");
+                column.style.left = 4f + i * RainColumnPitch;
+                car.Rain[i] = column;
+                car.RainY[i] = -(float)_rng.NextDouble() * RainRows * RainRowHeight;
+                car.RainSpeed[i] = 1.2f + (float)_rng.NextDouble() * 1.4f;
+                car.Clip.Add(column);
+            }
+            car.Root.Add(car.Name);
+            car.Root.Add(car.Sub);
+            car.Root.Add(car.Remove);
+            BridgeFont.Apply(car.Root);
+            car.Root.style.opacity = 0f;
+            car.Root.RegisterCallback<ClickEvent>(_ =>
+            {
+                if (car.Waiter == null)
+                    ShowMenu(car.Root.worldBound);
+            });
+            car.Remove.RegisterCallback<ClickEvent>(evt =>
+            {
+                evt.StopPropagation();
+                if (car.Waiter != null)
+                    Remove(car.Waiter);
+            });
+            return car;
+        }
+
+        static void Fill(Car car, EditorLockWaiter? waiter, EditorLockState state)
+        {
+            car.Waiter = waiter;
+            var holder = waiter == null;
+            car.Root.EnableInClassList("mb-car--holder", holder);
+            car.Root.EnableInClassList("mb-car--over", holder && IsPastCap(state));
+            car.Root.EnableInClassList("mb-car--blocking", holder && IsBlocking(state));
+            car.Root.EnableInClassList("mb-car--waiter", !holder);
+            car.Clip.style.backgroundImage = holder ? Ramp(ref _tintAmber, Amber, 0.16f, 0.03f, 0.7f) : Ramp(ref _tintGreen, Green, 0.10f, 0.02f, 0.7f);
+
+            if (waiter == null)
+            {
+                car.NameText = state.Kind == KindOutside ? $"{Name(state)} (lock file)" : Name(state);
+                car.SubText = Sub(state.Task, state.AcquiredUnixMs);
+                ShowText(car);
+                car.Root.tooltip = Tooltip(state);
                 return;
             }
 
-            var key = $"{state.QueuePaused}|{state.QueueHeldByPlayMode}|" + string.Join("|", Array.ConvertAll(state.Waiting, w => w.Ticket + w.Owner + w.Task));
-            if (!ReferenceEquals(view, _queueView) || key != _queueKey)
-            {
-                _queueView = view;
-                _queueKey = key;
-                Rebuild(view, state);
-            }
-            foreach (var (label, waiter) in _ages)
-                label.text = Format(Age(waiter.WaitingSinceUnixMs));
+            var who = waiter.Owner.Length > 0 ? waiter.Owner : "a session";
+            var client = waiter.ClientName.Length > 0 && waiter.ClientName != waiter.Owner ? $" ({waiter.ClientName})" : string.Empty;
+            car.NameText = who + client;
+            car.SubText = Sub(waiter.Task, waiter.WaitingSinceUnixMs);
+            ShowText(car);
+            car.Root.tooltip = $"{who}{client} waits for the editor" + Environment.NewLine
+                + (waiter.Task.Length > 0 ? $"Task: {waiter.Task}" + Environment.NewLine : string.Empty)
+                + $"Since: {Clock(waiter.WaitingSinceUnixMs)} ({Format(Age(waiter.WaitingSinceUnixMs))})";
+            car.Remove.tooltip = $"Take {who} out of the queue";
         }
 
-        static void Rebuild(VisualElement view, EditorLockState state)
+        static void Layout()
         {
-            view.Clear();
-            _ages.Clear();
-            var note = state.QueuePaused ? "  -  PAUSED" : state.QueueHeldByPlayMode ? "  -  WAITING FOR PLAY MODE TO END" : string.Empty;
-            var header = new VisualElement();
-            header.AddToClassList("mb-queue__row");
-            header.Add(new Label($"QUEUE  {state.Waiting.Length} waiting{note}") { name = "mb-queue-title" });
-            var pause = new Label(state.QueuePaused ? "RESUME" : "PAUSE") { tooltip = state.QueuePaused ? "Let the first in line have the editor" : "Nobody is granted the editor until you resume" };
-            pause.AddToClassList("mb-queue__button");
-            pause.RegisterCallback<ClickEvent>(_ => SetPaused(!state.QueuePaused));
-            header.Add(pause);
-            view.Add(header);
+            if (_track == null)
+                return;
+            var width = _track.resolvedStyle.width;
+            if (float.IsNaN(width) || width <= 0f)
+                return;
 
-            for (var i = 0; i < state.Waiting.Length; i++)
+            var used = _order.Count * CarPitch - (CarPitch - CarWidth);
+            var start = Mathf.Max(0f, (width - used) / 2f);
+            for (var i = 0; i < _order.Count; i++)
+                Place(_order[i], start + i * CarPitch, i);
+
+            if (_rail != null)
             {
-                var waiter = state.Waiting[i];
-                var row = new VisualElement();
-                row.AddToClassList("mb-queue__row");
-                var who = waiter.Owner.Length > 0 ? waiter.Owner : "a session";
-                var client = waiter.ClientName.Length > 0 && waiter.ClientName != waiter.Owner ? $" ({waiter.ClientName})" : string.Empty;
-                var task = new Label($"{i + 1}.  {who}{client}  -  {waiter.Task}") { tooltip = $"{who}{client}" + Environment.NewLine + waiter.Task };
-                task.AddToClassList("mb-queue__task");
-                var age = new Label(Format(Age(waiter.WaitingSinceUnixMs)));
-                age.AddToClassList("mb-queue__age");
-                var remove = new Label("X") { tooltip = $"Take {who} out of the queue" };
-                remove.AddToClassList("mb-queue__button");
-                remove.RegisterCallback<ClickEvent>(_ => Remove(waiter));
-                row.Add(task);
-                row.Add(age);
-                row.Add(remove);
-                view.Add(row);
-                _ages.Add((age, waiter));
+                _rail.style.left = start;
+                _rail.style.width = Mathf.Max(0f, used);
+                _rail.style.backgroundImage = Ramp(ref _railTexture, Green, 1f, 0.35f, 0.3f, 0.05f);
+            }
+            var held = _order.Count > 0 && _order[0].Waiter == null;
+            var firstWaiter = held ? 1 : 0;
+            PlaceLabel(_lockLabel, held, start);
+            PlaceLabel(_queueLabel, _order.Count > firstWaiter, start + firstWaiter * CarPitch);
+
+            // a light drop falls in each gap between two cars
+            var gaps = Mathf.Max(0, _order.Count - 1);
+            while (_drops.Count < gaps)
+            {
+                var drop = new VisualElement { pickingMode = PickingMode.Ignore };
+                drop.AddToClassList("mb-track__drop");
+                drop.style.backgroundImage = DropTexture();
+                _track.Add(drop);
+                _drops.Add(drop);
+            }
+            for (var i = 0; i < _drops.Count; i++)
+            {
+                _drops[i].style.display = i < gaps ? DisplayStyle.Flex : DisplayStyle.None;
+                _drops[i].style.left = start + (i + 1) * CarPitch - (CarPitch - CarWidth) / 2f;
             }
         }
+
+        static Label TrackLabel(string text, string className)
+        {
+            var label = new Label(text) { pickingMode = PickingMode.Ignore };
+            label.AddToClassList("mb-track__label");
+            label.AddToClassList(className);
+            _track!.Add(label);
+            return label;
+        }
+
+        static void PlaceLabel(Label? label, bool shown, float x)
+        {
+            if (label == null)
+                return;
+            label.style.display = shown ? DisplayStyle.Flex : DisplayStyle.None;
+            label.style.left = x;
+        }
+
+        static void Place(Car car, float x, int index)
+        {
+            car.Root.style.transitionDelay = new List<TimeValue> { new(index * StaggerMs, TimeUnit.Millisecond) };
+            if (float.IsNaN(car.X))
+            {
+                // a change made before the car's first style pass jumps instead of animating, so the drive-in waits for its first layout
+                car.Root.style.translate = new Translate(x + EnterFrom, 0);
+                car.Entering = true;
+                void Enter() => car.Root.schedule.Execute(() =>
+                {
+                    car.Entering = false;
+                    car.Root.style.opacity = 1f;
+                    car.Root.style.translate = new Translate(car.X, 0);
+                    Decode(car);
+                });
+                // a car placed from the track's own first layout is already laid out and gets no further geometry event
+                if (car.Root.layout.width > 0f)
+                    Enter();
+                else
+                {
+                    EventCallback<GeometryChangedEvent>? laidOut = null;
+                    laidOut = _ =>
+                    {
+                        car.Root.UnregisterCallback(laidOut);
+                        Enter();
+                    };
+                    car.Root.RegisterCallback(laidOut);
+                }
+            }
+            car.X = x;
+            if (!car.Entering)
+                car.Root.style.translate = new Translate(x, 0);
+        }
+
+        static void Leave(Car car)
+        {
+            car.Root.AddToClassList("mb-car--leaving");
+            car.Root.pickingMode = PickingMode.Ignore;
+            car.Root.style.transitionDelay = new List<TimeValue> { new(0, TimeUnit.Millisecond) };
+            car.Root.style.opacity = 0f;
+            car.Root.style.translate = new Translate(car.X + LeaveTo, 0);
+            car.Root.schedule.Execute(car.Root.RemoveFromHierarchy).StartingIn(LeaveMs);
+        }
+
+        static void Pop(Car car)
+        {
+            car.Root.AddToClassList("mb-car--pop");
+            car.Root.schedule.Execute(() => car.Root.RemoveFromClassList("mb-car--pop")).StartingIn(PopMs);
+        }
+
+        static void ShowText(Car car)
+        {
+            if (car.Decode > 0)
+                return;
+            car.Name.text = car.NameText;
+            car.Sub.text = car.SubText;
+        }
+
+        // the name of a car that drives in resolves from random glyphs, like the rain behind it
+        static void Decode(Car car)
+        {
+            car.Decode = DecodeSteps;
+            car.Name.text = Scramble(car.NameText);
+            car.Sub.text = Scramble(car.SubText);
+            car.Root.schedule.Execute(() =>
+            {
+                car.Decode--;
+                if (car.Decode > 0)
+                {
+                    car.Name.text = Scramble(car.NameText);
+                    car.Sub.text = Scramble(car.SubText);
+                }
+                else
+                    ShowText(car);
+            }).Every(DecodeStepMs).Until(() => car.Decode <= 0);
+        }
+
+        static void TickRain()
+        {
+            const float span = RainRows * RainRowHeight;
+            var now = (float)(EditorApplication.timeSinceStartup * 1000.0);
+            for (var i = 0; i < _drops.Count; i++)
+            {
+                var duration = DropMs + (i + 1) * DropStepMs;
+                var t = Mathf.Repeat(now - (i + 1) * DropDelayMs, duration) / duration;
+                _drops[i].style.translate = new Translate(0, DropTravel * t);
+                _drops[i].style.opacity = t < 0.3f ? t / 0.3f : (1f - t) / 0.7f;
+            }
+            foreach (var car in _cars.Values)
+                for (var i = 0; i < RainColumns; i++)
+                {
+                    var y = car.RainY[i] + car.RainSpeed[i];
+                    if (y > car.Root.layout.height)
+                    {
+                        y = -span;
+                        car.Rain[i].text = RandomColumn();
+                    }
+                    car.RainY[i] = y;
+                    car.Rain[i].style.translate = new Translate(0, y);
+                }
+        }
+
+        // horizontal alpha ramp through (0, a0), (mid, a1), (1, a2); runtime textures are lost on a domain reload, so they are rebuilt when gone
+        static Texture2D Ramp(ref Texture2D? cache, Color color, float a0, float a1, float mid, float a2 = -1f)
+        {
+            if (cache != null)
+                return cache;
+            if (a2 < 0f)
+                a2 = a1;
+            const int width = 64;
+            var pixels = new Color[width];
+            for (var x = 0; x < width; x++)
+            {
+                var t = x / (width - 1f);
+                var a = t < mid ? Mathf.Lerp(a0, a1, t / mid) : Mathf.Lerp(a1, a2, (t - mid) / (1f - mid));
+                pixels[x] = new Color(color.r, color.g, color.b, a);
+            }
+            return cache = NewTexture(width, 1, pixels);
+        }
+
+        static Texture2D DropTexture()
+        {
+            if (_dropTexture != null)
+                return _dropTexture;
+            const int height = 16;
+            var pixels = new Color[height];
+            // row 0 is the bottom of the texture: bright at the bottom, clear at the top
+            for (var y = 0; y < height; y++)
+                pixels[y] = new Color(Green.r, Green.g, Green.b, 1f - y / (height - 1f));
+            return _dropTexture = NewTexture(1, height, pixels);
+        }
+
+        // a soft amber halo for 9-slicing around the holder: clear in the middle, fading out over GlowSize pixels
+        static Texture2D GlowTexture()
+        {
+            if (_glowTexture != null)
+                return _glowTexture;
+            const int size = GlowSize * 2 + 1;
+            var pixels = new Color[size * size];
+            for (var y = 0; y < size; y++)
+                for (var x = 0; x < size; x++)
+                {
+                    var d = Mathf.Max(Mathf.Abs(x - GlowSize), Mathf.Abs(y - GlowSize));
+                    var a = d == 0 ? 0f : 0.11f * (1f - (d - 1f) / GlowSize);
+                    pixels[y * size + x] = new Color(Amber.r, Amber.g, Amber.b, a * a / 0.11f);
+                }
+            return _glowTexture = NewTexture(size, size, pixels);
+        }
+
+        static Texture2D NewTexture(int width, int height, Color[] pixels)
+        {
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            texture.SetPixels(pixels);
+            texture.Apply();
+            return texture;
+        }
+
+        static string RandomColumn()
+        {
+            var text = new StringBuilder(RainRows * 2);
+            for (var k = 0; k < RainRows; k++)
+            {
+                if (k > 0)
+                    text.Append('\n');
+                text.Append(RandomGlyph());
+            }
+            return text.ToString();
+        }
+
+        static string Scramble(string text)
+        {
+            var chars = text.ToCharArray();
+            for (var i = 0; i < chars.Length; i++)
+                if (!char.IsWhiteSpace(chars[i]))
+                    chars[i] = RandomGlyph();
+            return new string(chars);
+        }
+
+        static char RandomGlyph() => MatrixRainRenderer.Glyphs[_rng.Next(MatrixRainRenderer.Glyphs.Length)];
+
+        static void ClearCars()
+        {
+            foreach (var car in _cars.Values)
+                car.Root.RemoveFromHierarchy();
+            _cars.Clear();
+            _order.Clear();
+        }
+
+        static string HolderKey(EditorLockState state)
+            => state.SessionId.Length > 0 ? state.SessionId : $"holder:{state.Kind}:{state.Owner}";
+
+        static string WaiterKey(EditorLockWaiter waiter)
+            => waiter.SessionId.Length > 0 ? waiter.SessionId : $"ticket:{waiter.Ticket}";
+
+        static string Sub(string task, long sinceUnixMs)
+            => task.Length > 0 ? $"{task} · {Format(Age(sinceUnixMs))}" : Format(Age(sinceUnixMs));
 
         static void CopyDetails()
         {

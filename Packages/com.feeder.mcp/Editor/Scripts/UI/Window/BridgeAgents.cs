@@ -122,13 +122,32 @@ namespace Feeder.MCP.Editor.UI
             MatrixPluginEditor.Instance.Save();
         }
 
+        // folders these agents read skills from before they moved to the shared .agents/skills;
+        // left in place, Cursor would list every skill twice
+        static readonly Dictionary<string, string> _oldSkillsPaths = new()
+        {
+            ["cursor"] = ".cursor/skills",
+            ["gemini"] = ".gemini/skills",
+        };
+
         public static bool GenerateSkills(AgentConfig.AiAgentConfigurator agent)
         {
+            var generated = WithSkillsPath(agent.SkillsPath!, host => host.GenerateSkillFiles(MatrixPluginEditor.ProjectRootPath));
+            if (_oldSkillsPaths.TryGetValue(agent.AgentId, out var old))
+                RemoveOldSkills(old);
+            return generated;
+        }
+
+        static bool WithSkillsPath(string skillsPath, Func<Feeder.ToolHost.IToolHost, bool> action)
+        {
+            var host = MatrixPluginEditor.Instance.ToolHostInstance;
+            if (host == null)
+                return false;
             var previous = MatrixPluginEditor.SkillsPath;
             try
             {
-                MatrixPluginEditor.SkillsPath = agent.SkillsPath!;
-                return MatrixPluginEditor.Instance.ToolHostInstance?.GenerateSkillFiles(MatrixPluginEditor.ProjectRootPath) == true;
+                MatrixPluginEditor.SkillsPath = skillsPath;
+                return action(host);
             }
             finally
             {
@@ -136,9 +155,29 @@ namespace Feeder.MCP.Editor.UI
             }
         }
 
+        // removes only what this package wrote: the guide skills by name, tool skills by their mark
+        static void RemoveOldSkills(string skillsPath)
+        {
+            var folder = Path.Combine(MatrixPluginEditor.ProjectRootPath, skillsPath);
+            if (!Directory.Exists(folder))
+                return;
+            try
+            {
+                WithSkillsPath(skillsPath, host => host.DeleteSkillFiles(MatrixPluginEditor.ProjectRootPath));
+                foreach (var skill in Directory.GetDirectories(folder))
+                    Feeder.ToolHost.Skills.SkillFileGenerator.DeleteOwnSkill(skill);
+                if (Directory.GetFileSystemEntries(folder).Length == 0)
+                    Directory.Delete(folder);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Could not clean the old skills folder {path}.", folder);
+            }
+        }
+
         static string SkillsStampKey => $"Feeder_Matrix_SkillsStamp_{UnityEngine.Application.dataPath}";
 
-        // the skills only change with the package version or the set of enabled tools
+        // the skills only change with the package version, the set of enabled tools or an agent's skills folder
         static string? SkillsStamp()
         {
             var tools = MatrixPluginEditor.Instance.Tools;
@@ -150,7 +189,10 @@ namespace Feeder.MCP.Editor.UI
                 .Where(tool => tools!.IsToolEnabled(tool.Name))
                 .Select(tool => tool.Name)
                 .OrderBy(name => name, StringComparer.Ordinal);
-            return $"{MatrixPlugin.Version}|{string.Join(",", enabled)}";
+            var folders = MatrixPluginEditor.AutoConfigureAgentIds
+                .Select(id => $"{id}={AiAgentCatalog.GetByAgentId(id)?.SkillsPath}")
+                .OrderBy(entry => entry, StringComparer.Ordinal);
+            return $"{MatrixPlugin.Version}|{string.Join(",", folders)}|{string.Join(",", enabled)}";
         }
 
         public static void RegenerateSkillsIfChanged()
