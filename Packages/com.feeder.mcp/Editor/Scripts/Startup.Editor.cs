@@ -11,8 +11,9 @@ namespace Feeder.MCP.Editor
     {
         static void SubscribeOnEditorEvents()
         {
-            Application.unloading += OnApplicationUnloading;
-            Application.quitting += OnApplicationQuitting;
+            // not Application.quitting: in the Editor it also fires on leaving Play mode, which tore the link
+            // down with no reconnect path except EnteredEditMode, and any other package throwing there skips it
+            EditorApplication.quitting += OnEditorQuitting;
 
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             AssemblyReloadEvents.afterAssemblyReload += OnAfterAssemblyReload;
@@ -20,8 +21,7 @@ namespace Feeder.MCP.Editor
             // Handle Play mode state changes to ensure reconnection after exiting Play mode
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
         }
-        static void OnApplicationUnloading() => TryDisconnectAndCleanup(nameof(OnApplicationUnloading));
-        static void OnApplicationQuitting() => TryDisconnectAndCleanup(nameof(OnApplicationQuitting));
+        static void OnEditorQuitting() => TryDisconnectAndCleanup(nameof(OnEditorQuitting));
         static void OnBeforeAssemblyReload()
         {
             if (MatrixPluginEditor.HasInstance)
@@ -149,21 +149,8 @@ namespace Feeder.MCP.Editor
                         break;
                     }
 
-                    _logger.LogTrace("Scheduling reconnection after Play mode exit");
-
-                    // Small delay to ensure Unity is fully settled in Edit mode
-                    EditorApplication.delayCall += () =>
-                    {
-                        _logger.LogTrace("Initiating delayed reconnection after Play mode exit");
-
-                        MatrixPluginEditor.Instance.BuildToolHostIfNeeded();
-                        MatrixPluginEditor.Instance.AddUnityLogCollectorIfNeeded(() => new BufferedFileLogStorage());
-                        MatrixPluginEditor.ConnectIfNeeded();
-                    };
-
-                    // No delay, immediate reconnection for the case if Unity Editor in background
-                    // (has no focus)
-                    _logger.LogTrace("Initiating reconnection after Play mode exit");
+                    // the link survives leaving Play mode; this only restores one dropped during play
+                    _logger.LogTrace("Ensuring connection after Play mode exit");
 
                     MatrixPluginEditor.Instance.BuildToolHostIfNeeded();
                     MatrixPluginEditor.Instance.AddUnityLogCollectorIfNeeded(() => new BufferedFileLogStorage());

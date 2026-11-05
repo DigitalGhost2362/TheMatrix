@@ -47,6 +47,12 @@ All notable changes to this package are documented here.
 - Matrix Setup no longer installs or verifies the Claude Code CLI. Each agent's MCP config is still
   written from its chip in the Bridge window.
 
+### Fixed
+
+- The bridge link no longer drops when Play mode stops. It used to close and wait for the return to
+  Edit mode to reconnect, so a package whose Play mode handler threw an exception left it down until
+  the next domain reload.
+
 ## [1.0.1] - 2026-10-21
 
 ### Changed
