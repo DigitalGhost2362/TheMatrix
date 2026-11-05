@@ -131,6 +131,22 @@ namespace Feeder.MCP.Editor.Matrix
         public long LastActivityUnixMs { get; set; }
         public long ExpiresUnixMs { get; set; }
         public int CallsInFlight { get; set; }
+        // sessions queued for the lock, first in line first; empty from a server without the queue
+        public EditorLockWaiter[] Waiting { get; set; } = Array.Empty<EditorLockWaiter>();
+        public bool QueuePaused { get; set; }
+        public bool QueueHeldByPlayMode { get; set; }
+    }
+
+    [Serializable]
+    internal sealed class EditorLockWaiter
+    {
+        public string Ticket { get; set; } = string.Empty;
+        public string Owner { get; set; } = string.Empty;
+        public string Task { get; set; } = string.Empty;
+        public string ClientName { get; set; } = string.Empty;
+        public string SessionId { get; set; } = string.Empty;
+        public long WaitingSinceUnixMs { get; set; }
+        public bool Attached { get; set; }
     }
 
     [Serializable]

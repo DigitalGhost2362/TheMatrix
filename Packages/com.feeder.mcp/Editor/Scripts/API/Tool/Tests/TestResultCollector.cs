@@ -70,6 +70,7 @@ namespace Feeder.MCP.Editor.API.TestRunner
             MatrixPluginEditor.Instance.LogInfo("RunStarted", typeof(TestResultCollector));
 
             startTime = DateTime.Now;
+            TestRunGuard.Executing = true;
             var testCount = CountTests(testsToRun);
 
             lock (_logsMutex)
@@ -91,6 +92,9 @@ namespace Feeder.MCP.Editor.API.TestRunner
         public void RunFinished(ITestResultAdaptor result)
         {
             MatrixPluginEditor.Instance.LogInfo("RunFinished", typeof(TestResultCollector));
+
+            var requestId = TestCallRequestID;
+            TestRunGuard.Clear();
 
             // Unsubscribe from log messages
             Application.logMessageReceivedThreaded -= OnLogMessageReceived;
@@ -121,8 +125,6 @@ namespace Feeder.MCP.Editor.API.TestRunner
             if (!EnvironmentUtils.IsCi())
                 MatrixPluginEditor.ConnectIfNeeded();
 
-            var requestId = TestCallRequestID;
-            TestCallRequestID = string.Empty;
             if (string.IsNullOrEmpty(requestId) == false)
             {
                 var structuredResponse = CreateStructuredResponse(

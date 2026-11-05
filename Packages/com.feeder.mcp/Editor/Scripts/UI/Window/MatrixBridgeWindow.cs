@@ -31,7 +31,7 @@ namespace Feeder.MCP.Editor.UI
         };
         private static readonly string[] _lockClasses =
         {
-            "mb-lock--agent", "mb-lock--outside", "mb-lock--over",
+            "mb-lock--agent", "mb-lock--outside", "mb-lock--over", "mb-lock--blocking",
         };
         private static readonly LogLevel[] _menuLogLevels =
         {
@@ -60,6 +60,7 @@ namespace Feeder.MCP.Editor.UI
         private Label? _note;
         private Label? _menu;
         private Label? _lock;
+        private VisualElement? _queue;
         private IVisualElementScheduledItem? _lockTick;
         private VisualElement? _core;
         private VisualElement? _chips;
@@ -168,6 +169,7 @@ namespace Feeder.MCP.Editor.UI
             _note = root.Q<Label>("mb-note");
             _menu = root.Q<Label>("mb-menu");
             _lock = root.Q<Label>("mb-lock");
+            _queue = root.Q<VisualElement>("mb-queue");
             _chips = root.Q<VisualElement>("mb-chips");
 
             if (bridgeRoot == null || _state == null || _address == null || _chips == null)
@@ -244,6 +246,7 @@ namespace Feeder.MCP.Editor.UI
             _lockTick?.Pause();
             _lockTick = null;
             _lock = null;
+            _queue = null;
             _rainView = null;
             _chipViews.Clear();
             _portField = null;
@@ -272,6 +275,8 @@ namespace Feeder.MCP.Editor.UI
             _lock.EnableInClassList("mb-lock--visible", state != null);
             foreach (var lockClass in _lockClasses)
                 _lock.EnableInClassList(lockClass, false);
+            if (_queue != null)
+                BridgeLock.ShowQueue(_queue, state);
             if (state == null)
             {
                 _lockTick?.Pause();
@@ -282,9 +287,10 @@ namespace Feeder.MCP.Editor.UI
             _lock.tooltip = BridgeLock.Tooltip(state);
             if (state.Held)
                 _lock.EnableInClassList(BridgeLock.IsPastCap(state) ? "mb-lock--over" : "mb-lock--" + state.Kind, true);
+            _lock.EnableInClassList("mb-lock--blocking", BridgeLock.IsBlocking(state));
 
-            // the ages in the line and the tooltip move every second while someone holds the editor
-            if (!state.Held)
+            // the ages in the line, the tooltip and the queue move every second while someone holds the editor or waits for it
+            if (!state.Held && state.Waiting.Length == 0)
                 _lockTick?.Pause();
             else if (_lockTick == null)
                 _lockTick = _lock.schedule.Execute(RefreshLock).Every(1000);

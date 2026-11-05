@@ -54,6 +54,9 @@ public sealed class EditorLock
     FileLock? _outside;
     (string SessionId, string Reason)? _lastDropped;
     EditorLockState _published = new();
+    readonly List<Waiter> _queue = [];
+    readonly Dictionary<string, DateTimeOffset> _removed = [];
+    bool _paused;
 
     public EditorLock(
         UnityLinkRegistry registry,
@@ -84,6 +87,22 @@ public sealed class EditorLock
         public DateTimeOffset LastActivity { get; set; }
         public DateTimeOffset MirrorWritten { get; set; }
         public int InFlight { get; set; }
+        public DateTimeOffset GrantedAt { get; init; }
+        public bool AwaitingFirstCall { get; set; }
+    }
+
+    sealed class Waiter
+    {
+        public required string Ticket { get; init; }
+        public required string SessionId { get; init; }
+        public required string Owner { get; set; }
+        public required string Task { get; set; }
+        public string ClientName { get; init; } = string.Empty;
+        public DateTimeOffset Enqueued { get; init; }
+        public DateTimeOffset LastCall { get; set; }
+        public TaskCompletionSource? Pending { get; set; }
+        public bool Granted { get; set; }
+        public bool Removed { get; set; }
     }
 
     sealed record FileLock(string Owner, string Task, string Acquired, long Heartbeat, bool Matrix, string Session, DateTimeOffset Created);
@@ -100,13 +119,17 @@ public sealed class EditorLock
             Title = "Editor / Lock / Acquire",
             Description = "Claims the shared Unity editor for one burst of editor-changing work (a compile, one play session, an " +
                           "edit-mode batch). While you hold it, other sessions' editor-changing tools are refused; read-only tools " +
-                          "still run for everyone. Answers 'busy' with who holds it when it is taken. Release with " +
-                          $"{ReleaseName} as soon as the burst ends; a claim is freed on its own when your session closes or after " +
-                          "a long idle stretch. Calling it again while you hold it starts a new claim.",
+                          "still run for everyone. When it is taken the call waits in a first-come queue (about 50 s per call) and " +
+                          "answers 'acquired' the moment it is your turn; on 'queued' call it again at once with the ticket to keep " +
+                          $"your place. Release with {ReleaseName} as soon as the burst ends, because others may be waiting; a claim " +
+                          "is freed on its own when your session closes or after a long idle stretch. Calling it again while you hold " +
+                          "it starts a new claim.",
             InputSchema = Schema("""
                 {"type":"object","properties":{
                   "task":{"type":"string","description":"What the claim is for, in a few words. Shown in the Unity editor."},
-                  "owner":{"type":"string","description":"A label people recognize you by, e.g. 'claude-catwalk-score'. Defaults to your client name."}},
+                  "owner":{"type":"string","description":"A label people recognize you by, e.g. 'claude-catwalk-score'. Defaults to your client name."},
+                  "wait":{"type":"boolean","description":"Wait in the queue when the editor is taken. Default true; false answers 'busy' at once."},
+                  "ticket":{"type":"string","description":"The ticket of an earlier 'queued' answer: keeps your place in the queue."}},
                  "required":["task"],"additionalProperties":false}
                 """),
         };
@@ -124,7 +147,7 @@ public sealed class EditorLock
             Name = StatusName,
             Title = "Editor / Lock / Status",
             Description = "Says who holds the shared Unity editor (an agent session or a lock file), " +
-                          "for what, since when, and whether it is you.",
+                          "for what, since when, whether it is you, and who waits in the queue (with your position).",
             InputSchema = Schema("""{"type":"object","properties":{},"additionalProperties":false}"""),
             Annotations = new ToolAnnotations { ReadOnlyHint = true, IdempotentHint = true },
         };
@@ -132,26 +155,64 @@ public sealed class EditorLock
 
     #region MCP tools
 
-    public CallToolResult Call(CallToolRequestParams request, string? sessionId) => request.Name switch
+    public Task<CallToolResult> CallAsync(CallToolRequestParams request, string? sessionId, CancellationToken ct) => request.Name switch
     {
-        AcquireName => Acquire(sessionId, Text(request.Arguments, "owner"), Text(request.Arguments, "task")),
-        ReleaseName => Release(sessionId),
-        _ => Status(sessionId),
+        AcquireName => AcquireAsync(sessionId, Text(request.Arguments, "owner"), Text(request.Arguments, "task"),
+            Flag(request.Arguments, "wait") ?? true, Text(request.Arguments, "ticket"), ct),
+        ReleaseName => Task.FromResult(Release(sessionId)),
+        _ => Task.FromResult(Status(sessionId)),
     };
 
+    /// <summary>Claims the editor now or answers busy; never queues.</summary>
     public CallToolResult Acquire(string? sessionId, string? owner, string? task)
     {
+        var result = Enter(sessionId, owner, task, wait: false, ticket: null, out _, out _);
+        _ = PublishAsync();
+        return result!;
+    }
+
+    /// <summary>Claims the editor, or waits in the queue for at most one slice and answers queued.</summary>
+    public async Task<CallToolResult> AcquireAsync(string? sessionId, string? owner, string? task, bool wait, string? ticket, CancellationToken ct)
+    {
+        var result = Enter(sessionId, owner, task, wait, ticket, out var waiter, out var signal);
+        _ = PublishAsync();
+        if (result is not null)
+            return result;
+        try
+        {
+            await signal!.WaitAsync(_options.Value.EditorLockWaitSlice, _time, ct);
+        }
+        catch (TimeoutException)
+        {
+        }
+        catch (OperationCanceledException)
+        {
+            lock (_gate)
+                Drop(waiter!);
+            _ = PublishAsync();
+            throw;
+        }
+        lock (_gate)
+            result = Settle(waiter!, signal!, _time.GetUtcNow());
+        _ = PublishAsync();
+        return result;
+    }
+
+    // null: the caller is queued and must wait on signal
+    CallToolResult? Enter(string? sessionId, string? owner, string? task, bool wait, string? ticket, out Waiter? waiter, out Task? signal)
+    {
+        waiter = null;
+        signal = null;
         if (string.IsNullOrEmpty(sessionId))
             return Error("This connection has no MCP session id, so it cannot hold the editor lock.");
         task = Clip(task);
         if (task.Length == 0)
             return Error($"{AcquireName} needs 'task': what the claim is for, in a few words.");
 
-        CallToolResult result;
         lock (_gate)
         {
             var now = _time.GetUtcNow();
-            ExpireIfIdle(now);
+            Maintain(now);
             var link = _registry.GetLatestLink();
             var client = _clients.ClientOf(sessionId);
             owner = Clip(owner);
@@ -160,50 +221,211 @@ public sealed class EditorLock
 
             if (_holder is { } held && held.SessionId == sessionId)
             {
+                _queue.RemoveAll(w => w.SessionId == sessionId);
                 held.Owner = owner;
                 held.Task = task;
                 held.Acquired = now;
                 held.LastActivity = now;
+                held.AwaitingFirstCall = false;
                 WriteMirror(held, now);
-                result = Ok($"acquired (a new claim; you already held it) for \"{task}\". {EditorLine(link)} {Reminder}");
+                return Acquired($"acquired (a new claim; you already held it) for \"{task}\". {EditorLine(link)} {Reminder}", task, owner, link, TimeSpan.Zero);
             }
-            else if (_holder is { } other)
+            if (ticket is not null && _removed.Remove(ticket))
+                return Removed();
+
+            waiter = _queue.Find(w => w.SessionId == sessionId);
+            if (waiter is null)
             {
-                result = Error($"busy: {Describe(other, now)} Wait and acquire again, or hand off (write a test case and stop).");
-            }
-            else if (link?.ProjectRoot is { } root && ReadLiveOutsideLock(root, now) is { } outside)
-            {
-                _outside = outside;
-                result = Error($"busy: {DescribeOutside(outside, now)} Wait and acquire again, or hand off (write a test case and stop).");
-            }
-            else if (link is { Connected: true, EditorState: FmpEditorState.Playing or FmpEditorState.Paused })
-            {
-                result = Error("busy: the editor is in play mode and nobody holds the lock, so a person is playing (or a session " +
-                               "left play mode on). Do not stop it; wait, or hand off.");
-            }
-            else
-            {
-                _holder = new Holder
+                if (_queue.Count == 0 && Blocker(link, now) is null)
                 {
+                    Grant(sessionId, owner, task, link, now, fromQueue: false);
+                    return Acquired($"acquired for \"{task}\". {EditorLine(link)} {Reminder}", task, owner, link, TimeSpan.Zero);
+                }
+                if (!wait)
+                    return Busy(Blocker(link, now));
+                waiter = new Waiter
+                {
+                    Ticket = Guid.NewGuid().ToString("N")[..12],
                     SessionId = sessionId,
                     Owner = owner,
                     Task = task,
                     ClientName = client?.Name ?? string.Empty,
-                    ClientVersion = client?.Version ?? string.Empty,
-                    Root = link?.ProjectRoot,
-                    Acquired = now,
-                    LastActivity = now,
+                    Enqueued = now,
                 };
-                _outside = null;
-                if (_lastDropped?.SessionId == sessionId)
-                    _lastDropped = null;
-                WriteMirror(_holder, now);
-                _logger.LogInformation("Editor lock acquired by {Owner} (session {SessionId}) for {Task}", owner, sessionId, task);
-                result = Ok($"acquired for \"{task}\". {EditorLine(link)} {Reminder}");
+                _queue.Add(waiter);
+            }
+            else
+            {
+                waiter.Owner = owner;
+                waiter.Task = task;
+            }
+            waiter.LastCall = now;
+            if (!wait)
+                return Queued(waiter, now, link);
+
+            waiter.Pending?.TrySetResult();
+            var pending = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            waiter.Pending = pending;
+            signal = pending.Task;
+            Pump(now);
+            return waiter.Granted ? Settle(waiter, signal, now) : null;
+        }
+    }
+
+    // caller holds _gate; the answer of a waiting call that was granted, removed, dropped or timed out
+    CallToolResult Settle(Waiter waiter, Task signal, DateTimeOffset now)
+    {
+        if (waiter.Pending?.Task == signal)
+            waiter.Pending = null;
+        var link = _registry.GetLatestLink();
+        if (waiter.Granted)
+        {
+            if (_holder is { } held && held.SessionId == waiter.SessionId)
+                return Acquired($"acquired for \"{held.Task}\" after waiting {Age(now - waiter.Enqueued)}. {EditorLine(link)} {Reminder} " +
+                                $"Make a tool call within {Age(_options.Value.EditorLockFirstCallDeadline)} or the turn passes on.",
+                    held.Task, held.Owner, link, now - waiter.Enqueued);
+            return Error($"You were granted the lock but it was freed again before your call returned. Call {AcquireName} again.");
+        }
+        if (waiter.Removed)
+            return Removed();
+        if (_queue.Contains(waiter))
+            return Queued(waiter, now, link);
+        return Error($"Your place in the editor lock queue is gone (its session closed or the ticket expired). Call {AcquireName} again to join the end.");
+    }
+
+    static CallToolResult Removed()
+        => ToolErrors.Create(ToolErrors.EditorLocked,
+            "removed: a person took you out of the editor lock queue in the Unity editor. Do not queue again unless the user asks; " +
+            $"call {AcquireName} without the ticket to join the end of the queue.");
+
+    CallToolResult Queued(Waiter waiter, DateTimeOffset now, UnityLink? link)
+    {
+        var position = _queue.IndexOf(waiter) + 1;
+        var blocker = Blocker(link, now) ?? "The editor is free and your turn comes next.";
+        var result = ToolErrors.Create(ToolErrors.LockQueued,
+            $"queued: position {position} ({position - 1} ahead). {char.ToUpperInvariant(blocker[0])}{blocker[1..]} " +
+            $"Call {AcquireName} again at once with ticket \"{waiter.Ticket}\" to keep your place.",
+            retryAfterMs: 0,
+            new Dictionary<string, object?>
+            {
+                ["position"] = position,
+                ["ahead"] = position - 1,
+                ["holder"] = _holder?.Owner ?? _outside?.Owner,
+                ["ticket"] = waiter.Ticket,
+                ["waited_ms"] = (long)(now - waiter.Enqueued).TotalMilliseconds,
+            });
+        result.IsError = false;
+        return result;
+    }
+
+    CallToolResult Acquired(string text, string task, string owner, UnityLink? link, TimeSpan waited)
+        => new()
+        {
+            Content = [new TextContentBlock { Text = text }],
+            StructuredContent = JsonSerializer.SerializeToElement(new Dictionary<string, object?>
+            {
+                ["acquired"] = true,
+                ["task"] = task,
+                ["owner"] = owner,
+                ["waited_ms"] = (long)waited.TotalMilliseconds,
+                ["editor"] = EditorLine(link),
+            }),
+        };
+
+    CallToolResult Busy(string? blocker)
+        => ToolErrors.Create(ToolErrors.EditorLocked,
+            $"busy: {blocker ?? $"{_queue.Count} session(s) are waiting ahead of you."} Call {AcquireName} with wait (the default) to queue, or hand off (write a test case and stop).",
+            retryAfterMs: 5000,
+            new Dictionary<string, object?> { ["holder"] = _holder?.Owner ?? _outside?.Owner, ["queue_length"] = _queue.Count });
+
+    // caller holds _gate
+    void Grant(string sessionId, string owner, string task, UnityLink? link, DateTimeOffset now, bool fromQueue)
+    {
+        var client = _clients.ClientOf(sessionId);
+        _holder = new Holder
+        {
+            SessionId = sessionId,
+            Owner = owner,
+            Task = task,
+            ClientName = client?.Name ?? string.Empty,
+            ClientVersion = client?.Version ?? string.Empty,
+            Root = link?.ProjectRoot,
+            Acquired = now,
+            LastActivity = now,
+            GrantedAt = now,
+            AwaitingFirstCall = fromQueue,
+        };
+        _outside = null;
+        if (_lastDropped?.SessionId == sessionId)
+            _lastDropped = null;
+        WriteMirror(_holder, now);
+        _logger.LogInformation("Editor lock acquired by {Owner} (session {SessionId}) for {Task}", owner, sessionId, task);
+    }
+
+    // caller holds _gate; why nobody can be granted the lock now, or null
+    string? Blocker(UnityLink? link, DateTimeOffset now)
+    {
+        if (_holder is { } other)
+            return Describe(other, now);
+        if (link?.ProjectRoot is { } root && ReadLiveOutsideLock(root, now) is { } outside)
+        {
+            _outside = outside;
+            return DescribeOutside(outside, now);
+        }
+        if (_paused)
+            return "a person paused the editor lock queue in the Unity editor; nobody is granted the lock until they resume it.";
+        if (link is { Connected: true, EditorState: FmpEditorState.Playing or FmpEditorState.Paused })
+            return "the editor is in play mode and nobody holds the lock, so a person is playing (or a session left play mode on); do not stop it. The queue waits until play mode ends.";
+        return null;
+    }
+
+    // caller holds _gate; hands a free lock to the first queued session that has a call waiting
+    bool Pump(DateTimeOffset now)
+    {
+        if (_queue.Count == 0)
+            return false;
+        var link = _registry.GetLatestLink();
+        if (Blocker(link, now) is not null || _queue.Find(w => w.Pending is not null) is not { } next)
+            return false;
+        _queue.Remove(next);
+        next.Granted = true;
+        Grant(next.SessionId, next.Owner, next.Task, link, now, fromQueue: true);
+        next.Pending!.TrySetResult();
+        return true;
+    }
+
+    // caller holds _gate; drops queued sessions that closed or stayed away past their ticket
+    bool Sweep(DateTimeOffset now)
+    {
+        var changed = false;
+        var away = _options.Value.EditorLockWaitSlice + _options.Value.EditorLockTicketGrace;
+        foreach (var waiter in _queue.ToArray())
+        {
+            if (!_clients.IsOpen(waiter.SessionId) || (waiter.Pending is null && now - waiter.LastCall > away))
+            {
+                Drop(waiter);
+                changed = true;
             }
         }
-        _ = PublishAsync();
-        return result;
+        foreach (var ticket in _removed.Where(r => now - r.Value > TimeSpan.FromMinutes(10)).Select(r => r.Key).ToArray())
+            _removed.Remove(ticket);
+        return changed;
+    }
+
+    // caller holds _gate; true when something changed
+    bool Maintain(DateTimeOffset now)
+    {
+        var swept = Sweep(now);
+        var freed = ExpireIfIdle(now);
+        var granted = Pump(now);
+        return freed || swept || granted;
+    }
+
+    // caller holds _gate
+    void Drop(Waiter waiter)
+    {
+        _queue.Remove(waiter);
+        waiter.Pending?.TrySetResult();
     }
 
     public CallToolResult Release(string? sessionId)
@@ -212,11 +434,16 @@ public sealed class EditorLock
         lock (_gate)
         {
             var now = _time.GetUtcNow();
-            ExpireIfIdle(now);
+            Maintain(now);
             if (_holder is { } held && sessionId is not null && held.SessionId == sessionId)
             {
                 Free($"released by {held.Owner}");
                 result = Ok($"released after {Age(now - held.Acquired)}.");
+            }
+            else if (_queue.Find(w => w.SessionId == sessionId) is { } waiting)
+            {
+                Drop(waiting);
+                result = Ok("you left the editor lock queue.");
             }
             else if (_lastDropped is { } dropped && dropped.SessionId == sessionId)
             {
@@ -241,18 +468,48 @@ public sealed class EditorLock
         lock (_gate)
         {
             var now = _time.GetUtcNow();
-            ExpireIfIdle(now);
+            Maintain(now);
             var link = _registry.GetLatestLink();
+            var position = _queue.FindIndex(w => w.SessionId == sessionId) + 1;
+            string text;
             if (_holder is { } held)
             {
                 var mine = sessionId is not null && held.SessionId == sessionId;
-                return Ok((mine ? $"you hold it: \"{held.Task}\" since {Clock(held.Acquired)} ({Age(now - held.Acquired)}). " : Describe(held, now) + " ") + EditorLine(link));
+                if (mine)
+                    held.AwaitingFirstCall = false;
+                text = (mine ? $"you hold it: \"{held.Task}\" since {Clock(held.Acquired)} ({Age(now - held.Acquired)}). " : Describe(held, now) + " ") + EditorLine(link);
             }
-            if (link?.ProjectRoot is { } root && ReadLiveOutsideLock(root, now) is { } outside)
-                return Ok(DescribeOutside(outside, now) + " " + EditorLine(link));
-            if (_lastDropped is { } dropped && dropped.SessionId == sessionId)
-                return Ok($"free. Your last claim was freed ({dropped.Reason}). " + EditorLine(link));
-            return Ok("free. " + EditorLine(link));
+            else if (link?.ProjectRoot is { } root && ReadLiveOutsideLock(root, now) is { } outside)
+                text = DescribeOutside(outside, now) + " " + EditorLine(link);
+            else if (_lastDropped is { } dropped && dropped.SessionId == sessionId)
+                text = $"free. Your last claim was freed ({dropped.Reason}). " + EditorLine(link);
+            else
+                text = "free. " + EditorLine(link);
+
+            if (_queue.Count > 0)
+            {
+                text += $" Queue ({(_paused ? "paused by a person, " : string.Empty)}{_queue.Count} waiting): " +
+                        string.Join("; ", _queue.Select((w, i) => $"{i + 1}. {w.Owner} for \"{w.Task}\" ({Age(now - w.Enqueued)})"));
+                if (position > 0)
+                    text += $". You are number {position}, ticket \"{_queue[position - 1].Ticket}\".";
+            }
+            var result = Ok(text);
+            result.StructuredContent = JsonSerializer.SerializeToElement(new Dictionary<string, object?>
+            {
+                ["held"] = _holder is not null || _outside is not null,
+                ["mine"] = _holder is { } h && sessionId is not null && h.SessionId == sessionId,
+                ["holder"] = _holder?.Owner ?? _outside?.Owner,
+                ["queue_paused"] = _paused,
+                ["position"] = position,
+                ["waiting"] = _queue.Select((w, i) => new Dictionary<string, object?>
+                {
+                    ["position"] = i + 1,
+                    ["owner"] = w.Owner,
+                    ["task"] = w.Task,
+                    ["waited_ms"] = (long)(now - w.Enqueued).TotalMilliseconds,
+                }).ToArray(),
+            });
+            return result;
         }
     }
 
@@ -268,13 +525,23 @@ public sealed class EditorLock
         lock (_gate)
         {
             var now = _time.GetUtcNow();
-            if (ExpireIfIdle(now))
+            if (Maintain(now))
                 _ = PublishAsync();
             if (_holder is not { } held || (sessionId is not null && held.SessionId == sessionId))
                 return null;
             return $"Refused '{toolName}': {Describe(held, now)} Until it is released only read-only tools run for other " +
-                   $"sessions. Wait and call {AcquireName}, or hand off (write a test case and stop).";
+                   $"sessions. Call {AcquireName} (it waits in line for its turn), or hand off (write a test case and stop).";
         }
+    }
+
+    /// <summary>The refusal as a tool result, or null when the session may run the tool.</summary>
+    public CallToolResult? RefusalResult(string? sessionId, string toolName)
+    {
+        if (Refusal(sessionId, toolName) is not { } text)
+            return null;
+        lock (_gate)
+            return ToolErrors.Create(ToolErrors.EditorLocked, text, retryAfterMs: 5000,
+                new Dictionary<string, object?> { ["holder"] = _holder?.Owner, ["queue_length"] = _queue.Count });
     }
 
     /// <summary>Counts a Unity call of the holder as activity, so a long call never reads as idle.</summary>
@@ -285,6 +552,7 @@ public sealed class EditorLock
             if (_holder is not { } held || sessionId is null || held.SessionId != sessionId)
                 return NoCall.Instance;
             held.InFlight++;
+            held.AwaitingFirstCall = false;
             held.LastActivity = _time.GetUtcNow();
             return new TrackedCall(this, held);
         }
@@ -337,6 +605,7 @@ public sealed class EditorLock
                 DeleteDirectory(root);
                 _outside = null;
                 _logger.LogWarning("Editor lock file of {Owner} removed from the Unity editor", file.Owner);
+                Pump(_time.GetUtcNow());
             }
             else
             {
@@ -351,10 +620,47 @@ public sealed class EditorLock
     {
         lock (_gate)
         {
+            foreach (var waiter in _queue.Where(w => w.SessionId == sessionId).ToArray())
+                Drop(waiter);
             if (_holder is { } held && held.SessionId == sessionId)
                 Free("its MCP session closed");
         }
         _ = PublishAsync();
+    }
+
+    /// <summary>Removes one session from the queue (a person's choice in the editor). Returns who was removed.</summary>
+    public string RemoveWaiter(string ticket)
+    {
+        string removed;
+        lock (_gate)
+        {
+            if (_queue.Find(w => w.Ticket == ticket) is { } waiter)
+            {
+                waiter.Removed = true;
+                _removed[ticket] = _time.GetUtcNow();
+                Drop(waiter);
+                removed = waiter.Owner;
+                _logger.LogInformation("{Owner} removed from the editor lock queue from the Unity editor", waiter.Owner);
+            }
+            else
+            {
+                removed = "nothing";
+            }
+        }
+        _ = PublishAsync();
+        return removed;
+    }
+
+    /// <summary>Pauses or resumes the queue: while paused nobody is granted the lock. Returns the new state.</summary>
+    public bool SetQueuePaused(bool paused)
+    {
+        lock (_gate)
+        {
+            _paused = paused;
+            Maintain(_time.GetUtcNow());
+        }
+        _ = PublishAsync();
+        return paused;
     }
 
     #endregion
@@ -367,7 +673,7 @@ public sealed class EditorLock
         lock (_gate)
         {
             var now = _time.GetUtcNow();
-            ExpireIfIdle(now);
+            Maintain(now);
             if (_holder is { } held)
             {
                 if (now - held.MirrorWritten >= MirrorBeat)
@@ -386,39 +692,63 @@ public sealed class EditorLock
     {
         lock (_gate)
         {
-            if (_holder is { } held)
+            var link = _registry.GetLatestLink();
+            return Holding() with
             {
-                var idle = _options.Value.EditorLockIdleTimeout;
-                return new EditorLockState
+                Waiting = _queue.Select(w => new EditorLockWaiter
                 {
-                    Held = true,
-                    Kind = KindAgent,
-                    Owner = held.Owner,
-                    Task = held.Task,
-                    ClientName = held.ClientName,
-                    ClientVersion = held.ClientVersion,
-                    SessionId = held.SessionId,
-                    AcquiredUnixMs = held.Acquired.ToUnixTimeMilliseconds(),
-                    LastActivityUnixMs = held.LastActivity.ToUnixTimeMilliseconds(),
-                    ExpiresUnixMs = held.InFlight == 0 ? (held.LastActivity + idle).ToUnixTimeMilliseconds() : 0,
-                    CallsInFlight = held.InFlight,
-                };
-            }
-            if (_outside is { } outside)
-            {
-                return new EditorLockState
-                {
-                    Held = true,
-                    Kind = KindOutside,
-                    Owner = outside.Owner,
-                    Task = outside.Task,
-                    AcquiredUnixMs = ParseAcquired(outside.Acquired)?.ToUnixTimeMilliseconds() ?? outside.Created.ToUnixTimeMilliseconds(),
-                    LastActivityUnixMs = outside.Heartbeat > 0 ? outside.Heartbeat * 1000 : outside.Created.ToUnixTimeMilliseconds(),
-                    ExpiresUnixMs = outside.Heartbeat > 0 ? (outside.Heartbeat + (long)FileTtl.TotalSeconds) * 1000 : 0,
-                };
-            }
-            return new EditorLockState();
+                    Ticket = w.Ticket,
+                    Owner = w.Owner,
+                    Task = w.Task,
+                    ClientName = w.ClientName,
+                    SessionId = w.SessionId,
+                    WaitingSinceUnixMs = w.Enqueued.ToUnixTimeMilliseconds(),
+                    Attached = w.Pending is not null,
+                }).ToArray(),
+                QueuePaused = _paused,
+                QueueHeldByPlayMode = _queue.Count > 0 && _holder is null
+                    && link is { Connected: true, EditorState: FmpEditorState.Playing or FmpEditorState.Paused },
+            };
         }
+    }
+
+    // caller holds _gate
+    EditorLockState Holding()
+    {
+        if (_holder is { } held)
+        {
+            var idle = IdleLimit();
+            return new EditorLockState
+            {
+                Held = true,
+                Kind = KindAgent,
+                Owner = held.Owner,
+                Task = held.Task,
+                ClientName = held.ClientName,
+                ClientVersion = held.ClientVersion,
+                SessionId = held.SessionId,
+                AcquiredUnixMs = held.Acquired.ToUnixTimeMilliseconds(),
+                LastActivityUnixMs = held.LastActivity.ToUnixTimeMilliseconds(),
+                ExpiresUnixMs = held.InFlight > 0 ? 0
+                    : held.AwaitingFirstCall ? (held.GrantedAt + _options.Value.EditorLockFirstCallDeadline).ToUnixTimeMilliseconds()
+                    : (held.LastActivity + idle).ToUnixTimeMilliseconds(),
+                CallsInFlight = held.InFlight,
+            };
+        }
+        if (_outside is { } outside)
+        {
+            return new EditorLockState
+            {
+                Held = true,
+                Kind = KindOutside,
+                Owner = outside.Owner,
+                Task = outside.Task,
+                AcquiredUnixMs = ParseAcquired(outside.Acquired)?.ToUnixTimeMilliseconds() ?? outside.Created.ToUnixTimeMilliseconds(),
+                LastActivityUnixMs = outside.Heartbeat > 0 ? outside.Heartbeat * 1000 : outside.Created.ToUnixTimeMilliseconds(),
+                ExpiresUnixMs = outside.Heartbeat > 0 ? (outside.Heartbeat + (long)FileTtl.TotalSeconds) * 1000 : 0,
+            };
+        }
+        return new EditorLockState();
     }
 
     /// <summary>Sends the current state to every linked editor that shows it, when it changed (or to one link, always).</summary>
@@ -429,7 +759,7 @@ public sealed class EditorLock
         {
             lock (_gate)
             {
-                if (state == _published)
+                if (Same(state, _published))
                     return;
                 _published = state;
             }
@@ -449,12 +779,23 @@ public sealed class EditorLock
         }
     }
 
+    static bool Same(EditorLockState a, EditorLockState b)
+        => (a with { Waiting = [] }) == (b with { Waiting = [] }) && a.Waiting.SequenceEqual(b.Waiting);
+
+    // shorter while other sessions wait
+    TimeSpan IdleLimit() => _queue.Count > 0 ? _options.Value.EditorLockWaitingIdleTimeout : _options.Value.EditorLockIdleTimeout;
+
     // caller holds _gate; true when it freed a claim
     bool ExpireIfIdle(DateTimeOffset now)
     {
         if (_holder is not { } held)
             return false;
-        if (held.InFlight == 0 && now - held.LastActivity > _options.Value.EditorLockIdleTimeout)
+        if (held.AwaitingFirstCall && held.InFlight == 0 && now - held.GrantedAt > _options.Value.EditorLockFirstCallDeadline)
+        {
+            Free($"no tool call within {Age(_options.Value.EditorLockFirstCallDeadline)} of being granted its turn");
+            return true;
+        }
+        if (held.InFlight == 0 && now - held.LastActivity > IdleLimit())
         {
             Free($"no call for {Age(now - held.LastActivity)}");
             return true;
@@ -476,6 +817,7 @@ public sealed class EditorLock
         _lastDropped = (held.SessionId, reason);
         DeleteMirror(held);
         _logger.LogInformation("Editor lock of {Owner} ended: {Reason}", held.Owner, reason);
+        Pump(_time.GetUtcNow());
     }
 
     #endregion
@@ -664,6 +1006,9 @@ public sealed class EditorLock
         text = (text ?? string.Empty).Replace('\r', ' ').Replace('\n', ' ').Trim();
         return text.Length > MaxTextLength ? text[..MaxTextLength] : text;
     }
+
+    static bool? Flag(IDictionary<string, JsonElement>? args, string name)
+        => args is not null && args.TryGetValue(name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False ? value.GetBoolean() : null;
 
     static string? Text(IDictionary<string, JsonElement>? args, string name)
         => args is not null && args.TryGetValue(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;

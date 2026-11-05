@@ -91,6 +91,10 @@ namespace Feeder.MCP.Editor.API
 
             return await MainThread.Instance.RunAsync(async () =>
             {
+                var refusal = GuardTestRun();
+                if (refusal != null)
+                    return ResponseCallValueTool<TestRunResponse>.Error(refusal).SetRequestID(requestId);
+
                 // Abort before any state mutation if any open scene has unsaved changes.
                 // Running tests against a dirty scene is unsafe: Unity may reload the scene on
                 // play-mode entry, silently discarding edits and producing non-reproducible
@@ -101,7 +105,7 @@ namespace Feeder.MCP.Editor.API
 
                 // Save display options to PlayerPrefs BEFORE AssetDatabase.Refresh —
                 // these must be persisted before a potential domain reload
-                TestResultCollector.TestCallRequestID = requestId;
+                TestRunGuard.Begin(requestId);
                 TestResultCollector.IncludePassingTests.Value = includePassingTests;
                 TestResultCollector.IncludeMessage.Value = includeMessages;
                 TestResultCollector.IncludeMessageStacktrace.Value = includeStacktrace;
@@ -138,7 +142,7 @@ namespace Feeder.MCP.Editor.API
                 // Check for pre-existing compilation errors (no new compilation triggered)
                 if (UnityEditor.EditorUtility.scriptCompilationFailed)
                 {
-                    TestResultCollector.TestCallRequestID = string.Empty;
+                    TestRunGuard.Clear();
                     var errorDetails = ScriptUtils.GetCompilationErrorDetails();
                     return ResponseCallValueTool<TestRunResponse>
                         .Error($"Cannot run tests: Unity project has compilation errors.\n\n{errorDetails}")
@@ -159,7 +163,7 @@ namespace Feeder.MCP.Editor.API
                     var validation = await ValidateTestFilters(TestRunnerApi, testMode, filterParams);
                     if (validation != null)
                     {
-                        TestResultCollector.TestCallRequestID = string.Empty;
+                        TestRunGuard.Clear();
                         return ResponseCallValueTool<TestRunResponse>.Error(validation).SetRequestID(requestId);
                     }
 
@@ -172,7 +176,7 @@ namespace Feeder.MCP.Editor.API
                 }
                 catch (Exception ex)
                 {
-                    TestResultCollector.TestCallRequestID = string.Empty;
+                    TestRunGuard.Clear();
                     if (MatrixPlugin.IsLogEnabled(LogLevel.Error))
                     {
                         Debug.LogException(ex);

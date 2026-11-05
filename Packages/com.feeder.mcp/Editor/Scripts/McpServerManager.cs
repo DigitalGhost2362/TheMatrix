@@ -184,7 +184,7 @@ namespace Feeder.MCP.Editor
         /// the two to decide whether the cached binary in <c>Library/feeder-matrix</c> is current. Bumping
         /// the server means replacing the whole <c>Server~/&lt;rid&gt;</c> payload AND this constant together.
         /// </summary>
-        public const string ServerVersion = "0.5.1";
+        public const string ServerVersion = "0.6.0";
 
         public const string ExecutableName = ServerOwnership.ExeName;
         public const string BundledServerArchiveName = "server-payload.zip";
@@ -246,12 +246,52 @@ namespace Feeder.MCP.Editor
         // Sample (mac linux): ../Library/feeder-matrix/osx-x64/matrix-server
         // Sample   (windows): ../Library/feeder-matrix/win-x64/matrix-server.exe
         public static string ExecutableFullPath
-            => Path.GetFullPath(
+            => CustomServerPath ?? Path.GetFullPath(
                 Path.Combine(
                     ExecutableFolderPath,
                     ExecutableFullName
                 )
             );
+
+        // FEEDER_MATRIX_SERVER_PATH (process environment, else the project .env): run this exe instead of the bundled install
+        static string? _lastCustomServerNote;
+
+        public static string? CustomServerPath
+        {
+            get
+            {
+                var root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                var setting = EnvironmentUtils.ReadServerPathSetting(Environment.GetEnvironmentVariable, null)
+                    ?? EnvironmentUtils.ReadServerPathSetting(_ => null, ReadDotEnv(root));
+                var full = EnvironmentUtils.ResolveServerPath(setting, root);
+                if (full == null)
+                    return null;
+
+                var exists = File.Exists(full);
+                var note = exists ? $"Using custom MCP server ({EnvironmentUtils.EnvServerPath}): {full}"
+                    : $"{EnvironmentUtils.EnvServerPath} points to a missing file ({full}); using the bundled server.";
+                if (note != _lastCustomServerNote)
+                {
+                    _lastCustomServerNote = note;
+                    if (exists) _logger.LogInformation("{note}", note);
+                    else _logger.LogWarning("{note}", note);
+                }
+                return exists ? full : null;
+            }
+        }
+
+        static string? ReadDotEnv(string root)
+        {
+            try
+            {
+                var path = Path.Combine(root, ".env");
+                return File.Exists(path) ? File.ReadAllText(path) : null;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
 
         public static string VersionFullPath
             => Path.GetFullPath(
@@ -304,6 +344,9 @@ namespace Feeder.MCP.Editor
 
         public static bool IsVersionMatches()
         {
+            if (CustomServerPath != null)
+                return true;
+
             var binaryVersion = GetBinaryVersion();
             if (binaryVersion == null)
                 return false;
@@ -505,6 +548,12 @@ namespace Feeder.MCP.Editor
             // the authoritative single-flight guard is InstallServerBinary's atomic TryBeginInstall.
             if (_serverStatus.CurrentValue == McpServerStatus.Installing)
                 return Task.FromResult(true); // install already in progress; let it complete
+
+            if (CustomServerPath != null)
+            {
+                _lastInstallError.Value = null;
+                return Task.FromResult(true);
+            }
 
             if (!force && IsBinaryExists() && IsVersionMatches())
             {

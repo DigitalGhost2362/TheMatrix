@@ -15,6 +15,13 @@ public static class MatrixAuthentication
         return FixedTimeEquals(authorization[prefix.Length..], expectedToken);
     }
 
+    // No Origin header (CLI agents, the Unity plugin) passes; a browser page must come from a loopback origin.
+    public static bool IsAllowedOrigin(string? origin)
+        => origin is null ||
+           Uri.TryCreate(origin, UriKind.Absolute, out var uri) &&
+           uri.Scheme is "http" or "https" &&
+           uri.Host is "localhost" or "127.0.0.1" or "[::1]" && uri.PathAndQuery == "/" && uri.UserInfo.Length == 0;
+
     public static bool FixedTimeEquals(string? actual, string? expected)
     {
         if (actual is null || expected is null)

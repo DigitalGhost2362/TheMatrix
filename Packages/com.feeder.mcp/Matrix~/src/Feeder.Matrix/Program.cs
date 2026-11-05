@@ -121,6 +121,15 @@ try
             return;
         }
 
+        if ((context.Request.Path.StartsWithSegments(FmpConstants.McpPath) || context.Request.Path.StartsWithSegments(FmpConstants.HubPath)) &&
+            context.Request.Headers.TryGetValue("Origin", out var origin) &&
+            !MatrixAuthentication.IsAllowedOrigin(origin.ToString()))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsync("Forbidden origin.");
+            return;
+        }
+
         if (context.Request.Path.StartsWithSegments(FmpConstants.McpPath) &&
             matrixOptions.RequireAuth &&
             !MatrixAuthentication.HasValidBearerToken(context.Request.Headers.Authorization, matrixOptions.Token))
@@ -189,7 +198,7 @@ static ReadResourceResult throwResourceNotFound(string? uri)
 
 public static class MatrixVersion
 {
-    public const string Value = "0.5.1";
+    public const string Value = "0.6.0";
 }
 
 // Exposes the entry point to WebApplicationFactory-based integration tests.

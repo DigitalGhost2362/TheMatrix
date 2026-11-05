@@ -31,6 +31,18 @@ public sealed class MatrixOptions
     /// <summary>An agent's editor claim with no tool call for this long is freed.</summary>
     public TimeSpan EditorLockIdleTimeout { get; set; } = TimeSpan.FromMinutes(10);
 
+    /// <summary>The idle limit while other sessions wait for the lock.</summary>
+    public TimeSpan EditorLockWaitingIdleTimeout { get; set; } = TimeSpan.FromMinutes(2);
+
+    /// <summary>How long one acquire call waits in the queue before it answers queued.</summary>
+    public TimeSpan EditorLockWaitSlice { get; set; } = TimeSpan.FromSeconds(50);
+
+    /// <summary>A queued session that is not waiting in a call is dropped this long after its slice ended.</summary>
+    public TimeSpan EditorLockTicketGrace { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>A session granted the lock from the queue loses it when it makes no tool call for this long.</summary>
+    public TimeSpan EditorLockFirstCallDeadline { get; set; } = TimeSpan.FromSeconds(60);
+
     public long MaxRequestBodyBytes { get; set; } = 16 * 1024 * 1024;
 
     /// <summary>Require a bearer token on MCP requests and the same token in the Unity FMP handshake.</summary>

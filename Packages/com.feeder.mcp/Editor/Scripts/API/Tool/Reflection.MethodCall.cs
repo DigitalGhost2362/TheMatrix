@@ -166,6 +166,9 @@ namespace Feeder.MCP.Editor.API
                     if (obj == null)
                         throw new Exception($"'{nameof(targetObject)}' deserialized instance is null. Please specify the '{nameof(targetObject)}' properly.");
 
+                    if (executeInMainThread && obj is UnityEngine.Object unityTarget)
+                        UnityEditor.Undo.RecordObject(unityTarget, $"Call {method.Name}");
+
                     methodWrapper = new MethodWrapper(
                         reflector: reflector,
                         logger: MatrixPluginEditor.Instance.Logger,

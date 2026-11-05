@@ -28,10 +28,30 @@ All notable changes to this package are documented here.
     and 3x3 contact sheets. `watch action=status` returns the summary;
   - the skill covers reading the recording, asking what is missing, writing a playbook and replaying
     it with code shortcuts, UI clicks, walking, and teleports for long distances only.
+- **Editor lock queue** - `editor-lock-acquire` waits in a first-come queue instead of answering busy:
+  - each call waits up to 50 s, then answers `queued` with the position and a ticket; calling again with
+    the ticket keeps the place. `wait: false` answers busy at once;
+  - when the lock frees, the head of the queue gets it inside its pending call;
+  - a session that closes or stops calling leaves the queue; a session granted the lock that makes no
+    tool call within 60 s loses it; with others waiting, an idle claim ends after 2 minutes;
+  - the queue pauses while a person plays with nobody holding the lock;
+  - `editor-lock-status` lists the waiting sessions and the caller's position.
+- The Matrix Bridge window lists the queue (order, agent, task, time waiting) with buttons to remove an
+  agent and to pause or resume the queue, and highlights a holder past the 15 minute cap.
+- **`menu-execute` tool** (off by default) - runs an Editor menu item by path or lists menu paths
+  containing a text.
+- `FEEDER_MATRIX_SERVER_PATH`, read from the environment or a `.env` file at the project root, runs a
+  server build from that path instead of the bundled one, without install or version check.
 
 ### Changed
 
-- Server 0.5.0. It mirrors the lock to `Temp/agent-editor-lock/lock.json`, so sessions on the lock-file
+- Failed and refused tool calls carry a structured error next to the text: `structuredContent.error`
+  with `code` (`editor_locked`, `interrupted`, `compiling_or_reloading`, `timeout`, `unity_unavailable`,
+  `tool_not_found`, `tests_running`, `invalid_arguments`...), `message` and, when a retry makes sense,
+  `retry_after_ms`. Timeouts and a lost editor are now tool errors instead of protocol errors.
+- `matrix-shared-editor` waits in the lock queue instead of retrying, and releases right after each
+  burst.
+- Server 0.6.0. It mirrors the lock to `Temp/agent-editor-lock/lock.json`, so sessions on the lock-file
   scripts still see it, and treats a live lock file of such a session as busy.
 - `matrix-shared-editor` claims the editor with the new tools. The lock-file scripts remain, for an
   older server only.
@@ -49,6 +69,12 @@ All notable changes to this package are documented here.
 
 ### Fixed
 
+- `tests-run` refuses a second run while one is in progress (`tests_running` with `retry_after_ms`).
+  A second caller used to take over the run, receive the first caller's results, and leave the first
+  call waiting forever.
+- The server rejects `/mcp` and `/fmp` requests whose `Origin` header is not a loopback address, so a
+  web page can no longer call the editor through localhost.
+- `assets-prefab-instantiate` and `reflection-method-call` record undo steps.
 - The bridge link no longer drops when Play mode stops. It used to close and wait for the return to
   Edit mode to reconnect, so a package whose Play mode handler threw an exception left it down until
   the next domain reload.

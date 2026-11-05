@@ -92,6 +92,14 @@ namespace Feeder.MCP.Editor.API
             SessionState.SetString(PendingTestMethodKey, testMethod ?? string.Empty);
         }
 
+        internal static string? GuardTestRun()
+        {
+            var refusal = TestRunGuard.CheckAndReclaim(HasPendingTestRun());
+            if (refusal == null)
+                ClearPendingTestRun();
+            return refusal;
+        }
+
         static void ClearPendingTestRun()
         {
             SessionState.EraseString(PendingTestRunKey);
@@ -117,7 +125,7 @@ namespace Feeder.MCP.Editor.API
             if (EditorUtility.scriptCompilationFailed)
             {
                 ClearPendingTestRun();
-                TestResultCollector.TestCallRequestID = string.Empty;
+                TestRunGuard.Clear();
 
                 var errorDetails = ScriptUtils.GetCompilationErrorDetails();
                 var response = ResponseCallValueTool<TestRunResponse>
@@ -152,8 +160,21 @@ namespace Feeder.MCP.Editor.API
             if (MatrixPlugin.IsLogEnabled(LogLevel.Info))
                 Debug.Log($"[TestRunner] Resuming test run after recompilation. Mode: {testMode}, Filters: {filterParams}");
 
-            var filter = CreateTestFilter(testMode, filterParams);
-            TestRunnerApi.Execute(new ExecutionSettings(filter));
+            TestRunGuard.Touch();
+            try
+            {
+                TestRunnerApi.Execute(new ExecutionSettings(CreateTestFilter(testMode, filterParams)));
+            }
+            catch (Exception ex)
+            {
+                TestRunGuard.Clear();
+                Debug.LogException(ex);
+                _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
+                {
+                    RequestId = requestId,
+                    Result = ResponseCallValueTool<TestRunResponse>.Error(Error.TestExecutionFailed(ex.Message)).SetRequestID(requestId)
+                });
+            }
         }
 
         /// <summary>

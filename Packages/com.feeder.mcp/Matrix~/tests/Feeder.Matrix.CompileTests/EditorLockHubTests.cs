@@ -27,6 +27,26 @@ public sealed class EditorLockHubTests(EditorLockServerFactory factory) : IClass
     }
 
     [Fact]
+    public async Task Editor_manages_the_queue_over_the_hub()
+    {
+        await using var link = await ConnectAsync();
+        var response = await RegisterAsync(link, [FmpCapabilities.EditorLock]);
+        Assert.Contains(FmpCapabilities.EditorLockQueue, response.Capabilities);
+
+        Assert.Equal("nothing", await link.InvokeAsync<string>("RemoveFromEditorLockQueue", "no-such-ticket"));
+        Assert.True(await link.InvokeAsync<bool>("SetEditorLockQueuePaused", true));
+        Assert.False(await link.InvokeAsync<bool>("SetEditorLockQueuePaused", false));
+    }
+
+    [Fact]
+    public async Task Unregistered_connection_cannot_manage_the_queue()
+    {
+        await using var link = await ConnectAsync();
+        Assert.Equal("nothing", await link.InvokeAsync<string>("RemoveFromEditorLockQueue", "t"));
+        Assert.False(await link.InvokeAsync<bool>("SetEditorLockQueuePaused", true));
+    }
+
+    [Fact]
     public async Task Unregistered_connection_cannot_free_the_editor()
     {
         await using var link = await ConnectAsync();

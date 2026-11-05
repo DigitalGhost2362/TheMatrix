@@ -38,6 +38,7 @@ namespace Feeder.MCP.Runtime.Utils
         public const string EnvTools = EnvPrefix + "TOOLS";
         public const string EnvStartServer = EnvPrefix + "START_SERVER";
         public const string EnvTransport = EnvPrefix + "TRANSPORT";
+        public const string EnvServerPath = EnvPrefix + "SERVER_PATH";
 
         // Field-name keys used by OverrideRecord to track which fields were overridden
         // by env/flags so the Save flow can restore disk-baseline values before writing.
@@ -70,6 +71,55 @@ namespace Feeder.MCP.Runtime.Utils
             {
                 _baselineValues[fieldName] = baselineValue;
                 _overrideValues[fieldName] = overrideValue;
+            }
+        }
+
+        public static Dictionary<string, string> ParseDotEnv(string? text)
+        {
+            var values = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var raw in (text ?? string.Empty).Split('\n'))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line[0] == '#')
+                    continue;
+                if (line.StartsWith("export ", StringComparison.Ordinal))
+                    line = line.Substring(7).TrimStart();
+                var eq = line.IndexOf('=');
+                if (eq <= 0)
+                    continue;
+
+                var value = line.Substring(eq + 1).Trim();
+                if (value.Length >= 2 && (value[0] == '"' || value[0] == '\'') && value[value.Length - 1] == value[0])
+                    value = value.Substring(1, value.Length - 2);
+                else if (value.IndexOf(" #", StringComparison.Ordinal) is var hash and >= 0)
+                    value = value.Substring(0, hash).TrimEnd();
+                values[line.Substring(0, eq).Trim()] = value;
+            }
+            return values;
+        }
+
+        // process environment first, then the project .env file
+        public static string? ReadServerPathSetting(Func<string, string?> envReader, string? dotEnvText)
+        {
+            var fromEnv = envReader(EnvServerPath);
+            if (!string.IsNullOrWhiteSpace(fromEnv))
+                return fromEnv!.Trim().Trim('"');
+            return ParseDotEnv(dotEnvText).TryGetValue(EnvServerPath, out var fromFile) && !string.IsNullOrWhiteSpace(fromFile)
+                ? fromFile
+                : null;
+        }
+
+        public static string? ResolveServerPath(string? setting, string projectRoot)
+        {
+            if (string.IsNullOrWhiteSpace(setting))
+                return null;
+            try
+            {
+                return System.IO.Path.GetFullPath(System.IO.Path.IsPathRooted(setting) ? setting : System.IO.Path.Combine(projectRoot, setting));
+            }
+            catch (Exception)
+            {
+                return null;
             }
         }
 

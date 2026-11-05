@@ -79,7 +79,7 @@ public sealed class FmpHub(
             ChosenProtocolVersion = FmpConstants.ProtocolVersion,
             RegistryUpToDate = link.Registry?.RegistryHash == request.ToolRegistryHash,
             AwaitedOperations = registry.AwaitedOperationIds,
-            Capabilities = [FmpCapabilities.Compile, FmpCapabilities.EditorLock],
+            Capabilities = [FmpCapabilities.Compile, FmpCapabilities.EditorLock, FmpCapabilities.EditorLockQueue],
         };
     }
 
@@ -97,6 +97,14 @@ public sealed class FmpHub(
         logger.LogInformation("Editor lock released from the Unity editor: {Freed}", freed);
         return freed;
     }
+
+    /// <summary>Takes one session out of the editor lock queue. Returns who was removed.</summary>
+    public string RemoveFromEditorLockQueue(string ticket)
+        => registry.IsRegistered(Context.ConnectionId) ? editorLock.RemoveWaiter(ticket) : "nothing";
+
+    /// <summary>Pauses or resumes the queue. Returns the state it is in now.</summary>
+    public bool SetEditorLockQueuePaused(bool paused)
+        => registry.IsRegistered(Context.ConnectionId) ? editorLock.SetQueuePaused(paused) : false;
 
     public void Unregister(string projectId, string unityInstanceId)
     {

@@ -27,6 +27,8 @@ public sealed class EditorLockTests : IDisposable
         _lock = new EditorLock(_registry, _clients, _hub, _time, Options.Create(_options), NullLogger<EditorLock>.Instance);
         Open("sid-a", "claude-code");
         Open("sid-b", "codex");
+        Open("sid-c", "gemini");
+        _options.EditorLockWaitSlice = TimeSpan.FromSeconds(30);
     }
 
     public void Dispose()
@@ -308,6 +310,378 @@ public sealed class EditorLockTests : IDisposable
         Link();
         Assert.True(_lock.Acquire("sid-a", "claude", "  ").IsError);
         Assert.True(_lock.Acquire(null, "claude", "task").IsError);
+    }
+
+    private Task<CallToolResult> Wait(string sessionId, string? ticket = null, CancellationToken ct = default)
+        => _lock.AcquireAsync(sessionId, null, "task of " + sessionId, true, ticket, ct);
+
+    private static Task<CallToolResult> Done(Task<CallToolResult> call) => call.WaitAsync(TimeSpan.FromSeconds(5));
+
+    private static string Ticket(CallToolResult queued) => queued.StructuredContent!.Value.GetProperty("error").GetProperty("ticket").GetString()!;
+
+    private static string[] Order(EditorLockState state) => state.Waiting.Select(w => w.Owner).ToArray();
+
+    [Fact]
+    public async Task Free_lock_with_an_empty_queue_is_granted_at_once()
+    {
+        Link();
+
+        var result = await Done(Wait("sid-a"));
+
+        Assert.NotEqual(true, result.IsError);
+        Assert.StartsWith("acquired", Text(result));
+        Assert.True(result.StructuredContent!.Value.GetProperty("acquired").GetBoolean());
+        Assert.Empty(_lock.Snapshot().Waiting);
+    }
+
+    [Fact]
+    public async Task Three_sessions_are_served_first_come_first_served()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        var b = Wait("sid-b");
+        var c = Wait("sid-c");
+
+        Assert.Equal(["codex", "gemini"], Order(_lock.Snapshot()));
+        Assert.False(b.IsCompleted);
+
+        _lock.Release("sid-a");
+        var granted = await Done(b);
+        Assert.StartsWith("acquired", Text(granted));
+        Assert.Contains("after waiting", Text(granted));
+        Assert.False(c.IsCompleted);
+        Assert.Equal("codex", _lock.Snapshot().Owner);
+        Assert.Equal(["gemini"], Order(_lock.Snapshot()));
+
+        _lock.Release("sid-b");
+        Assert.StartsWith("acquired", Text(await Done(c)));
+        Assert.Equal("gemini", _lock.Snapshot().Owner);
+    }
+
+    [Fact]
+    public async Task Releasing_and_asking_again_goes_to_the_end_of_the_queue()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        var b = Wait("sid-b");
+
+        _lock.Release("sid-a");
+        await Done(b);
+        var c = Wait("sid-c");
+        var a = Wait("sid-a");
+        Assert.Equal(["gemini", "claude-code"], Order(_lock.Snapshot()));
+
+        _lock.Release("sid-b");
+        Assert.StartsWith("acquired", Text(await Done(c)));
+        Assert.False(a.IsCompleted);
+    }
+
+    [Fact]
+    public async Task Slice_that_runs_out_answers_queued_and_the_ticket_keeps_the_place()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        _options.EditorLockWaitSlice = TimeSpan.FromMilliseconds(100);
+
+        var first = await Done(Wait("sid-b"));
+        var behind = Wait("sid-c");
+
+        Assert.NotEqual(true, first.IsError);
+        Assert.Contains("queued: position 1 (0 ahead)", Text(first));
+        var ticket = Ticket(first);
+        Assert.Equal(1, first.StructuredContent!.Value.GetProperty("error").GetProperty("position").GetInt32());
+
+        var again = await Done(Wait("sid-b", ticket));
+        Assert.Equal(ticket, Ticket(again));
+        Assert.Contains("position 1", Text(again));
+        Assert.Equal(["codex", "gemini"], Order(_lock.Snapshot()));
+        await Done(behind);
+    }
+
+    [Fact]
+    public async Task Ticket_not_called_again_in_time_is_removed()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        _options.EditorLockWaitSlice = TimeSpan.FromMilliseconds(100);
+        var queued = await Done(Wait("sid-b"));
+        var ticket = Ticket(queued);
+
+        _time.Advance(_options.EditorLockWaitSlice + _options.EditorLockTicketGrace - TimeSpan.FromSeconds(1));
+        await _lock.TickAsync();
+        Assert.Single(_lock.Snapshot().Waiting);
+
+        _time.Advance(TimeSpan.FromSeconds(2));
+        await _lock.TickAsync();
+        Assert.Empty(_lock.Snapshot().Waiting);
+
+        var late = await Done(Wait("sid-b", ticket));
+        Assert.NotEqual(ticket, Ticket(late));
+        Assert.Single(_lock.Snapshot().Waiting);
+    }
+
+    [Fact]
+    public async Task Closed_session_leaves_the_queue_and_the_turn_passes_on()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        var b = Wait("sid-b");
+        var c = Wait("sid-c");
+
+        await _clients.EndAsync("sid-b", _entries["sid-b"]);
+        Assert.Equal(["gemini"], Order(_lock.Snapshot()));
+        Assert.True((await Done(b)).IsError);
+
+        _lock.Release("sid-a");
+        Assert.StartsWith("acquired", Text(await Done(c)));
+    }
+
+    [Fact]
+    public async Task Cancelled_call_leaves_the_queue()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        using var cancel = new CancellationTokenSource();
+        var b = Wait("sid-b", ct: cancel.Token);
+        var c = Wait("sid-c");
+
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => b);
+        Assert.Equal(["gemini"], Order(_lock.Snapshot()));
+
+        _lock.Release("sid-a");
+        Assert.StartsWith("acquired", Text(await Done(c)));
+    }
+
+    [Fact]
+    public async Task Head_that_is_between_two_calls_is_skipped_but_keeps_its_place()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        _options.EditorLockWaitSlice = TimeSpan.FromMilliseconds(100);
+        var queued = await Done(Wait("sid-b"));
+        _options.EditorLockWaitSlice = TimeSpan.FromSeconds(30);
+        var c = Wait("sid-c");
+
+        _lock.Release("sid-a");
+
+        Assert.StartsWith("acquired", Text(await Done(c)));
+        Assert.Equal(["codex"], Order(_lock.Snapshot()));
+        Assert.Equal(Ticket(queued), _lock.Snapshot().Waiting[0].Ticket);
+    }
+
+    [Fact]
+    public async Task Granted_session_that_makes_no_call_loses_its_turn()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        var b = Wait("sid-b");
+        var c = Wait("sid-c");
+        _lock.Release("sid-a");
+        await Done(b);
+
+        _time.Advance(_options.EditorLockFirstCallDeadline - TimeSpan.FromSeconds(1));
+        await _lock.TickAsync();
+        Assert.Equal("codex", _lock.Snapshot().Owner);
+
+        _time.Advance(TimeSpan.FromSeconds(2));
+        await _lock.TickAsync();
+        Assert.StartsWith("acquired", Text(await Done(c)));
+        Assert.Equal("gemini", _lock.Snapshot().Owner);
+        Assert.Contains("already freed", Text(_lock.Release("sid-b")));
+    }
+
+    [Fact]
+    public async Task Granted_session_that_calls_a_tool_keeps_the_lock()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        var b = Wait("sid-b");
+        _lock.Release("sid-a");
+        await Done(b);
+
+        _time.Advance(TimeSpan.FromSeconds(30));
+        using (_lock.Track("sid-b"))
+            _time.Advance(TimeSpan.FromSeconds(40));
+        await _lock.TickAsync();
+
+        Assert.Equal("codex", _lock.Snapshot().Owner);
+    }
+
+    [Fact]
+    public async Task Idle_claim_is_freed_after_two_minutes_while_others_wait_and_after_ten_without()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        _time.Advance(TimeSpan.FromMinutes(9));
+        await _lock.TickAsync();
+        Assert.True(_lock.Snapshot().Held);
+
+        var b = Wait("sid-b");
+        await _lock.TickAsync();
+        Assert.StartsWith("acquired", Text(await Done(b)));
+        Assert.Equal("codex", _lock.Snapshot().Owner);
+
+        var c = Wait("sid-c");
+        using (_lock.Track("sid-b"))
+        {
+            _time.Advance(_options.EditorLockWaitingIdleTimeout + TimeSpan.FromMinutes(1));
+            await _lock.TickAsync();
+            Assert.Equal("codex", _lock.Snapshot().Owner);
+        }
+
+        _time.Advance(_options.EditorLockWaitingIdleTimeout - TimeSpan.FromSeconds(1));
+        await _lock.TickAsync();
+        Assert.Equal("codex", _lock.Snapshot().Owner);
+        _time.Advance(TimeSpan.FromSeconds(2));
+        await _lock.TickAsync();
+        Assert.StartsWith("acquired", Text(await Done(c)));
+    }
+
+    [Fact]
+    public async Task Queue_waits_while_a_person_plays_and_resumes_when_play_stops()
+    {
+        var link = Link(FmpEditorState.Playing);
+        var b = Wait("sid-b");
+
+        await _lock.TickAsync();
+        Assert.False(b.IsCompleted);
+        var state = _lock.Snapshot();
+        Assert.True(state.QueueHeldByPlayMode);
+        Assert.Equal(["codex"], Order(state));
+
+        link.EditorState = FmpEditorState.Ready;
+        await _lock.TickAsync();
+
+        Assert.StartsWith("acquired", Text(await Done(b)));
+        Assert.False(_lock.Snapshot().QueueHeldByPlayMode);
+    }
+
+    [Fact]
+    public async Task Slice_during_play_mode_answers_queued_with_the_reason()
+    {
+        Link(FmpEditorState.Playing);
+        _options.EditorLockWaitSlice = TimeSpan.FromMilliseconds(100);
+
+        var queued = await Done(Wait("sid-b"));
+
+        Assert.NotEqual(true, queued.IsError);
+        Assert.Contains("play mode", Text(queued));
+        Assert.Contains("queued: position 1", Text(queued));
+    }
+
+    [Fact]
+    public async Task Paused_queue_grants_nobody_until_it_resumes()
+    {
+        Link();
+        _lock.SetQueuePaused(true);
+        Assert.Contains("paused", Text(_lock.Acquire("sid-a", "claude", "first")));
+        var b = Wait("sid-b");
+        await _lock.TickAsync();
+        Assert.False(b.IsCompleted);
+        Assert.True(_lock.Snapshot().QueuePaused);
+
+        _lock.SetQueuePaused(false);
+
+        Assert.StartsWith("acquired", Text(await Done(b)));
+    }
+
+    [Fact]
+    public async Task Person_removes_a_waiting_session_from_the_queue()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        var b = Wait("sid-b");
+        var c = Wait("sid-c");
+        var ticket = _lock.Snapshot().Waiting[0].Ticket;
+
+        Assert.Equal("codex", _lock.RemoveWaiter(ticket));
+        Assert.Equal("nothing", _lock.RemoveWaiter(ticket));
+
+        var removed = await Done(b);
+        Assert.True(removed.IsError);
+        Assert.Contains("removed", Text(removed));
+        Assert.Equal(["gemini"], Order(_lock.Snapshot()));
+        Assert.Contains("removed", Text(await Done(Wait("sid-b", ticket))));
+        _lock.Release("sid-a");
+        Assert.StartsWith("acquired", Text(await Done(c)));
+    }
+
+    [Fact]
+    public void Waiting_session_can_leave_with_release()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        _ = Wait("sid-b");
+
+        Assert.Contains("left the editor lock queue", Text(_lock.Release("sid-b")));
+        Assert.Empty(_lock.Snapshot().Waiting);
+    }
+
+    [Fact]
+    public async Task No_wait_answers_busy_and_never_queues()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+
+        var busy = await Done(_lock.AcquireAsync("sid-b", null, "t", wait: false, ticket: null, CancellationToken.None));
+
+        Assert.True(busy.IsError);
+        Assert.Contains("busy: held by claude", Text(busy));
+        Assert.Equal("editor_locked", busy.StructuredContent!.Value.GetProperty("error").GetProperty("code").GetString());
+        Assert.Empty(_lock.Snapshot().Waiting);
+    }
+
+    [Fact]
+    public void Refusal_carries_the_holder_the_queue_and_a_retry_hint()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude-catwalk", "catwalk score");
+        _ = Wait("sid-c");
+
+        var refusal = _lock.RefusalResult("sid-b", "script-execute")!;
+
+        Assert.True(refusal.IsError);
+        var error = refusal.StructuredContent!.Value.GetProperty("error");
+        Assert.Equal("editor_locked", error.GetProperty("code").GetString());
+        Assert.Equal(5000, error.GetProperty("retry_after_ms").GetInt32());
+        Assert.Equal("claude-catwalk", error.GetProperty("holder").GetString());
+        Assert.Equal(1, error.GetProperty("queue_length").GetInt32());
+        Assert.Contains("Refused 'script-execute'", Text(refusal));
+        Assert.Null(_lock.RefusalResult("sid-a", "script-execute"));
+    }
+
+    [Fact]
+    public void Status_lists_the_queue_and_the_position_of_the_asker()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        _ = Wait("sid-b");
+        _ = Wait("sid-c");
+
+        var status = _lock.Status("sid-c");
+
+        Assert.Contains("2 waiting", Text(status));
+        Assert.Contains("You are number 2", Text(status));
+        var json = status.StructuredContent!.Value;
+        Assert.Equal(2, json.GetProperty("position").GetInt32());
+        Assert.Equal(2, json.GetProperty("waiting").GetArrayLength());
+        Assert.Equal(0, _lock.Status("sid-a").StructuredContent!.Value.GetProperty("position").GetInt32());
+    }
+
+    [Fact]
+    public async Task Queue_is_pushed_to_the_editor()
+    {
+        var link = Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        _ = Wait("sid-b");
+        await _lock.PublishAsync();
+
+        var waiter = Assert.Single(_hub.Sent[link.ConnectionId][^1].Waiting);
+
+        Assert.Equal("codex", waiter.Owner);
+        Assert.True(waiter.Attached);
+        Assert.Equal(_time.GetUtcNow().ToUnixTimeMilliseconds(), waiter.WaitingSinceUnixMs);
     }
 
     private sealed class ManualTimeProvider : TimeProvider

@@ -225,4 +225,49 @@ public class McpEndpointTests : IClassFixture<MatrixFactory>
         using (listed)
             Assert.Contains("already in your tool list", listed.RootElement.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString());
     }
+
+    [Fact]
+    public async Task ToolCall_refusal_carries_structured_error()
+    {
+        var (client, sessionId) = await InitializeAsync();
+        var (doc, _) = await PostAsync(client,
+            """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"tool-call","arguments":{"name":"tool-call"}}}""", sessionId);
+        using var _d = doc;
+        var error = doc.RootElement.GetProperty("result").GetProperty("structuredContent").GetProperty("error");
+        Assert.Equal("invalid_arguments", error.GetProperty("code").GetString());
+    }
+
+    private async Task<HttpStatusCode> PostInitializeAsync(string? origin, string path = "/mcp")
+    {
+        var client = _factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = new StringContent(
+                """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"tests","version":"0"}}}""",
+                Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Accept.ParseAdd("application/json");
+        request.Headers.Accept.ParseAdd("text/event-stream");
+        if (origin is not null)
+            request.Headers.TryAddWithoutValidation("Origin", origin);
+        return (await client.SendAsync(request)).StatusCode;
+    }
+
+    [Theory]
+    [InlineData("http://evil.example")]
+    [InlineData("https://attacker.com")]
+    [InlineData("null")]
+    public async Task Foreign_origin_is_rejected_on_mcp_and_fmp(string origin)
+    {
+        Assert.Equal(HttpStatusCode.Forbidden, await PostInitializeAsync(origin));
+        Assert.Equal(HttpStatusCode.Forbidden, await PostInitializeAsync(origin, "/fmp/negotiate"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("http://localhost:6274")]
+    [InlineData("http://127.0.0.1:8080")]
+    [InlineData("http://[::1]:3000")]
+    public async Task Loopback_or_absent_origin_passes(string? origin)
+        => Assert.Equal(HttpStatusCode.OK, await PostInitializeAsync(origin));
 }

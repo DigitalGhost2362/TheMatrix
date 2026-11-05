@@ -359,13 +359,29 @@ namespace Feeder.MCP.Editor.Matrix
             return FmpJson.Parse<string?>(await connection.InvokeAsync("ReleaseEditorLock", "[]", _lifetime.Token).ConfigureAwait(false)) ?? "nothing";
         }
 
-        FmpConnection RequireEditorLock()
+        const string EditorLockQueueFeature = "editor-lock-queue";
+
+        /// <summary>Takes one session out of the editor lock queue. Returns who was removed.</summary>
+        public async Task<string> RemoveFromEditorLockQueueAsync(string ticket)
+        {
+            var connection = RequireEditorLock(EditorLockQueueFeature);
+            return FmpJson.Parse<string?>(await connection.InvokeAsync("RemoveFromEditorLockQueue", FmpJson.Arguments(ticket), _lifetime.Token).ConfigureAwait(false)) ?? "nothing";
+        }
+
+        /// <summary>Pauses or resumes the editor lock queue. Returns the state it is in now.</summary>
+        public async Task<bool> SetEditorLockQueuePausedAsync(bool paused)
+        {
+            var connection = RequireEditorLock(EditorLockQueueFeature);
+            return FmpJson.Parse<bool>(await connection.InvokeAsync("SetEditorLockQueuePaused", FmpJson.Arguments(paused), _lifetime.Token).ConfigureAwait(false));
+        }
+
+        FmpConnection RequireEditorLock(string feature = EditorLockFeature)
         {
             var connection = _connection;
             if (connection?.State != FmpState.Connected || _serverCapabilities == null)
                 throw new InvalidOperationException("Feeder Local Matrix is not connected.");
-            if (!_serverCapabilities.Contains(EditorLockFeature))
-                throw new InvalidOperationException("This Feeder Local Matrix server does not keep the editor lock. Reinstall the server from the Matrix Bridge menu.");
+            if (!_serverCapabilities.Contains(feature))
+                throw new InvalidOperationException($"This Feeder Local Matrix server does not keep the {(feature == EditorLockQueueFeature ? "editor lock queue" : "editor lock")}. Reinstall the server from the Matrix Bridge menu.");
             return connection;
         }
 

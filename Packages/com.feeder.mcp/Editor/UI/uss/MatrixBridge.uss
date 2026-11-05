@@ -166,6 +166,58 @@
     color: rgb(255, 124, 96);
 }
 
+.mb-lock--blocking {
+    color: rgb(255, 84, 64);
+    -unity-font-style: bold;
+}
+
+.mb-queue {
+    display: none;
+    margin: 6px 0 0 0;
+    max-width: 94%;
+    min-width: 60%;
+}
+
+.mb-queue--visible {
+    display: flex;
+}
+
+.mb-queue__row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin: 1px 0 0 0;
+    font-size: 10px;
+    color: rgb(255, 209, 99);
+    text-shadow: 0 0 5px rgba(2, 6, 4, 0.95);
+}
+
+.mb-queue__task {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: 1px;
+}
+
+.mb-queue__age {
+    margin: 0 8px 0 8px;
+    color: rgb(79, 174, 120);
+}
+
+.mb-queue__button {
+    padding: 0 4px 0 4px;
+    border-width: 1px;
+    border-color: rgba(255, 209, 99, 0.5);
+    letter-spacing: 1px;
+    -unity-text-align: middle-center;
+}
+
+.mb-queue__button:hover {
+    background-color: rgba(255, 209, 99, 0.2);
+}
+
 .mb-chips {
     position: absolute;
     left: 0;

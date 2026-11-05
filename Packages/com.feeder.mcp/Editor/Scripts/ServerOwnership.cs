@@ -48,7 +48,7 @@ namespace Feeder.MCP.Editor
         #region Classify
 
         // ours = under our root; OtherProject = under another project's Library/feeder-matrix; anything else is foreign
-        public static ServerOwner Classify(string? exePath, string ownRoot)
+        public static ServerOwner Classify(string? exePath, string ownRoot, string? customExe = null)
         {
             if (string.IsNullOrEmpty(exePath))
                 return ServerOwner.Unknown;
@@ -58,6 +58,8 @@ namespace Feeder.MCP.Editor
             try { full = Path.GetFullPath(exePath); }
             catch (Exception) { return ServerOwner.Unknown; }
             if (full.StartsWith(root, PathComparison))
+                return ServerOwner.Ours;
+            if (!string.IsNullOrEmpty(customExe) && string.Equals(full, Path.GetFullPath(customExe), PathComparison))
                 return ServerOwner.Ours;
             var marker = $"{Path.DirectorySeparatorChar}Library{Path.DirectorySeparatorChar}{FolderName}{Path.DirectorySeparatorChar}";
             return full.IndexOf(marker, PathComparison) > 0 ? ServerOwner.OtherProject : ServerOwner.Foreign;
@@ -89,7 +91,7 @@ namespace Feeder.MCP.Editor
             {
                 return ServerOwner.Unknown;
             }
-            return Classify(ReadExePath(process), ownRoot);
+            return Classify(ReadExePath(process), ownRoot, McpServerManager.CustomServerPath);
         }
 
         public static string? ReadExePath(Process process)

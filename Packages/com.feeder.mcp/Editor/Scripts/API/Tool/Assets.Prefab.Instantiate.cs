@@ -66,14 +66,22 @@ namespace Feeder.MCP.Editor.API
                 rotation ??= Vector3.zero;
                 scale ??= Vector3.one;
 
+                var undoName = $"Instantiate {prefab.name}";
+                Undo.IncrementCurrentGroup();
+                Undo.SetCurrentGroupName(undoName);
+                var undoGroup = Undo.GetCurrentGroup();
+
                 var go = PrefabUtility.InstantiatePrefab(prefab) as GameObject;
                 if (go == null)
                     throw new Exception($"Failed to instantiate prefab from path '{prefabAssetPath}'.");
 
                 go.name = name ?? prefab.name;
+                Undo.RegisterCreatedObjectUndo(go, undoName);
                 if (parentGo != null)
-                    go.transform.SetParent(parentGo.transform, false);
+                    Undo.SetTransformParent(go.transform, parentGo.transform, undoName);
                 go.SetTransform(position, rotation, scale, isLocalSpace);
+
+                Undo.CollapseUndoOperations(undoGroup);
 
                 EditorUtility.SetDirty(go);
                 EditorUtils.RepaintAllEditorWindows();

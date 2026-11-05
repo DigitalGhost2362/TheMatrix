@@ -72,17 +72,17 @@ public sealed class ServerTools(
         if (request.Name == EditorHealth.ToolName)
             return Text(health.Report());
         if (EditorLock.IsLockTool(request.Name))
-            return editorLock.Call(request, sessionId);
+            return await editorLock.CallAsync(request, sessionId, ct);
         return await ProxyAsync(request, sessionId, backend, ct);
     }
 
     /// <summary>Runs a Unity tool for a session, unless another session or a person holds the editor lock.</summary>
     public async ValueTask<CallToolResult> CallUnityAsync(CallToolRequestParams request, string? sessionId, IUnityBackend backend, CancellationToken ct)
     {
-        if (editorLock.Refusal(sessionId, request.Name) is { } refusal)
+        if (editorLock.RefusalResult(sessionId, request.Name) is { } refusal)
         {
             logger.LogInformation("{Tool} refused for session {SessionId}: editor lock", request.Name, sessionId);
-            return Refuse(refusal);
+            return refusal;
         }
         using (editorLock.Track(sessionId))
             return await backend.CallToolAsync(request, ct);
@@ -92,26 +92,26 @@ public sealed class ServerTools(
     {
         var args = request.Arguments;
         if (args is null || !args.TryGetValue("name", out var nameElement) || nameElement.ValueKind != JsonValueKind.String)
-            return Refuse("tool-call needs 'name', the Unity tool to call, as a string.");
+            return Invalid("tool-call needs 'name', the Unity tool to call, as a string.");
 
         IDictionary<string, JsonElement>? targetArguments = null;
         if (args.TryGetValue("arguments", out var argumentsElement) && argumentsElement.ValueKind != JsonValueKind.Null)
         {
             if (argumentsElement.ValueKind != JsonValueKind.Object)
-                return Refuse("tool-call 'arguments' must be a JSON object.");
+                return Invalid("tool-call 'arguments' must be a JSON object.");
             targetArguments = argumentsElement.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone(), StringComparer.Ordinal);
         }
 
         var link = registry.GetLatestLink();
         var name = StripPrefix(nameElement.GetString()!.Trim());
         if (name.Length == 0 || name.Length > MaxNameLength)
-            return Refuse($"tool-call needs a tool name of 1 to {MaxNameLength} characters.");
+            return Invalid($"tool-call needs a tool name of 1 to {MaxNameLength} characters.");
 
         // 1. never itself or another matrix tool
         if (string.Equals(name, ToolCallName, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(name, EditorHealth.ToolName, StringComparison.OrdinalIgnoreCase) ||
             EditorLock.ToolNames.Contains(name, StringComparer.OrdinalIgnoreCase))
-            return Refuse($"'{name}' is a matrix tool: call it directly, not through tool-call.");
+            return Invalid($"'{name}' is a matrix tool: call it directly, not through tool-call.");
 
         // one spelling for every check below and for the call itself
         name = link?.Registry?.Tools.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase))?.Name ?? name;
@@ -120,7 +120,7 @@ public sealed class ServerTools(
 
         // 2. only for the gap before the client re-lists its tools
         if (clients.WasListed(sessionId, name))
-            return Refuse($"'{name}' is already in your tool list: call {targets[0]} directly so your client's permission rules apply.");
+            return Invalid($"'{name}' is already in your tool list: call {targets[0]} directly so your client's permission rules apply.");
 
         // 4-6. Claude Code deny/ask rules and PreToolUse hooks, failing closed on unreadable settings
         var proxies = entries.Select(entry => ClaudePermissionMirror.FullName(entry, ToolCallName)).Distinct().ToArray();
@@ -128,7 +128,7 @@ public sealed class ServerTools(
         if (refusal is not null)
         {
             logger.LogInformation("tool-call {Tool} refused for session {SessionId}: {Reason}", name, sessionId, refusal);
-            return Refuse(refusal);
+            return Invalid(refusal);
         }
 
         // 3. disabled or unknown tools are refused by Unity itself (FMP_TOOL_NOT_FOUND)
@@ -140,7 +140,9 @@ public sealed class ServerTools(
         }
         catch (McpProtocolException e)
         {
-            return new CallToolResult { IsError = true, Content = [Block($"via tool-call -> {name}"), Block(e.Message)] };
+            var failure = ToolErrors.Create(ToolErrors.ToolFailed, e.Message);
+            failure.Content = [Block($"via tool-call -> {name}"), .. failure.Content];
+            return failure;
         }
 
         var content = new List<ContentBlock> { Block($"via tool-call -> {name}") };
@@ -211,6 +213,8 @@ public sealed class ServerTools(
             }
         }
     }
+
+    static CallToolResult Invalid(string message) => ToolErrors.Create(ToolErrors.InvalidArguments, message);
 
     static CallToolResult Refuse(string message) => new() { IsError = true, Content = [Block(message)] };
 

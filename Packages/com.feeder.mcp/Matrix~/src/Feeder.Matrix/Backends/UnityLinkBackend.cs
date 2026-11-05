@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Feeder.Matrix.Health;
 using Feeder.Matrix.Protocol;
+using Feeder.Matrix.Tools;
 using Feeder.Matrix.Unity;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
@@ -41,7 +42,9 @@ public sealed class UnityLinkBackend(
     public async ValueTask<CallToolResult> CallToolAsync(CallToolRequestParams request, CancellationToken ct)
     {
         var settings = options.Value;
-        var link = await WaitForLinkAsync(request.Name, ct);
+        var (link, waited) = await WaitForLinkAsync(ct);
+        if (link is null)
+            return Unavailable(waited, $"No Unity editor is connected to the matrix, so '{request.Name}' cannot run. {health.Summary()}", null);
         var connectionId = link.ConnectionId;
         var operationId = Guid.NewGuid().ToString("N");
 
@@ -64,6 +67,7 @@ public sealed class UnityLinkBackend(
             var hardStop = operation.Started + settings.MaxToolTimeout;
             var down = TimeSpan.Zero;
             var lastCheck = DateTimeOffset.UtcNow;
+            var reloaded = waited;
             while (true)
             {
                 try
@@ -85,26 +89,28 @@ public sealed class UnityLinkBackend(
                 lastCheck = now;
                 var current = registry.GetLink(link.ProjectId);
                 if (current is null)
-                    throw new McpProtocolException($"Tool '{request.Name}' lost its Unity editor: the editor unlinked from the matrix. {health.Summary()}", McpErrorCode.InternalError);
+                    return Unavailable(reloaded, $"Tool '{request.Name}' lost its Unity editor: the editor unlinked from the matrix. {health.Summary()}", ToolErrors.TimeoutRetryMs);
 
+                reloaded |= EditorHealth.IsCompilingOrReloading(current);
                 if (!current.Connected)
                 {
                     // time spent reloading does not count against the call, up to the reconnect grace
                     down += elapsed;
                     operation.ExtendTo(operation.Deadline + elapsed);
                     if (down > settings.ReconnectGrace || EditorHealth.ProcessExited(current))
-                        throw new McpProtocolException(
+                        return Unavailable(reloaded,
                             $"Tool '{request.Name}' lost its Unity editor: it did not come back within {EditorHealth.Seconds(settings.ReconnectGrace)}. {health.Summary()}",
-                            McpErrorCode.InternalError);
+                            EditorHealth.ProcessExited(current) ? null : ToolErrors.TimeoutRetryMs);
                     continue;
                 }
 
                 if (now > operation.Deadline || now > hardStop)
                 {
                     await TryCancelAsync(current, operationId);
-                    throw new McpProtocolException(
-                        $"Tool '{request.Name}' timed out after {EditorHealth.Seconds(now - operation.Started)}. Editor health: {health.Summary()}",
-                        McpErrorCode.InternalError);
+                    var message = $"Tool '{request.Name}' timed out after {EditorHealth.Seconds(now - operation.Started)}. Editor health: {health.Summary()}";
+                    return reloaded
+                        ? ToolErrors.Create(ToolErrors.CompilingOrReloading, message, ToolErrors.ReloadRetryMs)
+                        : ToolErrors.Create(ToolErrors.Timeout, message, ToolErrors.TimeoutRetryMs);
                 }
             }
         }
@@ -116,20 +122,27 @@ public sealed class UnityLinkBackend(
 
     // A link that dropped (domain reload, editor restart) gets the reconnect grace to come back
     // before the call fails; a project that never linked fails at once.
-    private async Task<UnityLink> WaitForLinkAsync(string toolName, CancellationToken ct)
+    private async Task<(UnityLink? Link, bool Waited)> WaitForLinkAsync(CancellationToken ct)
     {
+        var waited = false;
         while (true)
         {
             if (registry.GetDefaultLink() is { } link)
-                return link;
+                return (link, waited);
 
             var latest = registry.GetLatestLink();
             if (latest is null || IsGone(latest))
-                throw new McpProtocolException($"No Unity editor is connected to the matrix, so '{toolName}' cannot run. {health.Summary()}", McpErrorCode.InternalError);
+                return (null, waited || latest is not null && EditorHealth.IsCompilingOrReloading(latest));
 
+            waited = true;
             await Task.Delay(LinkPoll, ct);
         }
     }
+
+    private static CallToolResult Unavailable(bool reloading, string message, int? retryAfterMs)
+        => reloading
+            ? ToolErrors.Create(ToolErrors.CompilingOrReloading, message, ToolErrors.ReloadRetryMs)
+            : ToolErrors.Create(ToolErrors.UnityUnavailable, message, retryAfterMs);
 
     private bool IsGone(UnityLink link)
         => !link.Connected &&
@@ -147,16 +160,14 @@ public sealed class UnityLinkBackend(
         }
     }
 
-    private static CallToolResult ToCallToolResult(string toolName, ToolResult result)
+    internal static CallToolResult ToCallToolResult(string toolName, ToolResult result)
     {
         if (!result.Success)
         {
             var error = result.Error;
-            return new CallToolResult
-            {
-                IsError = true,
-                Content = [new TextContentBlock { Text = error is null ? $"Tool '{toolName}' failed." : $"[{error.Code}] {error.Message}" }],
-            };
+            return error is null
+                ? ToolErrors.Create(ToolErrors.ToolFailed, $"Tool '{toolName}' failed.")
+                : ToolErrors.FromFmp(error.Code, error.Message);
         }
 
         if (result.ContentJsonUtf8 is { Length: > 0 } json)
@@ -164,7 +175,7 @@ public sealed class UnityLinkBackend(
             // Unity sends a full CallToolResult-shaped JSON payload (content blocks + structuredContent).
             var parsed = JsonSerializer.Deserialize<CallToolResult>(json, McpJsonUtilities.DefaultOptions);
             if (parsed is not null)
-                return parsed;
+                return ToolErrors.WithStructuredError(parsed);
         }
 
         return new CallToolResult { Content = [new TextContentBlock { Text = string.Empty }] };

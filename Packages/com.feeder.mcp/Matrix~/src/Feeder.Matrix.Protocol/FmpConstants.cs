@@ -25,6 +25,9 @@ public static class FmpCapabilities
 
     /// <summary>The matrix keeps the editor lock: the hub serves <c>ReleaseEditorLock</c> and pushes <c>EditorLockChanged</c>.</summary>
     public const string EditorLock = "editor-lock";
+
+    /// <summary>The editor lock keeps a queue: the hub serves <c>RemoveFromEditorLockQueue</c> and <c>SetEditorLockQueuePaused</c>, and the lock state lists the waiting sessions.</summary>
+    public const string EditorLockQueue = "editor-lock-queue";
 }
 
 /// <summary>Editor state reported in handshake and heartbeats.</summary>

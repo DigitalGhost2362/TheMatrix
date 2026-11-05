@@ -27,6 +27,20 @@ internal sealed class EditorLockStateMirror
     public string Owner { get; set; } = string.Empty;
     public string Task { get; set; } = string.Empty;
     public long AcquiredUnixMs { get; set; }
+    public EditorLockWaiterMirror[] Waiting { get; set; } = [];
+    public bool QueuePaused { get; set; }
+    public bool QueueHeldByPlayMode { get; set; }
+}
+
+internal sealed class EditorLockWaiterMirror
+{
+    public string Ticket { get; set; } = string.Empty;
+    public string Owner { get; set; } = string.Empty;
+    public string Task { get; set; } = string.Empty;
+    public string ClientName { get; set; } = string.Empty;
+    public string SessionId { get; set; } = string.Empty;
+    public long WaitingSinceUnixMs { get; set; }
+    public bool Attached { get; set; }
 }
 
 internal sealed class RegisterResponseMirror

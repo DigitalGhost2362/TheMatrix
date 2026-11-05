@@ -87,6 +87,73 @@ public class FmpCompatibilityTests
         Assert.Equal(string.Empty, free.Owner);
     }
 
+    // the lock state of an editor that predates the queue
+    public sealed record OldLockState
+    {
+        public bool Held { get; set; }
+        public string Kind { get; set; } = string.Empty;
+        public string Owner { get; set; } = string.Empty;
+        public string Task { get; set; } = string.Empty;
+        public int CallsInFlight { get; set; }
+    }
+
+    [MessagePackObject]
+    public sealed record OldLockStateMessagePack
+    {
+        [Key(0)] public bool Held { get; init; }
+        [Key(1)] public string Kind { get; set; } = string.Empty;
+        [Key(2)] public string Owner { get; set; } = string.Empty;
+        [Key(3)] public string Task { get; set; } = string.Empty;
+        [Key(4)] public string ClientName { get; set; } = string.Empty;
+        [Key(5)] public string ClientVersion { get; set; } = string.Empty;
+        [Key(6)] public string SessionId { get; set; } = string.Empty;
+        [Key(7)] public long AcquiredUnixMs { get; init; }
+        [Key(8)] public long LastActivityUnixMs { get; init; }
+        [Key(9)] public long ExpiresUnixMs { get; init; }
+        [Key(10)] public int CallsInFlight { get; init; }
+    }
+
+    [Fact]
+    public void Old_editor_still_gets_the_normal_lock_state_next_to_the_waiting_list()
+    {
+        var json = JsonSerializer.Serialize(new EditorLockState
+        {
+            Held = true,
+            Kind = "agent",
+            Owner = "claude-catwalk",
+            Task = "catwalk score",
+            CallsInFlight = 2,
+            Waiting = [new EditorLockWaiter { Ticket = "t", Owner = "codex", Task = "shop", WaitingSinceUnixMs = 7, Attached = true }],
+            QueuePaused = true,
+        }, HubJson);
+
+        Assert.Contains("\"waiting\":[{\"ticket\":\"t\"", json);
+        var old = JsonSerializer.Deserialize<OldLockState>(json, HubJson)!;
+        Assert.True(old.Held);
+        Assert.Equal("claude-catwalk", old.Owner);
+        Assert.Equal(2, old.CallsInFlight);
+
+        var oldPacked = MessagePackSerializer.Deserialize<OldLockStateMessagePack>(MessagePackSerializer.Serialize(
+            new EditorLockState { Held = true, Owner = "o", CallsInFlight = 2, Waiting = [new EditorLockWaiter { Ticket = "t" }] }));
+        Assert.Equal("o", oldPacked.Owner);
+        Assert.Equal(2, oldPacked.CallsInFlight);
+    }
+
+    [Fact]
+    public void New_editor_reads_the_lock_state_of_a_server_without_a_queue()
+    {
+        var state = JsonSerializer.Deserialize<EditorLockState>("""{"held":true,"kind":"agent","owner":"claude","callsInFlight":1}""", HubJson)!;
+        Assert.True(state.Held);
+        Assert.Empty(state.Waiting);
+        Assert.False(state.QueuePaused);
+        Assert.False(state.QueueHeldByPlayMode);
+
+        var packed = MessagePackSerializer.Deserialize<EditorLockState>(MessagePackSerializer.Serialize(
+            new OldLockStateMessagePack { Held = true, Owner = "claude", CallsInFlight = 1 }));
+        Assert.Equal("claude", packed.Owner);
+        Assert.Empty(packed.Waiting);
+    }
+
     [Fact]
     public void New_messages_parse_in_the_old_messagepack_shape()
     {

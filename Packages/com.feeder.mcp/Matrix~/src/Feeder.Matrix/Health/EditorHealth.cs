@@ -26,6 +26,13 @@ public sealed class EditorHealth(UnityLinkRegistry registry, IOptions<MatrixOpti
     /// <summary>One line naming what holds the editor, derived from what the matrix can observe.</summary>
     public string Conclusion() => Conclude(Snapshot());
 
+    /// <summary>True while the linked editor is compiling or reloading scripts, so a failed call is worth retrying shortly.</summary>
+    public bool IsCompilingOrReloading()
+        => registry.GetLatestLink() is { } link && IsCompilingOrReloading(link);
+
+    public static bool IsCompilingOrReloading(UnityLink link)
+        => link.EditorState is FmpEditorState.Compiling or FmpEditorState.Reloading && !ProcessExited(link);
+
     /// <summary>Conclusion plus in-flight calls and open editor windows; short enough for an error message.</summary>
     public string Summary()
     {

@@ -170,4 +170,24 @@ public sealed record EditorLockState
     // when the matrix frees an idle claim on its own; 0 = never
     [Key(9)] public long ExpiresUnixMs { get; init; }
     [Key(10)] public int CallsInFlight { get; init; }
+    // sessions queued for the lock, first in line first
+    [Key(11)] public EditorLockWaiter[] Waiting { get; set; } = [];
+    // a person paused the queue: nobody is granted the lock until it resumes
+    [Key(12)] public bool QueuePaused { get; init; }
+    // the editor is in play mode with nobody holding the lock, so the queue waits for the person playing
+    [Key(13)] public bool QueueHeldByPlayMode { get; init; }
+}
+
+/// <summary>One session waiting for the editor lock.</summary>
+[MessagePackObject]
+public sealed record EditorLockWaiter
+{
+    [Key(0)] public string Ticket { get; set; } = string.Empty;
+    [Key(1)] public string Owner { get; set; } = string.Empty;
+    [Key(2)] public string Task { get; set; } = string.Empty;
+    [Key(3)] public string ClientName { get; set; } = string.Empty;
+    [Key(4)] public string SessionId { get; set; } = string.Empty;
+    [Key(5)] public long WaitingSinceUnixMs { get; set; }
+    // a call of this session is waiting right now
+    [Key(6)] public bool Attached { get; set; }
 }

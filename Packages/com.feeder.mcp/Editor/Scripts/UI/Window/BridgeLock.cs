@@ -1,10 +1,12 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Text;
 using Feeder.MCP.Editor.Matrix;
 using Feeder.Rx;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Feeder.MCP.Editor.UI
 {
@@ -28,16 +30,20 @@ namespace Feeder.MCP.Editor.UI
 
         public static bool IsPastCap(EditorLockState state) => state.Held && Age(state.AcquiredUnixMs) > Cap;
 
+        /// <summary>The holder is past the cap while others wait for the editor.</summary>
+        public static bool IsBlocking(EditorLockState state) => IsPastCap(state) && state.Waiting.Length > 0;
+
         /// <summary>One short line: who, for what, for how long.</summary>
         public static string Line(EditorLockState state)
         {
             if (!state.Held)
-                return "editor free";
+                return state.Waiting.Length > 0 ? $"editor free  -  {state.Waiting.Length} waiting" : "editor free";
             var age = Format(Age(state.AcquiredUnixMs));
+            var blocking = IsBlocking(state) ? $"  -  OVER THE CAP, {state.Waiting.Length} waiting" : string.Empty;
             return state.Kind switch
             {
-                KindOutside => $"{Name(state)} (lock file)  -  {Task(state)}{age}",
-                _ => $"{Name(state)}  -  {Task(state)}{age}",
+                KindOutside => $"{Name(state)} (lock file)  -  {Task(state)}{age}{blocking}",
+                _ => $"{Name(state)}  -  {Task(state)}{age}{blocking}",
             };
         }
 
@@ -67,6 +73,8 @@ namespace Feeder.MCP.Editor.UI
                 text.AppendLine($"Last heartbeat: {Format(Age(state.LastActivityUnixMs))} ago");
             if (state.ExpiresUnixMs > 0)
                 text.AppendLine($"Freed on its own at {Clock(state.ExpiresUnixMs)} if it stays idle");
+            if (state.Waiting.Length > 0)
+                text.AppendLine($"Waiting: {state.Waiting.Length} (the first gets the editor when it is freed)");
             text.Append("Click for options.");
             return text.ToString();
         }
@@ -75,9 +83,11 @@ namespace Feeder.MCP.Editor.UI
         {
             var state = _state.Value;
             var menu = new GenericMenu();
-            if (state is not { Held: true })
+            if (state == null || (!state.Held && state.Waiting.Length == 0 && !state.QueuePaused))
                 return;
-            menu.AddItem(new GUIContent($"Free the claim of {Name(state)}..."), false, ConfirmRelease);
+            if (state.Held)
+                menu.AddItem(new GUIContent($"Free the claim of {Name(state)}..."), false, ConfirmRelease);
+            menu.AddItem(new GUIContent(state.QueuePaused ? "Resume the queue" : "Pause the queue"), false, () => SetPaused(!state.QueuePaused));
             menu.AddItem(new GUIContent("Copy details"), false, CopyDetails);
             menu.DropDown(at);
         }
@@ -106,6 +116,92 @@ namespace Feeder.MCP.Editor.UI
             catch (Exception e)
             {
                 Debug.LogWarning($"[Matrix Bridge] Could not free the editor lock: {e.Message}");
+            }
+        }
+
+        static async void SetPaused(bool paused)
+        {
+            try
+            {
+                await MatrixPluginEditor.Instance.SetEditorLockQueuePausedAsync(paused);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Matrix Bridge] Could not {(paused ? "pause" : "resume")} the editor lock queue: {e.Message}");
+            }
+        }
+
+        static async void Remove(EditorLockWaiter waiter)
+        {
+            try
+            {
+                await MatrixPluginEditor.Instance.RemoveFromEditorLockQueueAsync(waiter.Ticket);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Matrix Bridge] Could not remove {waiter.Owner} from the editor lock queue: {e.Message}");
+            }
+        }
+
+        static VisualElement? _queueView;
+        static string _queueKey = string.Empty;
+        static readonly List<(Label Age, EditorLockWaiter Waiter)> _ages = new();
+
+        /// <summary>Lists the sessions waiting for the editor under the holder line; rebuilt only when the queue changes.</summary>
+        public static void ShowQueue(VisualElement view, EditorLockState? state)
+        {
+            var visible = state != null && (state.Waiting.Length > 0 || state.QueuePaused);
+            view.EnableInClassList("mb-queue--visible", visible);
+            if (!visible || state == null)
+            {
+                _queueKey = string.Empty;
+                return;
+            }
+
+            var key = $"{state.QueuePaused}|{state.QueueHeldByPlayMode}|" + string.Join("|", Array.ConvertAll(state.Waiting, w => w.Ticket + w.Owner + w.Task));
+            if (!ReferenceEquals(view, _queueView) || key != _queueKey)
+            {
+                _queueView = view;
+                _queueKey = key;
+                Rebuild(view, state);
+            }
+            foreach (var (label, waiter) in _ages)
+                label.text = Format(Age(waiter.WaitingSinceUnixMs));
+        }
+
+        static void Rebuild(VisualElement view, EditorLockState state)
+        {
+            view.Clear();
+            _ages.Clear();
+            var note = state.QueuePaused ? "  -  PAUSED" : state.QueueHeldByPlayMode ? "  -  WAITING FOR PLAY MODE TO END" : string.Empty;
+            var header = new VisualElement();
+            header.AddToClassList("mb-queue__row");
+            header.Add(new Label($"QUEUE  {state.Waiting.Length} waiting{note}") { name = "mb-queue-title" });
+            var pause = new Label(state.QueuePaused ? "RESUME" : "PAUSE") { tooltip = state.QueuePaused ? "Let the first in line have the editor" : "Nobody is granted the editor until you resume" };
+            pause.AddToClassList("mb-queue__button");
+            pause.RegisterCallback<ClickEvent>(_ => SetPaused(!state.QueuePaused));
+            header.Add(pause);
+            view.Add(header);
+
+            for (var i = 0; i < state.Waiting.Length; i++)
+            {
+                var waiter = state.Waiting[i];
+                var row = new VisualElement();
+                row.AddToClassList("mb-queue__row");
+                var who = waiter.Owner.Length > 0 ? waiter.Owner : "a session";
+                var client = waiter.ClientName.Length > 0 && waiter.ClientName != waiter.Owner ? $" ({waiter.ClientName})" : string.Empty;
+                var task = new Label($"{i + 1}.  {who}{client}  -  {waiter.Task}") { tooltip = $"{who}{client}" + Environment.NewLine + waiter.Task };
+                task.AddToClassList("mb-queue__task");
+                var age = new Label(Format(Age(waiter.WaitingSinceUnixMs)));
+                age.AddToClassList("mb-queue__age");
+                var remove = new Label("X") { tooltip = $"Take {who} out of the queue" };
+                remove.AddToClassList("mb-queue__button");
+                remove.RegisterCallback<ClickEvent>(_ => Remove(waiter));
+                row.Add(task);
+                row.Add(age);
+                row.Add(remove);
+                view.Add(row);
+                _ages.Add((age, waiter));
             }
         }
 
