@@ -9,7 +9,7 @@ All notable changes to this package are documented here.
 - **Runtime tools:** a build, or Play mode, links to the project's server as a player next to the Editor, and
   `[MatrixRuntimeTool]` methods run there. The server keeps both links at once; a player never replaces the Editor and
   an older Editor or server keeps working. Samples: `runtime-ping`, `runtime-scene-info`. Play mode links through
-  `Tools > Feeder > Server > Link Play Mode As Player`.
+  `Tools > Feeder > Matrix Bridge > Server > Link Play Mode As Player`.
 - **Server for macOS and Linux:** payloads for `osx-x64`, `osx-arm64` and `linux-x64` next to `win-x64`;
   `Matrix~/tools/publish-payloads.ps1` builds them all.
 - **Batch entry** `Feeder.MCP.Editor.MatrixBatch.Run` for `-batchmode` and CI: installs and starts the server, links the
@@ -99,9 +99,14 @@ All notable changes to this package are documented here.
 - `editor-health` also answers with structured data: `ready`, `phase` (adds `running_tests` and
   `playmode_transition`), `retry_after_ms` and a compile counter that survives reloads.
 - The Matrix Bridge window copies an agent's MCP config JSON: right-click a chip, or the **+N** menu.
+- **Editor Window Capture:** `screenshot-editor-window` (off by default) captures any open Editor window by title or
+  type name, the focused one by default, HiDPI-aware, and can save the full-size PNG. People use
+  `Tools > Feeder > Matrix Bridge > Capture` (Capture Focused Window, Capture Window...), which saves to `Docs/Captures/`.
 
 ### Changed
 
+- Every Matrix Bridge menu item moved one level down, under `Tools > Feeder > Matrix Bridge`, for example
+  `Tools > Feeder > Bridge` is now `Tools > Feeder > Matrix Bridge > Bridge`. Order and items are unchanged.
 - Cursor and Gemini CLI get their skills in the shared `.agents/skills`, next to Codex and DeepSeek, instead of
   `.cursor/skills` and `.gemini/skills`. The skills Matrix wrote to the old folders are removed on the next
   regeneration, so Cursor no longer lists them twice. Claude Code still reads only `.claude/skills`.

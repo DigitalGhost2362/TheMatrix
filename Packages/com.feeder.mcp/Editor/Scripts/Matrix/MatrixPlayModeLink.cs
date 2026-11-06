@@ -13,7 +13,7 @@ namespace Feeder.MCP.Editor.Matrix
     internal static class MatrixPlayModeLink
     {
         const string PrefKey = "Feeder.Matrix.PlayModeLink";
-        const string MenuPath = "Tools/Feeder/Server/Link Play Mode As Player";
+        const string MenuPath = Feeder.MCP.Editor.UI.MenuItems.Root + "Server/Link Play Mode As Player";
 
         static MatrixPlayModeLink() => EditorApplication.playModeStateChanged += OnPlayModeChanged;
 

@@ -14,7 +14,7 @@ namespace Feeder.MCP.Editor.API
 # Matrix VFX
 
 Five tools, one prefab per effect, the prefab is the source of truth. Humans keep editing it in the
-Inspector or in `Tools/Feeder/VFX Studio (Experimental)`; you read it back with `vfx-read` before patching.
+Inspector or in `Tools/Feeder/Matrix Bridge/VFX Studio (Experimental)`; you read it back with `vfx-read` before patching.
 
 | Tool | Use | Cost |
 |---|---|---|

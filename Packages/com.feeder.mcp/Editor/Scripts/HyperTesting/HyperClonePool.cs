@@ -64,7 +64,7 @@ namespace Feeder.MCP.Editor.HyperTesting
         static string Refusal =>
             File.Exists(Path.Combine(HyperTestingPaths.ProjectRoot, HyperTestingPaths.MarkerFileName))
                 ? "This editor is itself a Hyper Testing clone. Pool commands run only in the original project."
-                : $"{HyperTestingActivation.ModeName} is OFF for this project. Only the user can enable it in Tools > Feeder > Hyper Testing (Experimental). Do not try to enable it; ask the user.";
+                : $"{HyperTestingActivation.ModeName} is OFF for this project. Only the user can enable it in Tools > Feeder > Matrix Bridge > Hyper Testing (Experimental). Do not try to enable it; ask the user.";
 
         public static async Task<string> UpAsync(int count)
         {

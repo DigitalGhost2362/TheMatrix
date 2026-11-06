@@ -11,36 +11,38 @@ namespace Feeder.MCP.Editor.UI
 {
     public static class MenuItems
     {
-        [MenuItem("Tools/Feeder/Setup...", priority = -20)]
+        public const string Root = "Tools/Feeder/Matrix Bridge/";
+
+        [MenuItem(Root + "Setup...", priority = -20)]
         public static void RunMatrixSetup() => MatrixSetup.Run();
 
-        [MenuItem("Tools/Feeder/Skills", priority = -19)]
+        [MenuItem(Root + "Skills", priority = -19)]
         public static void ShowSkills() => MatrixSkillsWindow.ShowWindow();
 
-        [MenuItem("Tools/Feeder/Bridge", priority = -18)]
+        [MenuItem(Root + "Bridge", priority = -18)]
         public static void ShowWindow() => MatrixBridgeWindow.ShowWindow();
 
-        [MenuItem("Tools/Feeder/Hyper Testing (Experimental)", priority = -16)]
+        [MenuItem(Root + "Hyper Testing (Experimental)", priority = -16)]
         public static void ShowHyperTesting() => HyperTesting.HyperTestingWindow.ShowWindow();
 
-        [MenuItem("Tools/Feeder/VFX Studio (Experimental)", priority = -15)]
+        [MenuItem(Root + "VFX Studio (Experimental)", priority = -15)]
         public static void ShowVfxStudio() => Vfx.VfxStudioWindow.ShowWindow();
 
-        [MenuItem("Tools/Feeder/Skills", true)]
-        [MenuItem("Tools/Feeder/Bridge", true)]
-        [MenuItem("Tools/Feeder/Space (experimental)", true)]
-        [MenuItem("Tools/Feeder/Hyper Testing (Experimental)", true)]
-        [MenuItem("Tools/Feeder/Server/Reinstall Binaries", true)]
-        [MenuItem("Tools/Feeder/Server/Delete Binaries", true)]
-        [MenuItem("Tools/Feeder/Server/Open Logs", true)]
-        [MenuItem("Tools/Feeder/Server/Launch MCP Inspector", true)]
-        [MenuItem("Tools/Feeder/Server/Reset Config", true)]
+        [MenuItem(Root + "Skills", true)]
+        [MenuItem(Root + "Bridge", true)]
+        [MenuItem(Root + "Space (experimental)", true)]
+        [MenuItem(Root + "Hyper Testing (Experimental)", true)]
+        [MenuItem(Root + "Server/Reinstall Binaries", true)]
+        [MenuItem(Root + "Server/Delete Binaries", true)]
+        [MenuItem(Root + "Server/Open Logs", true)]
+        [MenuItem(Root + "Server/Launch MCP Inspector", true)]
+        [MenuItem(Root + "Server/Reset Config", true)]
         private static bool IsSetUp() => MatrixActivation.IsEnabled;
 
-        [MenuItem("Tools/Feeder/Server/Reinstall Binaries", priority = 1000)]
+        [MenuItem(Root + "Server/Reinstall Binaries", priority = 1000)]
         public static Task ReinstallServer() => McpServerManager.InstallServerBinaryIfNeeded(force: true);
 
-        [MenuItem("Tools/Feeder/Server/Delete Binaries", priority = 1001)]
+        [MenuItem(Root + "Server/Delete Binaries", priority = 1001)]
         public static void DeleteServer()
         {
             var result = McpServerManager.DeleteBinaryFolderIfExists();
@@ -68,7 +70,7 @@ namespace Feeder.MCP.Editor.UI
             }
         }
 
-        [MenuItem("Tools/Feeder/Server/Open Logs", priority = 1002)]
+        [MenuItem(Root + "Server/Open Logs", priority = 1002)]
         public static void OpenServerLogs()
         {
             var folder = Path.Combine(
@@ -81,7 +83,7 @@ namespace Feeder.MCP.Editor.UI
             EditorUtility.RevealInFinder(folder);
         }
 
-        [MenuItem("Tools/Feeder/Server/Launch MCP Inspector", priority = 1004)]
+        [MenuItem(Root + "Server/Launch MCP Inspector", priority = 1004)]
         public static void LaunchMcpInspector()
         {
             if (MatrixPluginEditor.TransportMethod != TransportMethod.streamableHttp)
@@ -153,7 +155,7 @@ namespace Feeder.MCP.Editor.UI
             }
         }
 
-        [MenuItem("Tools/Feeder/Server/Reset Config", priority = 2020)]
+        [MenuItem(Root + "Server/Reset Config", priority = 2020)]
         public static void ResetConfig()
         {
             MatrixPluginEditor.ResetConfig();

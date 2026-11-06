@@ -26,8 +26,8 @@ Installing the package changes nothing on a machine: no window opens, no server 
 is written until the person using the project turns Matrix on. Teammates who do not use MCP are
 never affected, even when the project is shared through version control.
 
-To turn it on, run **Tools > Feeder > Setup...** once (see [Matrix Setup](#matrix-setup)). Until
-then the other items of the **Tools > Feeder** menu are greyed out. The choice is stored per
+To turn it on, run **Tools > Feeder > Matrix Bridge > Setup...** once (see [Matrix Setup](#matrix-setup)). Until
+then the other items of the **Tools > Feeder > Matrix Bridge** menu are greyed out. The choice is stored per
 machine and per project folder, outside the project, so it is never committed. A saved window
 layout that includes Matrix windows or the Scene view toolbar (for example one checked in with the
 project) does not open them for someone who has not turned Matrix on.
@@ -39,19 +39,19 @@ Once Matrix is on, the package does this each time the editor loads:
    the next session in that folder).
 3. Generates skill files into `.claude/skills`, one `matrix-<tool>` folder for each enabled tool.
 
-For other AI clients, open **Tools > Feeder > Bridge** and click the client name at the
+For other AI clients, open **Tools > Feeder > Matrix Bridge > Bridge** and click the client name at the
 bottom of the window to wire or unwire it. To turn Matrix off again, click the state word while it
-reads ONLINE: the server stops, the other **Tools > Feeder** items grey out again, and nothing
+reads ONLINE: the server stops, the other **Tools > Feeder > Matrix Bridge** items grey out again, and nothing
 starts, opens or is written on the next load.
 
 Note: the server port is derived from the project's directory path, so `.mcp.json` differs
 between machines that clone the project to different paths. The file is rewritten with the local
-port on editor load. Do not commit it: run **Tools > Feeder > Setup...** once per machine to
+port on editor load. Do not commit it: run **Tools > Feeder > Matrix Bridge > Setup...** once per machine to
 gitignore it.
 
 ## Matrix Bridge window
 
-Open **Tools > Feeder > Bridge**. Every connection is local: the bridge listens on loopback
+Open **Tools > Feeder > Matrix Bridge > Bridge**. Every connection is local: the bridge listens on loopback
 only.
 
 - Click the large state word to link or unlink (OFFLINE, LINKING, ONLINE).
@@ -65,7 +65,7 @@ only.
 
 ## Skills window
 
-Open **Tools > Feeder > Skills**. It lists every MCP tool with its own switch.
+Open **Tools > Feeder > Matrix Bridge > Skills**. It lists every MCP tool with its own switch.
 
 - Pick a group on the left or type in the search box; the All, On and Off buttons filter by state.
 - Each row shows what the tool does, the tokens it adds to every request while it is on, and a
@@ -78,13 +78,13 @@ Open **Tools > Feeder > Skills**. It lists every MCP tool with its own switch.
 
 ## Matrix Setup
 
-Run **Tools > Feeder > Setup...** once on each machine. It:
+Run **Tools > Feeder > Matrix Bridge > Setup...** once on each machine. It:
 
 - turns Matrix on for the project on this machine: it starts the local server and links the editor;
 - adds `.mcp.json` to the project's `.gitignore`; if the file is already committed, it prints
   `git rm --cached .mcp.json` for you to run;
 - keeps only the core MCP tools enabled and disables the rest, to cut the tokens sent with every
-  request; switch more on in **Tools > Feeder > Skills**, or a client enables them on demand with
+  request; switch more on in **Tools > Feeder > Matrix Bridge > Skills**, or a client enables them on demand with
   `tool-set-enabled-state`;
 - writes the Claude Code MCP config, then installs or verifies the Claude Code CLI (Node.js is
   installed with winget if missing).
@@ -178,7 +178,7 @@ packages, screenshots, profiler, UI inspection and VFX.
 
 Several clone editors play test one project in parallel, each driven by its own `hyper-playtester-N`
 subagent. It is off by default, Windows only, and only a person can turn it on, from
-**Tools > Feeder > Hyper Testing (Experimental)**. The switch is per machine and per project, and turns off
+**Tools > Feeder > Matrix Bridge > Hyper Testing (Experimental)**. The switch is per machine and per project, and turns off
 again on every package update.
 
 - **Clones:** `up` creates the clones in `<project>.HyperClones/hc<N>`. `Assets` and the embedded packages
@@ -241,7 +241,7 @@ up, and runtime tools run in the player. Mark a static method:
 static string Hello([Description("Who to greet.")] string name = "world") => "hello " + name;
 ```
 
-- **Play mode:** switch on `Tools > Feeder > Server > Link Play Mode As Player`; each Play session then links.
+- **Play mode:** switch on `Tools > Feeder > Matrix Bridge > Server > Link Play Mode As Player`; each Play session then links.
 - **Builds:** start the game with `-matrixPort <port> -matrixToken <token> [-matrixHost <host>] [-matrixProject <id>]`,
   or call `Feeder.MCP.Player.MatrixPlayer.Connect(host, port, token)`. The port is the one in the project's
   `.mcp.json`. Desktop and mobile players only (no WebGL). `runtime-ping` and `runtime-scene-info` ship as samples.

@@ -15,7 +15,7 @@ journal entries.
 ## Rule 0 - The mode is the user's switch, never yours
 
 - If `hyper-testing` (action `status`) says the mode is OFF, stop and tell the user: "Hyper Testing Mode
-  is off; enable it in Tools > Feeder > Hyper Testing (Experimental) if you want parallel play testing."
+  is off; enable it in Tools > Feeder > Matrix Bridge > Hyper Testing (Experimental) if you want parallel play testing."
 - Never try to enable it: no `script-execute`, no reflection, no EditorPrefs or registry writes, no
   editing of files under `Library/MatrixHyperTesting/`, no hand-made clone markers. The tools refuse
   such attempts. Treat a refusal as final.

@@ -9,7 +9,7 @@ This project has the standalone `com.feeder.mcp` package installed. The package 
 
 ## Open The Bridge
 
-1. Open `Tools/Feeder/Bridge`.
+1. Open `Tools/Feeder/Matrix Bridge/Bridge`.
 2. Click the large state word until it reads ONLINE. It cycles OFFLINE, LINKING, ONLINE; clicking it again unlinks.
 3. The address under the state word is the local endpoint. Every connection stays on this machine (loopback only).
 

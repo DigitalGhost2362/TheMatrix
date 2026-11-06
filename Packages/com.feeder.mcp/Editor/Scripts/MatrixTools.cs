@@ -17,7 +17,7 @@ namespace Feeder.MCP.Editor
         public static void CoreOnly() => Run(
             all: false,
             "Keep only the core Matrix tools enabled and drop the skills of the others?\n\n" +
-            "Switch more on later in Tools > Feeder > Skills, or with the tool-set-enabled-state tool.");
+            "Switch more on later in Tools > Feeder > Matrix Bridge > Skills, or with the tool-set-enabled-state tool.");
 
         static void Run(bool all, string confirm)
         {
@@ -34,7 +34,7 @@ namespace Feeder.MCP.Editor
             if (MatrixActivation.IsEnabled)
                 return true;
 
-            EditorUtility.DisplayDialog(Title, "Matrix is off for this project. Run Tools > Feeder > Setup first.", "OK");
+            EditorUtility.DisplayDialog(Title, "Matrix is off for this project. Run Tools > Feeder > Matrix Bridge > Setup first.", "OK");
             return false;
         }
 

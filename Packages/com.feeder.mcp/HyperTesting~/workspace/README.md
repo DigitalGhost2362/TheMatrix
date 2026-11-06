@@ -3,7 +3,7 @@
 This folder belongs to **Hyper Testing Mode (Experimental)**: several clone Unity Editors play test this
 project in parallel, each driven by its own `hyper-playtester-N` subagent.
 
-Turn it on or off only from **Tools > Feeder > Hyper Testing (Experimental)**. Agents cannot enable it.
+Turn it on or off only from **Tools > Feeder > Matrix Bridge > Hyper Testing (Experimental)**. Agents cannot enable it.
 The switch is per machine and per project, and every Matrix Bridge package update turns it off again.
 
 | Path | What it holds |

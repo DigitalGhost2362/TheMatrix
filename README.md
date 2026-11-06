@@ -47,7 +47,7 @@ the project-root `.mcp.json` for Claude Code, and generates `.claude/skills`. No
 is needed for Claude Code.
 
 For other AI clients or to opt out of auto-configure, open
-**Tools > Feeder > Bridge**.
+**Tools > Feeder > Matrix Bridge > Bridge**.
 
 ## Repository layout
 

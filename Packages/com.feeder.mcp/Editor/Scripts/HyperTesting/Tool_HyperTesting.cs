@@ -28,7 +28,7 @@ namespace Feeder.MCP.Editor.API
             "HyperTesting/Journal/ram-samples.csv. When the mode is off every action returns a refusal: stop and ask the user, " +
             "never try to enable the mode yourself.")]
         [Description("EXPERIMENTAL Hyper Testing clone pool: action = status | up | refresh | down | purge | ram. " +
-            "Refuses unless the user enabled Hyper Testing Mode in Tools > Feeder > Hyper Testing (Experimental).")]
+            "Refuses unless the user enabled Hyper Testing Mode in Tools > Feeder > Matrix Bridge > Hyper Testing (Experimental).")]
         public async Task<string> Run
         (
             [Description("status | up | refresh | down | purge | ram")]

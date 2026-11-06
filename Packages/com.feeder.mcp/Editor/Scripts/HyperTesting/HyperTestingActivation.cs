@@ -54,7 +54,7 @@ namespace Feeder.MCP.Editor.HyperTesting
             }
             if (!MatrixActivation.IsEnabled)
             {
-                error = "Turn Matrix on first (Tools > Feeder > Setup...).";
+                error = "Turn Matrix on first (Tools > Feeder > Matrix Bridge > Setup...).";
                 return false;
             }
 
@@ -108,6 +108,6 @@ namespace Feeder.MCP.Editor.HyperTesting
 
         internal const string ActivationRefusal =
             "Refused: this code touches Hyper Testing Mode activation. Hyper Testing Mode is experimental and only the user may enable it, " +
-            "from Tools > Feeder > Hyper Testing (Experimental). Ask the user instead.";
+            "from Tools > Feeder > Matrix Bridge > Hyper Testing (Experimental). Ask the user instead.";
     }
 }

@@ -236,30 +236,30 @@ namespace Feeder.MCP.Editor.Utils
                 windowTitle: "Matrix Bridge update",
                 title: $"Matrix Bridge {outcome.Latest} is available",
                 message: $"You have {outcome.Installed}. Update it in Window > Package Manager (Matrix Bridge > Update).\n\n" +
-                    "To stop this check: Tools > Feeder > Update Check, for you or for this project.");
+                    "To stop this check: Tools > Feeder > Matrix Bridge > Update Check, for you or for this project.");
         }
 
         #region Menu
-        [MenuItem("Tools/Feeder/Update Check/Check Now")]
+        [MenuItem(Feeder.MCP.Editor.UI.MenuItems.Root + "Update Check/Check Now")]
         static void CheckNow() => Run(force: true);
 
-        [MenuItem("Tools/Feeder/Update Check/Enabled For Me")]
+        [MenuItem(Feeder.MCP.Editor.UI.MenuItems.Root + "Update Check/Enabled For Me")]
         static void ToggleUser() => UserEnabled = !UserEnabled;
 
-        [MenuItem("Tools/Feeder/Update Check/Enabled For Me", true)]
+        [MenuItem(Feeder.MCP.Editor.UI.MenuItems.Root + "Update Check/Enabled For Me", true)]
         static bool ToggleUserValidate()
         {
-            Menu.SetChecked("Tools/Feeder/Update Check/Enabled For Me", UserEnabled);
+            Menu.SetChecked(Feeder.MCP.Editor.UI.MenuItems.Root + "Update Check/Enabled For Me", UserEnabled);
             return true;
         }
 
-        [MenuItem("Tools/Feeder/Update Check/Enabled For This Project")]
+        [MenuItem(Feeder.MCP.Editor.UI.MenuItems.Root + "Update Check/Enabled For This Project")]
         static void ToggleProject() => ProjectEnabled = !ProjectEnabled;
 
-        [MenuItem("Tools/Feeder/Update Check/Enabled For This Project", true)]
+        [MenuItem(Feeder.MCP.Editor.UI.MenuItems.Root + "Update Check/Enabled For This Project", true)]
         static bool ToggleProjectValidate()
         {
-            Menu.SetChecked("Tools/Feeder/Update Check/Enabled For This Project", ProjectEnabled);
+            Menu.SetChecked(Feeder.MCP.Editor.UI.MenuItems.Root + "Update Check/Enabled For This Project", ProjectEnabled);
             return true;
         }
         #endregion

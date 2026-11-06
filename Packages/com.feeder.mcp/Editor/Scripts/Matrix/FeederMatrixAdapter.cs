@@ -417,7 +417,7 @@ namespace Feeder.MCP.Editor.Matrix
                 await Task.Delay(50, cancellationToken).ConfigureAwait(false);
             }
             if (!capabilities.Contains("compile"))
-                throw new InvalidOperationException("This Feeder Local Matrix server cannot compile C#. Reinstall the server from the Tools > Feeder menu.");
+                throw new InvalidOperationException("This Feeder Local Matrix server cannot compile C#. Reinstall the server from the Tools > Feeder > Matrix Bridge menu.");
             // callers block on this, so the continuation must not need the main thread
             return FmpJson.Parse<CompileResponse>(await connection.InvokeAsync("Compile", FmpJson.Arguments(request), cancellationToken).ConfigureAwait(false));
         }

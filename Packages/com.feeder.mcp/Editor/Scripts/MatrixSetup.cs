@@ -169,7 +169,7 @@ namespace Feeder.MCP.Editor
         {
             var manager = MatrixPluginEditor.Instance.Tools;
             if (manager == null)
-                return "Tools: the MCP plugin is not running - open Tools > Feeder > Bridge, then run Setup again";
+                return "Tools: the MCP plugin is not running - open Tools > Feeder > Matrix Bridge > Bridge, then run Setup again";
 
             var tools = manager.GetAllTools().Where(tool => tool.Name != null).ToList();
             var registered = new HashSet<string>(tools.Select(tool => tool.Name!), StringComparer.OrdinalIgnoreCase);
