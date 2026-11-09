@@ -123,5 +123,6 @@ public class McpClientTrackerTests
         }
 
         public Task EditorLockChanged(EditorLockState state) => Task.CompletedTask;
+        public Task StopAgentPlay(string reason) => Task.CompletedTask;
     }
 }

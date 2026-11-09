@@ -43,7 +43,7 @@ public sealed class EditorLockTests : IDisposable
     private void Open(string sessionId, string client)
         => _entries[sessionId] = _clients.Register(sessionId, () => new Implementation { Name = client, Version = "2.0" });
 
-    private UnityLink Link(FmpEditorState state = FmpEditorState.Ready, bool showsLock = true)
+    private UnityLink Link(FmpEditorState state = FmpEditorState.Ready, bool showsLock = true, bool agentPlay = false)
     {
         var link = _registry.Register(new UnityRegisterRequest
         {
@@ -58,7 +58,7 @@ public sealed class EditorLockTests : IDisposable
             AuthToken = string.Empty,
             EditorState = state,
             ProjectRoot = _root,
-            Features = showsLock ? [FmpCapabilities.EditorLock] : [],
+            Features = [.. showsLock ? [FmpCapabilities.EditorLock] : Array.Empty<string>(), .. agentPlay ? [FmpCapabilities.AgentPlay] : Array.Empty<string>()],
         }, "conn-1");
         link.Registry = new RegistrySnapshot
         {
@@ -880,6 +880,251 @@ public sealed class EditorLockTests : IDisposable
 
     #endregion
 
+    #region Play mode of an agent
+
+    private UnityLink Beat(UnityLink link, FmpEditorState state, bool agentPlay = true, int phase = 0)
+    {
+        link.EditorState = state;
+        link.Heartbeat = new HeartbeatMessage { UnityInstanceId = "inst", EditorState = state, AgentPlay = agentPlay, Phase = phase };
+        _lock.ObserveEditor(link);
+        return link;
+    }
+
+    private List<string> Stops(UnityLink link) => _hub.Stops.TryGetValue(link.ConnectionId, out var list) ? list : [];
+
+    private UnityLink AgentPlaying()
+    {
+        var link = Link(agentPlay: true);
+        _lock.Acquire("sid-a", "claude", "play test");
+        return Beat(link, FmpEditorState.Playing);
+    }
+
+    [Fact]
+    public async Task Holder_in_its_own_play_session_keeps_the_lock_past_the_waiting_idle_limit()
+    {
+        var link = AgentPlaying();
+        var b = Wait("sid-b");
+        _ = Wait("sid-c");
+
+        _time.Advance(TimeSpan.FromMinutes(3));
+        await _lock.TickAsync();
+
+        Assert.Equal("sid-a", _lock.Snapshot().SessionId);
+        Assert.False(b.IsCompleted);
+        Assert.Empty(Stops(link));
+    }
+
+    [Fact]
+    public async Task Implicit_holder_that_entered_play_keeps_the_lock_past_the_implicit_idle()
+    {
+        var link = Link(agentPlay: true);
+        await Gate("sid-a");
+        Beat(link, FmpEditorState.Playing);
+        _ = Wait("sid-b");
+
+        _time.Advance(TimeSpan.FromMinutes(3));
+        await _lock.TickAsync();
+
+        Assert.Equal("sid-a", _lock.Snapshot().SessionId);
+    }
+
+    [Fact]
+    public async Task Holder_idle_past_the_play_limit_is_freed_and_its_play_mode_stopped_once()
+    {
+        var link = AgentPlaying();
+        _ = Wait("sid-b");
+
+        _time.Advance(_options.EditorLockPlayIdleTimeout + TimeSpan.FromSeconds(1));
+        await _lock.TickAsync();
+        await _lock.TickAsync();
+
+        Assert.NotEqual("sid-a", _lock.Snapshot().SessionId);
+        Assert.Single(Stops(link));
+    }
+
+    [Fact]
+    public async Task Holder_freed_while_tests_run_does_not_stop_play_mode()
+    {
+        var link = Link(agentPlay: true);
+        _lock.Acquire("sid-a", "claude", "play mode tests");
+        Beat(link, FmpEditorState.Playing, phase: FmpPhases.RunningTests);
+
+        _time.Advance(_options.EditorLockPlayIdleTimeout + TimeSpan.FromSeconds(1));
+        await _lock.TickAsync();
+
+        Assert.False(_lock.Snapshot().Held);
+        Assert.Empty(Stops(link));
+    }
+
+    [Fact]
+    public async Task Owner_of_play_left_on_jumps_the_queue_with_acquire()
+    {
+        var link = AgentPlaying();
+        _lock.Release("sid-a");
+        var b = Wait("sid-b");
+        _ = Wait("sid-c");
+        await Task.Delay(30);
+        Assert.False(b.IsCompleted);
+        var state = _lock.Snapshot();
+        Assert.Equal("claude", state.PlayLeftBy);
+        Assert.False(state.QueueHeldByPlayMode);
+
+        Assert.StartsWith("acquired", Text(await Done(Wait("sid-a"))));
+        Assert.Equal(["codex", "gemini"], Order(_lock.Snapshot()));
+        Assert.Empty(Stops(link));
+    }
+
+    [Fact]
+    public async Task Owner_of_play_left_on_runs_an_editor_changing_tool_ahead_of_the_queue()
+    {
+        AgentPlaying();
+        _lock.Release("sid-a");
+        _ = Wait("sid-b");
+        _ = Wait("sid-c");
+        await Task.Delay(30);
+
+        Assert.Null(await Done(Gate("sid-a")));
+        Assert.Equal("sid-a", _lock.Snapshot().SessionId);
+    }
+
+    [Fact]
+    public async Task Play_left_on_passes_to_the_head_of_the_queue_after_the_grace()
+    {
+        AgentPlaying();
+        _lock.Release("sid-a");
+        var b = Wait("sid-b");
+        await Task.Delay(30);
+
+        _time.Advance(_options.EditorLockAbandonedPlayGrace - TimeSpan.FromSeconds(1));
+        await _lock.TickAsync();
+        Assert.False(b.IsCompleted);
+
+        _time.Advance(TimeSpan.FromSeconds(2));
+        await _lock.TickAsync();
+        var granted = Text(await Done(b));
+        Assert.StartsWith("acquired", granted);
+        Assert.Contains("left on by claude", granted);
+    }
+
+    [Fact]
+    public async Task Play_left_on_during_a_test_run_keeps_the_queue_waiting()
+    {
+        var link = AgentPlaying();
+        Beat(link, FmpEditorState.Playing, phase: FmpPhases.RunningTests);
+        _lock.Release("sid-a");
+        var b = Wait("sid-b");
+
+        _time.Advance(_options.EditorLockAbandonedPlayGrace + TimeSpan.FromMinutes(1));
+        await _lock.TickAsync();
+
+        Assert.False(b.IsCompleted);
+    }
+
+    [Fact]
+    public async Task Test_run_in_play_mode_holds_the_queue_and_says_so()
+    {
+        var link = Link(agentPlay: true);
+        Beat(link, FmpEditorState.Playing, agentPlay: false, phase: FmpPhases.RunningTests);
+        _options.EditorLockWaitSlice = TimeSpan.FromMilliseconds(100);
+
+        var queued = Text(await Done(Wait("sid-b")));
+
+        Assert.Contains("test run", queued);
+        Assert.DoesNotContain("person", queued);
+    }
+
+    [Fact]
+    public async Task Person_playing_holds_the_queue_even_with_a_new_plugin()
+    {
+        var link = Link(agentPlay: true);
+        Beat(link, FmpEditorState.Playing, agentPlay: false);
+        var b = Wait("sid-b");
+
+        _time.Advance(TimeSpan.FromMinutes(5));
+        await _lock.TickAsync();
+
+        Assert.False(b.IsCompleted);
+        Assert.True(_lock.Snapshot().QueueHeldByPlayMode);
+        Assert.Null(_lock.Snapshot().PlayLeftBy);
+        Assert.Empty(Stops(link));
+    }
+
+    [Fact]
+    public async Task Person_playing_does_not_let_a_session_whose_implicit_claim_just_ended_in()
+    {
+        var link = Link(agentPlay: true);
+        await Gate("sid-a");
+        _time.Advance(_options.EditorLockImplicitIdle + TimeSpan.FromSeconds(1));
+        Beat(link, FmpEditorState.Playing, agentPlay: false);
+        _options.EditorLockWaitSlice = TimeSpan.FromMilliseconds(100);
+
+        var queued = (await Done(Gate("sid-a")))!;
+
+        Assert.True(queued.IsError);
+        Assert.Contains("play mode", Text(queued));
+    }
+
+    [Fact]
+    public void Force_release_of_a_holder_in_play_stops_its_play_mode()
+    {
+        var link = AgentPlaying();
+
+        _lock.ForceRelease();
+
+        Assert.Single(Stops(link));
+    }
+
+    [Fact]
+    public async Task Closed_session_of_a_holder_in_play_stops_its_play_mode()
+    {
+        var link = AgentPlaying();
+
+        await _clients.EndAsync("sid-a", _entries["sid-a"]);
+
+        Assert.Single(Stops(link));
+    }
+
+    [Fact]
+    public void Plugin_without_the_feature_gets_no_stop()
+    {
+        var link = Link();
+        _lock.Acquire("sid-a", "claude", "play test");
+        Beat(link, FmpEditorState.Playing);
+
+        _lock.ForceRelease();
+
+        Assert.Empty(Stops(link));
+        Assert.Null(_lock.Snapshot().PlayLeftBy);
+    }
+
+    [Fact]
+    public async Task Play_owner_survives_the_link_dropping_for_a_domain_reload()
+    {
+        var link = AgentPlaying();
+        link.Connected = false;
+        Beat(link, FmpEditorState.Reloading, agentPlay: false);
+        link.Connected = true;
+        Beat(link, FmpEditorState.Playing);
+        _lock.Release("sid-a");
+        _ = Wait("sid-b");
+        await Task.Delay(30);
+
+        Assert.StartsWith("acquired", Text(await Done(Wait("sid-a"))));
+    }
+
+    [Fact]
+    public async Task Leaving_play_mode_clears_the_owner()
+    {
+        var link = AgentPlaying();
+        _lock.Release("sid-a");
+        Beat(link, FmpEditorState.Ready, agentPlay: false);
+
+        Assert.Null(_lock.Snapshot().PlayLeftBy);
+        Assert.StartsWith("acquired", Text(await Done(Wait("sid-b"))));
+    }
+
+    #endregion
+
     private sealed class ManualTimeProvider : TimeProvider
     {
         private DateTimeOffset _now = new(2026, 10, 5, 0, 0, 0, TimeSpan.Zero);
@@ -894,6 +1139,7 @@ public sealed class EditorLockTests : IDisposable
         public LockHub() => _targets = new Targets(this);
 
         public Dictionary<string, List<EditorLockState>> Sent { get; } = [];
+        public Dictionary<string, List<string>> Stops { get; } = [];
 
         public IHubClients<IFmpUnityClient> Clients => _targets;
         public IGroupManager Groups => throw new NotSupportedException();
@@ -922,6 +1168,14 @@ public sealed class EditorLockTests : IDisposable
                 if (!hub.Sent.TryGetValue(connectionId, out var list))
                     hub.Sent[connectionId] = list = [];
                 list.Add(state);
+                return Task.CompletedTask;
+            }
+
+            public Task StopAgentPlay(string reason)
+            {
+                if (!hub.Stops.TryGetValue(connectionId, out var list))
+                    hub.Stops[connectionId] = list = [];
+                list.Add(reason);
                 return Task.CompletedTask;
             }
         }

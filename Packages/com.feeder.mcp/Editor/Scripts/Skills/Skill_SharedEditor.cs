@@ -9,7 +9,7 @@ namespace Feeder.MCP.Editor.API
         public const string SkillId = "matrix-shared-editor";
 
         [AiSkill(SkillId,
-@"Protocol for a Unity Editor shared by several AI sessions and humans: which Matrix tools need exclusive use of the Editor, the editor lock (editor-lock-acquire / editor-lock-release / editor-lock-status; held by one MCP session for one burst of Editor work, released between bursts; other sessions' editor-changing tools wait in line, and a tool called with no lock takes an implicit claim for 30 idle seconds; freed on release, session close or 10 idle minutes, 2 while others wait), the check that catches a human in play mode, and the test-case handoff - when the Editor is busy write TestCases/<stamp>-<slug>.md and stop; a verifier session runs pending cases later. Use BEFORE entering play mode, compiling, opening or saving a scene, wiping prefs or save data, clearing the console or running tests, and when asked to run pending test cases.")]
+@"Protocol for a Unity Editor shared by several AI sessions and humans: which Matrix tools need exclusive use of the Editor, the editor lock (editor-lock-acquire / editor-lock-release / editor-lock-status; held by one MCP session for one burst of Editor work, released between bursts; other sessions' editor-changing tools wait in line, and a tool called with no lock takes an implicit claim for 30 idle seconds; freed on release, session close or 10 idle minutes, 2 while others wait except inside a play session you started), the check that catches a human in play mode, and the test-case handoff - when the Editor is busy write TestCases/<stamp>-<slug>.md and stop; a verifier session runs pending cases later. Use BEFORE entering play mode, compiling, opening or saving a scene, wiping prefs or save data, clearing the console or running tests, and when asked to run pending test cases.")]
         public static string Markdown => @"
 # Shared Editor
 
@@ -56,7 +56,9 @@ A file written on disk still reaches the Editor: Unity refreshes when its window
 Hot Reload (if installed) patches a save straight into whoever is playing. Matrix cannot refuse that,
 which is why the verifier compares the tree before and after its run (Rule 5).
 
-Never stop, pause or exit someone else's play mode. Never answer a modal dialog you did not open.
+Never stop, pause or exit someone else's play mode. One exception: when your `acquired` answer says
+the Editor is ""in play mode left on by <agent>"", that agent is gone and the Editor is now yours -
+exit play mode first, then do your own work. Never answer a modal dialog you did not open.
 
 ### Hold it for one burst, not for the task
 
@@ -121,13 +123,18 @@ How the claim behaves:
 - Every tool call you make counts as activity. A claim with no call from you for **10 minutes** is
   freed (**2 minutes** while other sessions wait; a call still running keeps it), and so is a claim
   whose MCP session closed. There is no heartbeat to send.
+- In a play session your own tool started, the claim (implicit too) is freed only after **10 minutes**
+  without a call, even while others wait. When it is freed that way, or your session closes, Matrix
+  exits that play mode for you. A person's play mode and a play mode test run are never stopped.
+- Releasing while your play mode is still on leaves it on: you then have **30 seconds** to acquire again
+  (you go ahead of the queue) and exit it; after that the next in line gets the Editor with it.
 - A claim you were granted from the queue is freed again if you make no tool call within **60 seconds**
   of the `acquired` answer: use the Editor at once. Releasing and acquiring again puts you at the end
   of the queue.
 - Acquiring again while you hold it starts a new claim (and a new 15-minute cap).
-- While the Editor is in play mode and nobody holds the lock, a person is playing (or a session left
-  play mode on). Do not stop it: the queue pauses until play mode ends, and acquire keeps answering
-  `queued` meanwhile. A person can also pause the queue from the Matrix Bridge window.
+- While the Editor is in play mode a person started and nobody holds the lock, a person is playing.
+  Do not stop it: the queue pauses until play mode ends, and acquire keeps answering `queued`
+  meanwhile. A person can also pause the queue from the Matrix Bridge window.
 - A person can free your claim, or take you out of the queue, from the Matrix Bridge window.
 - The claim is mirrored to `Temp/agent-editor-lock/lock.json` for sessions still on the lock-file
   scripts. A live lock file written by such a session keeps the queue waiting (Matrix cannot tell
@@ -148,6 +155,10 @@ Outcomes:
   by a person): `editor-lock-status` says so. Report it; acquire again only from a clean start (Rule 3).
 - **Release answers ""your claim was already freed (<reason>)""** -> same: the Editor may have changed
   under you. Treat the burst's evidence as suspect.
+- **Lost the lock while your play session was on** (a tool answers `queued`, or status says your claim
+  was freed) -> `editor-lock-status`, then `editor-lock-acquire` (the agent that started play mode goes
+  first while it is still on), exit play mode, and run the play session again from the start: the
+  evidence of the cut-off one is suspect.
 - **Release** at the end of every burst - exit play mode, restore what you changed (Rule 6), confirm
   `rql-query` `scenes` reports no scene dirtied by you, then `editor-lock-release`. A session that ends,
   fails or is interrupted releases too.

@@ -31,6 +31,9 @@ public static class FmpCapabilities
 
     /// <summary>The hub serves <c>RegisterPlayer</c>: a built player links next to the editor and runs the tools marked <see cref="FmpToolTargets.Runtime"/>.</summary>
     public const string PlayerLink = "player-link";
+
+    /// <summary>Plugin feature: heartbeats carry <see cref="HeartbeatMessage.AgentPlay"/> and the editor handles <c>StopAgentPlay</c>.</summary>
+    public const string AgentPlay = "agent-play";
 }
 
 /// <summary>Values of <see cref="ToolDescriptor.Target"/>.</summary>

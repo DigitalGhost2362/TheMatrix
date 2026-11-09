@@ -2,7 +2,7 @@
 
 All notable changes to this package are documented here.
 
-## [Unreleased]
+## [1.1.0] - 2026-11-09
 
 ### Added
 
@@ -143,6 +143,13 @@ All notable changes to this package are documented here.
 
 ### Fixed
 
+- **Editor lock and play mode** (server 0.9.0): the Editor tells the server when an agent's tool started play mode.
+  A holder in its own play session keeps the lock for 10 idle minutes (`EditorLockPlayIdleTimeout`) even while others
+  wait, instead of 2 minutes (30 seconds for an implicit claim). When such a claim ends on idle, on session close or on
+  Force Release, the Editor leaves that play mode. Play mode an agent leaves on after release no longer holds the whole
+  queue: that agent gets the lock back ahead of the queue, and after 30 seconds (`EditorLockAbandonedPlayGrace`) the
+  next in line gets the Editor with a note to exit play mode first; the Bridge shows `PLAY LEFT ON BY <owner>`. A
+  person's play mode and a play mode test run are never stopped, and an older plugin behaves as before.
 - `tests-run` refuses a second run while one is in progress (`tests_running` with `retry_after_ms`).
   A second caller used to take over the run, receive the first caller's results, and leave the first
   call waiting forever.

@@ -135,6 +135,8 @@ namespace Feeder.MCP.Editor.Matrix
         public EditorLockWaiter[] Waiting { get; set; } = Array.Empty<EditorLockWaiter>();
         public bool QueuePaused { get; set; }
         public bool QueueHeldByPlayMode { get; set; }
+        // an agent left play mode on and holds no lock; null from an older server
+        public string? PlayLeftBy { get; set; }
     }
 
     [Serializable]
@@ -162,6 +164,7 @@ namespace Feeder.MCP.Editor.Matrix
         public string? ConsoleLogPath { get; set; }
         public int Phase { get; set; }
         public int CompileCount { get; set; }
+        public bool AgentPlay { get; set; }
     }
 
     [Serializable]

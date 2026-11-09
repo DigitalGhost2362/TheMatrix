@@ -207,7 +207,7 @@ static GetPromptResult throwPromptNotFound(string? name)
 
 public static class MatrixVersion
 {
-    public const string Value = "0.8.0";
+    public const string Value = "0.9.0";
 }
 
 // Exposes the entry point to WebApplicationFactory-based integration tests.

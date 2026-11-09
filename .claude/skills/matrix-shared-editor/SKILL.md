@@ -1,6 +1,6 @@
 ---
 name: matrix-shared-editor
-description: "Protocol for a Unity Editor shared by several AI sessions and humans at once: which Matrix tools need exclusive use of the Editor, the editor lock Matrix keeps (editor-lock-acquire / editor-lock-release / editor-lock-status; held by one MCP session for one burst of Editor work - a compile, one play session - and released between bursts, never for a whole task; other sessions' editor-changing tools are refused while it is held; freed on release, when the session closes or after 10 idle minutes; shown to people in the Matrix Bridge window), the state check that catches a human in play mode, and the test-case handoff - when the Editor is busy the author writes TestCases/<stamp>-<slug>.md and stops, and a later verifier session runs the pending cases. Use BEFORE entering play mode, compiling, opening or saving a scene, wiping prefs or save data, clearing the console or running tests, and when asked to run pending test cases."
+description: "Protocol for a Unity Editor shared by several AI sessions and humans: which Matrix tools need exclusive use of the Editor, the editor lock (editor-lock-acquire / editor-lock-release / editor-lock-status; held by one MCP session for one burst of Editor work, released between bursts; other sessions' editor-changing tools wait in line, and a tool called with no lock takes an implicit claim for 30 idle seconds; freed on release, session close or 10 idle minutes, 2 while others wait except inside a play session you started), the check that catches a human in play mode, and the test-case handoff - when the Editor is busy write TestCases/<stamp>-<slug>.md and stop; a verifier session runs pending cases later. Use BEFORE entering play mode, compiling, opening or saving a scene, wiping prefs or save data, clearing the console or running tests, and when asked to run pending test cases."
 ---
 
 # Shared Editor
@@ -14,9 +14,10 @@ Claim the Editor here before each compile or play session, compile, read the con
 collect evidence the way the project's own workflow says, then give the Editor back at once. The lock
 is for the Editor, not for your task: while you think, code or wait, other sessions must be able to play.
 
-Matrix keeps the lock. While another session holds it, Matrix refuses your editor-changing tools
-and names the holder; read-only tools always run. While nobody holds it, nothing is refused -
-claiming first is still your job. People see the holder in the Matrix Bridge window and as a green
+Matrix keeps the lock. While another session holds it, your editor-changing tools wait in line for
+their turn (and answer `queued` when the wait runs out); read-only tools always run. While nobody
+holds it, an editor-changing tool claims the Editor for you by itself (an implicit claim, see Rule 2)
+- but claiming first with `editor-lock-acquire` for a whole burst is still your job. People see the holder in the Matrix Bridge window and as a green
 frame around the Scene view, and can free a claim from the window. A person who wants the Editor
 tells the agents to stop; when the user asks you to stop, release at once and do no more
 Editor-exclusive work until they say so. Tools that
@@ -47,7 +48,9 @@ A file written on disk still reaches the Editor: Unity refreshes when its window
 Hot Reload (if installed) patches a save straight into whoever is playing. Matrix cannot refuse that,
 which is why the verifier compares the tree before and after its run (Rule 5).
 
-Never stop, pause or exit someone else's play mode. Never answer a modal dialog you did not open.
+Never stop, pause or exit someone else's play mode. One exception: when your `acquired` answer says
+the Editor is "in play mode left on by <agent>", that agent is gone and the Editor is now yours -
+exit play mode first, then do your own work. Never answer a modal dialog you did not open.
 
 ### Hold it for one burst, not for the task
 
@@ -60,7 +63,8 @@ A burst is the shortest run of Editor-exclusive calls that another session must 
 
 A compile immediately followed by the play session that tests it may share one claim.
 
-Acquire right before the burst and release right after it. **Release before anything that does not
+Acquire right before the burst and release right after it, because other sessions may be waiting in
+line for the Editor. **Release before anything that does not
 need the Editor**: thinking, reading or writing code and docs, running Blender or another tool, waiting
 for a subagent, a reviewer or the user, writing a test case or a report. A review loop, a fix round or a
 verifier with several cases claims the lock once per burst, never across the whole loop.
@@ -77,38 +81,76 @@ claim's time. Scenes, prefs and the compiled code may have changed since your la
 Three tools, served by the Matrix server itself (they answer even while Unity reloads):
 
 - **`editor-lock-acquire`** with `task` (what the claim is for, a few words) and `owner`
-  (`<agent>-<task-slug>`, e.g. `claude-catwalk-score`; people read it in the Editor). Answers
-  `acquired ...` plus the Editor state, or an error starting with `busy:` that names the holder, its
-  client and session, its task and since when.
+  (`<agent>-<task-slug>`, e.g. `claude-catwalk-score`; people read it in the Editor). When the Editor
+  is free it answers `acquired ...` plus the Editor state. When it is taken the call **waits in a
+  first-come queue** for about 50 seconds and answers `acquired` the moment it is your turn; if your
+  turn has not come it answers `queued` (not an error) with your position, the holder and a `ticket`:
+  **call acquire again at once with that `ticket`** to keep your place, and repeat until `acquired`.
+  A ticket not used again within about 80 seconds is dropped. `wait: false` skips the queue and answers
+  `busy:` with the holder, its client and session, its task and since when.
 - **`editor-lock-release`** - gives the Editor back. Only releases your own claim.
-- **`editor-lock-status`** - who holds it, for what, since when, and whether it is you. Read-only.
+- **`editor-lock-status`** - who holds it, for what, since when, whether it is you, who waits in the
+  queue and your own position. Read-only.
+
+Implicit claim (on by default; `FeederMatrix:ImplicitLock=false` in the server settings turns it off,
+then a tool is refused at once while someone else holds the lock and runs freely while nobody does).
+Every editor-changing tool (`tool-call`, `batch-execute` and the tools they run included; read-only
+tools never) follows one rule when your session holds no lock:
+
+- Editor free and nobody waiting -> the tool runs and your session gets an **implicit claim**, shown in
+  the Matrix Bridge window as `<tool> (implicit)`. It is freed after **30 seconds** without a call
+  from you (a running call keeps it), or when your session closes. Keep calling and it stays yours.
+  For a play session or several steps in a row, still claim with `editor-lock-acquire`.
+- Editor taken, or others waiting -> the call waits in the same first-come queue as
+  `editor-lock-acquire` (about 50 seconds) and the tool runs the moment you are granted the Editor.
+  When the wait runs out the tool did **not** run: the answer is the error `lock_queued` with your
+  position; call **the same tool again at once** to keep your place.
+- A claim you made with `editor-lock-acquire` is never shortened by this; acquiring explicitly while
+  you hold an implicit claim turns it into a normal one.
 
 How the claim behaves:
 
 - It belongs to your MCP session. Subagents that run inside your session share it: never let two of
   them work the Editor at once.
 - Every tool call you make counts as activity. A claim with no call from you for **10 minutes** is
-  freed (a call still running keeps it), and so is a claim whose MCP session closed. There is no
-  heartbeat to send.
+  freed (**2 minutes** while other sessions wait; a call still running keeps it), and so is a claim
+  whose MCP session closed. There is no heartbeat to send.
+- In a play session your own tool started, the claim (implicit too) is freed only after **10 minutes**
+  without a call, even while others wait. When it is freed that way, or your session closes, Matrix
+  exits that play mode for you. A person's play mode and a play mode test run are never stopped.
+- Releasing while your play mode is still on leaves it on: you then have **30 seconds** to acquire again
+  (you go ahead of the queue) and exit it; after that the next in line gets the Editor with it.
+- A claim you were granted from the queue is freed again if you make no tool call within **60 seconds**
+  of the `acquired` answer: use the Editor at once. Releasing and acquiring again puts you at the end
+  of the queue.
 - Acquiring again while you hold it starts a new claim (and a new 15-minute cap).
-- Acquire answers `busy` while the Editor is in play mode and nobody holds the lock: a person is
-  playing, or a session left play mode on. Do not stop it.
-- A person can free your claim from the Matrix Bridge window.
+- While the Editor is in play mode a person started and nobody holds the lock, a person is playing.
+  Do not stop it: the queue pauses until play mode ends, and acquire keeps answering `queued`
+  meanwhile. A person can also pause the queue from the Matrix Bridge window.
+- A person can free your claim, or take you out of the queue, from the Matrix Bridge window.
 - The claim is mirrored to `Temp/agent-editor-lock/lock.json` for sessions still on the lock-file
-  scripts. A live lock file written by such a session makes acquire answer `busy` (Matrix cannot tell
+  scripts. A live lock file written by such a session keeps the queue waiting (Matrix cannot tell
   which session it is, so it refuses nobody's tools for it); one with no heartbeat for 20 minutes is
   removed.
 
 Outcomes:
 
-- **Busy** -> the Editor is taken, go to Rule 4. A claim past the 15-minute cap is still live: report
+- **Queued** -> not an error: call acquire again at once with the `ticket`. Give up only when a human
+  is using the Editor (play mode) or the user's wait limit is exceeded, then go to Rule 4.
+- **Busy** (only with `wait: false`, or a removal by a person) -> go to Rule 4. A claim past the 15-minute cap is still live: report
   its owner, task and start time so the user can tell that session to release, or free it from the
   Matrix Bridge window.
-- **A tool refused with "Refused '<tool>': held by ..."** -> someone else holds the Editor. Stop all
-  Editor-exclusive work. If you thought you held it, your claim was freed (idle, session closed, freed
+- **A tool answers `lock_queued` ("queued: position N ... The tool did not run")** -> call the same
+  tool again at once; same limits as Queued above.
+- **A tool refused with "Refused '<tool>': held by ..."** (only when the implicit claim is switched
+  off) -> someone else holds the Editor. Stop all Editor-exclusive work. If you thought you held it, your claim was freed (idle, session closed, freed
   by a person): `editor-lock-status` says so. Report it; acquire again only from a clean start (Rule 3).
 - **Release answers "your claim was already freed (<reason>)"** -> same: the Editor may have changed
   under you. Treat the burst's evidence as suspect.
+- **Lost the lock while your play session was on** (a tool answers `queued`, or status says your claim
+  was freed) -> `editor-lock-status`, then `editor-lock-acquire` (the agent that started play mode goes
+  first while it is still on), exit play mode, and run the play session again from the start: the
+  evidence of the cut-off one is suspect.
 - **Release** at the end of every burst - exit play mode, restore what you changed (Rule 6), confirm
   `rql-query` `scenes` reports no scene dirtied by you, then `editor-lock-release`. A session that ends,
   fails or is interrupted releases too.
@@ -140,8 +182,10 @@ When the task needs play-mode proof, try to acquire the lock.
 - **Acquired and the Editor is clean** -> verify in bursts (Rule 1): compile and read the console,
   play and collect evidence, release. If a result sends you back to the code, release first, fix, then
   claim again for the next compile and play. Report after the last release.
-- **Busy** -> claims are short, so retry a few times over up to 10 minutes. Still busy -> handoff below.
-- **Human in the Editor, still busy after retrying, or verification cut short** (focus trap, lost lock)
+- **Queued** -> call acquire again at once with the `ticket`; the call waits for you, so there is no
+  polling. Write a test case and stop only when a human is using the Editor (play mode) or the user's
+  wait limit is exceeded.
+- **Human in the Editor, the wait limit exceeded, or verification cut short** (focus trap, lost lock)
   -> write the handoff and stop:
   1. Create `TestCases/` at the project root if missing, and make sure `.gitignore` ignores `/TestCases/`.
      Never put test cases under `Assets/` - a new file there triggers an import in the shared Editor.
@@ -164,8 +208,8 @@ Triggered by a request like "run the pending test cases".
 1. List `TestCases/*.md` with `Status: pending`, oldest first. A `running` case whose owner holds no
    claim (`editor-lock-status`) was abandoned - treat it as `pending` and note that in its run log.
 2. Snapshot the tree: `git status --porcelain` and `git hash-object` of every touched file.
-3. Acquire the lock (Rule 2) and check the Editor (Rule 3). Busy -> retry as in Rule 4, then report
-   and stop.
+3. Acquire the lock (Rule 2) and check the Editor (Rule 3). Queued -> acquire again with the
+   ticket as in Rule 4; give up as there, then report and stop.
 4. For each case (one claim per case, Rule 1 - release between cases whenever you stop to read, think
    or write, and re-acquire with the Rule 3 check before the next compile or play):
    - Set `Status: running (<owner>, <time>)`. Claim the lock again if you released it.

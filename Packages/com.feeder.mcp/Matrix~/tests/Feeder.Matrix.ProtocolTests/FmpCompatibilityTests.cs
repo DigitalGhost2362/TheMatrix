@@ -173,6 +173,24 @@ public class FmpCompatibilityTests
     }
 
     [Fact]
+    public void Agent_play_and_play_left_by_round_trip_and_default_when_missing()
+    {
+        Assert.True(JsonSerializer.Deserialize<HeartbeatMessage>("""{"unityInstanceId":"u","editorState":3,"agentPlay":true}""", HubJson)!.AgentPlay);
+        Assert.False(JsonSerializer.Deserialize<HeartbeatMessage>("""{"unityInstanceId":"u","editorState":3}""", HubJson)!.AgentPlay);
+
+        var beat = new HeartbeatMessage { UnityInstanceId = "u", EditorState = FmpEditorState.Playing, AgentPlay = true };
+        Assert.True(MessagePackSerializer.Deserialize<HeartbeatMessage>(MessagePackSerializer.Serialize(beat)).AgentPlay);
+        Assert.False(MessagePackSerializer.Deserialize<HeartbeatMessage>(
+            MessagePackSerializer.Serialize(new OldHeartbeat { UnityInstanceId = "u", EditorState = FmpEditorState.Playing })).AgentPlay);
+
+        var state = new EditorLockState { PlayLeftBy = "claude" };
+        Assert.Equal("claude", MessagePackSerializer.Deserialize<EditorLockState>(MessagePackSerializer.Serialize(state)).PlayLeftBy);
+        Assert.Equal("claude", JsonSerializer.Deserialize<EditorLockState>(JsonSerializer.Serialize(state, HubJson), HubJson)!.PlayLeftBy);
+        Assert.Null(MessagePackSerializer.Deserialize<EditorLockState>(MessagePackSerializer.Serialize(
+            new OldLockStateMessagePack { Held = true, Owner = "claude" })).PlayLeftBy);
+    }
+
+    [Fact]
     public void Old_messagepack_shape_parses_as_new_message()
     {
         var beat = MessagePackSerializer.Deserialize<HeartbeatMessage>(

@@ -13,6 +13,8 @@ public interface IFmpUnityClient
     Task CancelTool(string operationId);
     Task McpClientsChanged(McpClientInfo[] clients);
     Task EditorLockChanged(EditorLockState state);
+    // only sent to links listing FmpCapabilities.AgentPlay; the editor exits play mode only if an agent started it
+    Task StopAgentPlay(string reason);
 }
 
 /// <summary>FMP/1 hub — the Unity side of the matrix. WebSocket + MessagePack only.</summary>
@@ -189,6 +191,7 @@ public sealed class FmpHub(
                 link.LastSeen = now;
                 link.Heartbeat = heartbeat;
                 link.HeartbeatAt = now;
+                editorLock.ObserveEditor(link);
             }
         }
     }

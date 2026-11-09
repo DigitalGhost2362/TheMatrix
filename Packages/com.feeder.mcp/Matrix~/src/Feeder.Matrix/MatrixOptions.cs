@@ -43,6 +43,12 @@ public sealed class MatrixOptions
     /// <summary>The idle limit while other sessions wait for the lock.</summary>
     public TimeSpan EditorLockWaitingIdleTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
+    /// <summary>The idle limit of a holder in the play session it started itself, whether others wait or not.</summary>
+    public TimeSpan EditorLockPlayIdleTimeout { get; set; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>How long play mode an agent left on stays reserved for that agent before the queue moves on.</summary>
+    public TimeSpan EditorLockAbandonedPlayGrace { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>How long one acquire call waits in the queue before it answers queued.</summary>
     public TimeSpan EditorLockWaitSlice { get; set; } = TimeSpan.FromSeconds(50);
 

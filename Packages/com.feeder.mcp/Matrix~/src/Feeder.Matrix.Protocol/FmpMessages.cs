@@ -120,6 +120,8 @@ public sealed record HeartbeatMessage
     [Key(8)] public int Phase { get; init; }
     // Script compilations started this editor session; survives domain reloads. 0 from an older plugin.
     [Key(9)] public int CompileCount { get; init; }
+    // Play mode was started by an agent's tool, not by a person. False from an older plugin.
+    [Key(10)] public bool AgentPlay { get; init; }
 }
 
 [MessagePackObject]
@@ -182,6 +184,8 @@ public sealed record EditorLockState
     [Key(12)] public bool QueuePaused { get; init; }
     // the editor is in play mode with nobody holding the lock, so the queue waits for the person playing
     [Key(13)] public bool QueueHeldByPlayMode { get; init; }
+    // the editor is in play mode an agent started and left on with nobody holding the lock; who left it
+    [Key(14)] public string? PlayLeftBy { get; init; }
 }
 
 /// <summary>One session waiting for the editor lock.</summary>

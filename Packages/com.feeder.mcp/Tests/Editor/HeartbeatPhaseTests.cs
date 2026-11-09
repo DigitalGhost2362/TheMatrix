@@ -15,5 +15,21 @@ namespace Feeder.MCP.Editor.Tests
         {
             Assert.AreEqual(expected, FeederMatrixAdapter.ComputePhase(tests, transition));
         }
+
+        [TestCase(true, false, true)]
+        [TestCase(false, false, false)]
+        [TestCase(true, true, false)]
+        [TestCase(false, true, false)]
+        public void StopAgentPlay_OnlyStopsAnAgentsPlayOutsideATestRun(bool agentPlay, bool tests, bool expected)
+        {
+            Assert.AreEqual(expected, FeederMatrixAdapter.ShouldStopAgentPlay(agentPlay, tests));
+        }
+
+        [Test]
+        public void Heartbeat_SendsAgentPlay()
+        {
+            var json = FmpJson.Arguments(new HeartbeatMessage { UnityInstanceId = "u", AgentPlay = true });
+            StringAssert.Contains("\"agentPlay\":true", json);
+        }
     }
 }

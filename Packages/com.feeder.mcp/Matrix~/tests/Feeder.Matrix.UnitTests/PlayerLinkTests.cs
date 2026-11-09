@@ -194,5 +194,6 @@ public class PlayerLinkTests
         public Task CancelTool(string operationId) => Task.CompletedTask;
         public Task McpClientsChanged(McpClientInfo[] clients) => Task.CompletedTask;
         public Task EditorLockChanged(EditorLockState state) => Task.CompletedTask;
+        public Task StopAgentPlay(string reason) => Task.CompletedTask;
     }
 }

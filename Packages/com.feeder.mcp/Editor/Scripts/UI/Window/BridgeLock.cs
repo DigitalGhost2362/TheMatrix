@@ -258,7 +258,9 @@ namespace Feeder.MCP.Editor.UI
                 return;
             var queued = state.Waiting.Length > 0 || state.QueuePaused;
             _header.style.display = queued ? DisplayStyle.Flex : DisplayStyle.None;
-            var note = state.QueuePaused ? "  -  PAUSED" : state.QueueHeldByPlayMode ? "  -  WAITING FOR PLAY MODE TO END" : string.Empty;
+            var note = state.QueuePaused ? "  -  PAUSED"
+                : !string.IsNullOrEmpty(state.PlayLeftBy) ? $"  -  PLAY LEFT ON BY {state.PlayLeftBy!.ToUpperInvariant()}"
+                : state.QueueHeldByPlayMode ? "  -  WAITING FOR PLAY MODE TO END" : string.Empty;
             _title.text = $"QUEUE  {state.Waiting.Length} waiting{note}";
             _pause.text = state.QueuePaused ? "RESUME" : "PAUSE";
             _pause.tooltip = state.QueuePaused ? "Let the first in line have the editor" : "Nobody is granted the editor until you resume";

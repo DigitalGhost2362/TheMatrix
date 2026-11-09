@@ -56,6 +56,7 @@ namespace Feeder.MCP.Editor.Matrix
         volatile bool _focused;
         volatile int _phase;
         volatile int _compileCount;
+        volatile bool _agentPlay;
         const string CompileCountKey = "Feeder_Matrix_CompileCount";
         readonly int _processId = System.Diagnostics.Process.GetCurrentProcess().Id;
         readonly string _consoleLogPath = Application.consoleLogPath;
@@ -87,6 +88,7 @@ namespace Feeder.MCP.Editor.Matrix
             UpdateEditorState();
             EditorApplication.update += UpdateEditorState;
             UnityEditor.Compilation.CompilationPipeline.compilationStarted += OnCompilationStarted;
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             // a pool thread, so the matrix still hears from the editor while its main thread is held
             _heartbeatTimer = new Timer(_ => _ = SendHeartbeat(), null, HeartbeatInterval, HeartbeatInterval);
         }
@@ -117,6 +119,7 @@ namespace Feeder.MCP.Editor.Matrix
                     ConsoleLogPath = _consoleLogPath,
                     Phase = _phase,
                     CompileCount = _compileCount,
+                    AgentPlay = _agentPlay,
                 };
                 return connection.SendAsync("Heartbeat", FmpJson.Arguments(message)).ContinueWith(
                     _ => Interlocked.Exchange(ref _heartbeatBusy, 0), TaskScheduler.Default);
@@ -444,6 +447,13 @@ namespace Feeder.MCP.Editor.Matrix
                     BridgeLock.Publish(FmpJson.First<EditorLockState>(arguments));
                 return Task.CompletedTask;
             });
+            connection.On("StopAgentPlay", arguments =>
+            {
+                var reason = FmpJson.First<string>(arguments);
+                if (ReferenceEquals(connection, _connection))
+                    _ = Feeder.Reflect.Utils.MainThread.Instance.RunAsync(() => StopAgentPlay(reason));
+                return Task.CompletedTask;
+            });
             connection.HandlerFailed += (target, error) =>
                 _logger.LogError(error, "Feeder Local Matrix call {target} failed", target);
             connection.StateChanged += state =>
@@ -539,7 +549,7 @@ namespace Feeder.MCP.Editor.Matrix
                 PendingOperations = _operations.Keys.ToArray(),
                 ProjectRoot = _projectRoot,
                 McpEntryName = Feeder.ToolHost.AgentConfig.AiAgentConfig.DefaultMcpServerName,
-                Features = new[] { EditorLockFeature },
+                Features = new[] { EditorLockFeature, AgentPlayFeature },
             }), cancellationToken));
 
             if (response.Error != null)
@@ -840,8 +850,9 @@ namespace Feeder.MCP.Editor.Matrix
             _updating = EditorApplication.isUpdating;
             _focused = UnityEditorInternal.InternalEditorUtility.isApplicationActive;
             _phase = ComputePhase(
-                !string.IsNullOrEmpty(API.TestRunner.TestResultCollector.TestCallRequestID) || API.TestRunner.TestRunGuard.Executing,
+                TestsRunning,
                 EditorApplication.isPlayingOrWillChangePlaymode != EditorApplication.isPlaying);
+            _agentPlay = Activity.AgentActivity.IsAgentPlay;
             if (EditorApplication.isCompiling) _lastEditorState = FmpEditorState.Compiling;
             else if (EditorApplication.isPaused) _lastEditorState = FmpEditorState.Paused;
             else if (EditorApplication.isPlaying) _lastEditorState = FmpEditorState.Playing;
@@ -850,6 +861,33 @@ namespace Feeder.MCP.Editor.Matrix
 
         internal static int ComputePhase(bool runningTests, bool playmodeTransition)
             => (runningTests ? FmpPhases.RunningTests : 0) | (playmodeTransition ? FmpPhases.PlaymodeTransition : 0);
+
+        static bool TestsRunning => !string.IsNullOrEmpty(API.TestRunner.TestResultCollector.TestCallRequestID) || API.TestRunner.TestRunGuard.Executing;
+
+        // tells the matrix at once instead of on the next beat, so it knows who owns the play session
+        void OnPlayModeStateChanged(PlayModeStateChange state)
+        {
+            if (state != PlayModeStateChange.EnteredPlayMode && state != PlayModeStateChange.EnteredEditMode)
+                return;
+            UpdateEditorState();
+            _ = SendHeartbeat();
+        }
+
+        const string AgentPlayFeature = "agent-play";
+
+        // a person's play mode and a play mode test run are never stopped from the matrix
+        internal static bool ShouldStopAgentPlay(bool isAgentPlay, bool testsRunning) => isAgentPlay && !testsRunning;
+
+        void StopAgentPlay(string reason)
+        {
+            if (!ShouldStopAgentPlay(Activity.AgentActivity.IsAgentPlay, TestsRunning))
+            {
+                _logger.LogInformation("Matrix asked to stop play mode ({reason}); kept on, an agent did not start it or tests run", reason);
+                return;
+            }
+            Debug.Log($"[Matrix Bridge] Leaving play mode an agent started and left on: {reason}.");
+            EditorApplication.isPlaying = false;
+        }
 
         void OnCompilationStarted(object _)
         {
@@ -878,6 +916,7 @@ namespace Feeder.MCP.Editor.Matrix
             Interlocked.Increment(ref _reconnectGeneration);
             EditorApplication.update -= UpdateEditorState;
             UnityEditor.Compilation.CompilationPipeline.compilationStarted -= OnCompilationStarted;
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             StopHeartbeat();
             _lifetime.Cancel();
             _toolsUpdatedSubscription?.Dispose();
