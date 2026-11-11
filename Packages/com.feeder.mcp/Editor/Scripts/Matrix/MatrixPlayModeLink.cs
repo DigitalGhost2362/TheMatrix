@@ -15,7 +15,7 @@ namespace Feeder.MCP.Editor.Matrix
         const string PrefKey = "Feeder.Matrix.PlayModeLink";
         const string MenuPath = Feeder.MCP.Editor.UI.MenuItems.Root + "Server/Link Play Mode As Player";
 
-        static MatrixPlayModeLink() => EditorApplication.playModeStateChanged += OnPlayModeChanged;
+        static MatrixPlayModeLink() => Activity.EditorEvents.OnPlayModeChanged(OnPlayModeChanged);
 
         static bool Enabled
         {
@@ -36,8 +36,11 @@ namespace Feeder.MCP.Editor.Matrix
         static void OnPlayModeChanged(PlayModeStateChange change)
         {
             if (change == PlayModeStateChange.EnteredPlayMode && Enabled && MatrixActivation.IsEnabled)
+            {
                 MatrixPlayer.Connect("127.0.0.1", MatrixPluginEditor.Port, MatrixPluginEditor.Token ?? string.Empty,
                     MatrixPlayer.ProjectIdFor(MatrixPluginEditor.ProjectRootPath));
+                Activity.PlaySessionGuard.Arm(MatrixPlayer.Disconnect);
+            }
             else if (change == PlayModeStateChange.ExitingPlayMode)
                 MatrixPlayer.Disconnect();
         }

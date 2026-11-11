@@ -57,6 +57,8 @@ try
     builder.Services.AddSingleton<IUnityBackend, BackendRouter>();
     builder.Services.AddSingleton<ScriptCompiler>();
     builder.Services.AddSingleton<EditorHealth>();
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddSingleton<AgentDirectory>();
     builder.Services.AddSingleton<EditorLock>();
     builder.Services.AddHostedService<EditorLockMonitor>();
     builder.Services.AddSingleton<ServerTools>();
@@ -96,9 +98,13 @@ try
         {
             var backend = context.Services!.GetRequiredService<IUnityBackend>();
             var serverTools = context.Services!.GetRequiredService<ServerTools>();
+            var toolUseId = context.Params?.Meta?[AgentDirectory.ToolUseIdMeta] is System.Text.Json.Nodes.JsonValue value && value.TryGetValue<string>(out var id) ? id : null;
+            var caller = context.Services!.GetRequiredService<AgentDirectory>().Resolve(context.Server.SessionId, toolUseId);
+            // a handler runs in the execution context of its HTTP request, so this is the request of this very call
+            var aborted = context.Services!.GetRequiredService<IHttpContextAccessor>().HttpContext?.RequestAborted ?? CancellationToken.None;
             if (serverTools.Handles(context.Params?.Name))
-                return await serverTools.CallAsync(context.Params!, context.Server.SessionId, backend, ct);
-            return await serverTools.CallUnityAsync(context.Params!, context.Server.SessionId, backend, ct);
+                return await serverTools.CallAsync(context.Params!, caller, backend, ct, aborted);
+            return await serverTools.CallUnityAsync(context.Params!, caller, backend, ct, aborted);
         })
         .WithListPromptsHandler((_, _) => ValueTask.FromResult(new ListPromptsResult()))
         .WithGetPromptHandler((context, _) =>
@@ -125,7 +131,8 @@ try
             return;
         }
 
-        if ((context.Request.Path.StartsWithSegments(FmpConstants.McpPath) || context.Request.Path.StartsWithSegments(FmpConstants.HubPath)) &&
+        if ((context.Request.Path.StartsWithSegments(FmpConstants.McpPath) || context.Request.Path.StartsWithSegments(FmpConstants.HubPath) ||
+             context.Request.Path.StartsWithSegments(AgentDirectory.HookPath)) &&
             context.Request.Headers.TryGetValue("Origin", out var origin) &&
             !MatrixAuthentication.IsAllowedOrigin(origin.ToString()))
         {
@@ -134,7 +141,7 @@ try
             return;
         }
 
-        if (context.Request.Path.StartsWithSegments(FmpConstants.McpPath) &&
+        if ((context.Request.Path.StartsWithSegments(FmpConstants.McpPath) || context.Request.Path.StartsWithSegments(AgentDirectory.HookPath)) &&
             matrixOptions.RequireAuth &&
             !MatrixAuthentication.HasValidBearerToken(context.Request.Headers.Authorization, matrixOptions.Token))
         {
@@ -153,6 +160,13 @@ try
 
     app.MapMcp(FmpConstants.McpPath);
     app.MapHub<FmpHub>(FmpConstants.HubPath, o => o.Transports = HttpTransportType.WebSockets);
+
+    // Claude Code hook events: which subagent makes which tool call (see AgentDirectory). An empty answer changes nothing in the client.
+    app.MapPost(AgentDirectory.HookPath, (System.Text.Json.JsonElement body, AgentDirectory agents) =>
+    {
+        agents.OnHook(body);
+        return Results.Ok();
+    });
 
     // Local health endpoint — intentionally outside the MCP surface.
     app.MapGet("/healthz", (UnityLinkRegistry registry, McpClientTracker mcpClients) => Results.Json(new

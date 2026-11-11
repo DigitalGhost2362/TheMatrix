@@ -59,6 +59,13 @@ namespace Feeder.MCP
             => _matrixAdapter?.RemoveFromEditorLockQueueAsync(ticket)
                ?? throw new System.InvalidOperationException("Feeder Local Matrix is not connected.");
 
+        // null while not linked
+        internal bool? ServerTellsAgentsApart => _matrixAdapter?.ServerTellsAgentsApart;
+
+        internal Task<string> SkipEditorLockAfterAsync(string ticket)
+            => _matrixAdapter?.SkipEditorLockAfterAsync(ticket)
+               ?? throw new System.InvalidOperationException("Feeder Local Matrix is not connected.");
+
         internal Task<bool> SetEditorLockQueuePausedAsync(bool paused)
             => _matrixAdapter?.SetEditorLockQueuePausedAsync(paused)
                ?? throw new System.InvalidOperationException("Feeder Local Matrix is not connected.");

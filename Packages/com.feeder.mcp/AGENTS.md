@@ -50,6 +50,13 @@ Matrix server  --FMP/1 (SignalR + MessagePack, loopback)-->  Unity Editor plugin
 - **Editor lock.** Editor-changing tools from a session without the lock get an implicit claim, or wait in the queue
   when someone else holds it. Never read the lock from tool code; the server does it. Read-only tools never wait.
 - **Play mode.** Do not enter or leave play mode from a tool unless that is the tool's purpose, and never leave it on.
+- **Shared Unity events.** Unity calls the handlers of `playModeStateChanged`, `afterAssemblyReload`, `update` and
+  `delayCall` one after another and stops at the first one that throws, so a handler of any other package can keep
+  yours from running. Subscribe through `EditorEvents` (`Editor/Scripts/Activity/EditorEvents.cs`), never directly, and
+  use `EditorEvents.NextTick` instead of `delayCall`. State that lives for one play session (a flag, a recorder, a
+  link) calls `PlaySessionGuard.Arm(cleanup)` when it is created: the cleanup then also runs from the Editor's own
+  state, and must be safe to run twice. Do not read `SessionState` on every editor tick; keep a static copy and read
+  it once per domain load. `Tests/Editor/SharedEventSubscriptionTests.cs` fails on a direct subscription.
 - **Tests must not leave state behind.** Temp scenes unsaved and closed, temp assets under `Assets/_MxTest*` deleted,
   prefs restored. Never touch `TestRunGuard` or `TestResultCollector.TestCallRequestID` of a live run, and never save
   the open scene.

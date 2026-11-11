@@ -140,7 +140,7 @@ namespace Feeder.MCP.Editor.Utils
         {
             if (Application.isBatchMode || EnvironmentUtils.IsCi())
                 return;
-            EditorApplication.delayCall += () => Run(force: false);
+            Activity.EditorEvents.NextTick(() => Run(force: false));
         }
 
         // force: ignore the daily cache and the opt-outs (the menu item); the popup is shown even for a version already announced

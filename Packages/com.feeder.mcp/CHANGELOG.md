@@ -11,9 +11,30 @@ All notable changes to this package are documented here.
   the Matrix windows. Its confirm dialog lists every change first.
 - `matrix-setup-checklist` skill: turning off domain reload on entering play mode after checking the project's
   static state, and a Windows Defender exclusion for the project folder.
+- Matrix Bridge window: every session in the editor lock queue has a small animated pet on the roof of its car.
+  The holder's pet shows its task (compile, play test, tests, refresh, save, anything else) and turns hot or angry
+  past the 15 minute cap; a waiter's pet dozes off the longer it waits and drinks coffee while the queue is paused.
+  Each state has several poses: a pet switches pose every 8 to 14 seconds and moves out of step with the others.
+
+- Editor lock per agent: with Claude Code, every subagent now claims the editor for itself. It no longer shares the
+  claim of its session, it waits in the queue on its own and the Matrix Bridge window shows it as its own car. The
+  editor adds a hook to `.claude/settings.local.json` for this while the linked server supports it and the project has
+  Claude Code wired in `.mcp.json`, and takes it out again for a server that does not (Revert Setups removes it too).
+  Sessions started before the hook was added, and other clients, stay one agent per session as before.
+- `editor-lock-acquire` takes `after`: join the queue now and get the editor only when the named agents have
+  finished, for example a play test after the agent that edits and compiles. `editor-lock-status` takes `owner` to
+  make a label known early, and `editor-lock-release` takes `done` to say an agent's editor work is over. A subagent
+  that ends is done on its own. `FeederMatrix:EditorLockAfterGrace` (2 minutes) is how long a label nobody uses yet
+  is waited for.
+- Matrix Bridge window: a subagent's car is marked with `>`, a waiting car says whom it waits for (click it to let
+  it go now), cars that share one name also show the end of their id, the queue wraps to up to three rows when the
+  window is narrow, and the rest is listed in one `+N` car.
 
 ### Changed
 
+- A main agent that holds the lock and waits for a subagent it spawned passes its claim to that subagent when it asks
+  for the editor, ahead of the queue. The main agent is told with its next tool result.
+- A subagent that ends frees its claim and leaves the queue at once, and play mode it started is stopped.
 - Setup also sets Auto Refresh to Disabled, Script Changes While Playing to Recompile After Finished Playing
   and Run In Background to On, and lists these in its confirm dialog. The two Preferences are machine-wide. `assets-refresh` joins the core tools, since agents now refresh on their own.
 
@@ -27,9 +48,31 @@ All notable changes to this package are documented here.
 
 ### Fixed
 
+- Editor lock queue: a second editor-changing call of a waiting session made its first call answer `queued` at once
+  instead of waiting. Calls of one agent now wait together.
+- Editor lock queue: a client that opened a new MCP session while it held the lock had to wait about 2 minutes behind
+  its own old claim. With the hook, its claim and its place in the queue move to the new session.
+- Editor lock queue: a waiting call whose connection the client dropped stayed in the queue for up to 80 seconds and
+  could be granted the editor. It now leaves the queue when the connection goes.
+- Editor lock queue: an agent whose place lapsed between two calls joined the end without being told. The next
+  `queued` answer now says so.
+- Matrix Bridge window: two lock updates sent at the same moment could arrive in the wrong order, and the window then
+  showed the older queue until the next change.
 - Editor lock: the holder of a claim past the 15 minute cap was never told. Every Unity tool result it gets now ends
   with an `Editor lock:` line (also in `structuredContent.lock_notice`) asking it to release and acquire again.
   `FeederMatrix:EditorLockCapNudge=false` turns it off.
+- An exception thrown by another package's play mode handler no longer leaves Matrix in a wrong state. Unity stops
+  calling the remaining handlers after the first one that throws, so the agent play mark stayed on until Unity was
+  restarted: the next Play a person started showed the `AGENT PLAY TEST` frame and was reported to the server as an
+  agent's, which let a waiting session take the Editor. The mark is now also cleared from the Editor's own state,
+  and the Console gets one warning that names the cause.
+- The mark is also cleared when Unity refuses to enter play mode.
+- The Editor links to the server again after a script reload when another package throws in `afterAssemblyReload`.
+- A watch stops and writes its summary when the play mode exit event does not arrive, and starts recording when the
+  enter event does not.
+- An exception in one of Matrix's own play mode or reload handlers no longer stops the handlers of other packages.
+- `console-get-logs`, `console-get-logs-page` and the `logs` query source received nothing after play mode ended, until
+  the next script reload. The log collector now subscribes again when play mode ends.
 
 ## [1.1.0] - 2026-11-09
 

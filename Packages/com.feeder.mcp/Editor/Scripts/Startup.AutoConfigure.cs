@@ -41,6 +41,8 @@ namespace Feeder.MCP.Editor
         }
 
         /// <summary>Rewrites the MCP config of every auto-configured agent with the current host/port.</summary>
+        const string ClaudeCodeAgentId = "claude-code";
+
         internal static void ConfigureAgents()
         {
             try
@@ -64,6 +66,9 @@ namespace Feeder.MCP.Editor
                     }
                     config.Configure();
                     _logger.LogInformation("Auto-configured MCP for agent '{agentId}' at '{path}'.", agentId, config.ConfigPath);
+                    // wiring Claude Code includes its hook, which follows the port like .mcp.json does
+                    if (agentId == ClaudeCodeAgentId)
+                        MatrixAgentHook.Sync(MatrixPluginEditor.Instance.ServerTellsAgentsApart);
                 }
             }
             catch (Exception e)

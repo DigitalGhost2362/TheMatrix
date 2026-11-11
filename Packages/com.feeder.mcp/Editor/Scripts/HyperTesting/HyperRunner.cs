@@ -115,7 +115,7 @@ namespace Feeder.MCP.Editor.HyperTesting
             if (marker.isolatePlayerPrefs && !PlayerSettings.productName.EndsWith($"_hc{marker.index}"))
                 PlayerSettings.productName += $"_hc{marker.index}";
 
-            EditorApplication.playModeStateChanged += OnPlayModeChanged;
+            Activity.EditorEvents.OnPlayModeChanged(OnPlayModeChanged);
 
             _setupPending = !SessionState.GetBool(SetupDoneKey, false);
             _toolSetPending = !SessionState.GetBool(ToolSetDoneKey, false);
@@ -194,17 +194,36 @@ namespace Feeder.MCP.Editor.HyperTesting
                     _savedQualityLevel = QualitySettings.GetQualityLevel();
                     QualitySettings.SetQualityLevel(0, false);
                 }
+                ArmAfterPlay();
             }
             else if (change == PlayModeStateChange.EnteredEditMode)
             {
-                if (_savedQualityLevel >= 0)
-                    QualitySettings.SetQualityLevel(_savedQualityLevel, false);
-                _savedQualityLevel = -1;
-                EditorUtility.UnloadUnusedAssetsImmediate();
-                GC.Collect();
-                if (SessionState.GetString(PendingCommandKey, string.Empty).Length > 0)
-                    RunPendingRefresh();
+                _afterPlayDue = true;
+                AfterPlay();
             }
+        }
+
+        static bool _afterPlayDue;
+
+        // also from the guard, for an EnteredEditMode that never got here
+        static void ArmAfterPlay()
+        {
+            _afterPlayDue = true;
+            Activity.PlaySessionGuard.Arm(AfterPlay);
+        }
+
+        static void AfterPlay()
+        {
+            if (!_afterPlayDue)
+                return;
+            _afterPlayDue = false;
+            if (_savedQualityLevel >= 0)
+                QualitySettings.SetQualityLevel(_savedQualityLevel, false);
+            _savedQualityLevel = -1;
+            EditorUtility.UnloadUnusedAssetsImmediate();
+            GC.Collect();
+            if (SessionState.GetString(PendingCommandKey, string.Empty).Length > 0)
+                RunPendingRefresh();
         }
 
         static void Tick()
@@ -287,7 +306,10 @@ namespace Feeder.MCP.Editor.HyperTesting
                 case "refresh":
                     SessionState.SetString(PendingCommandKey, command.id);
                     if (EditorApplication.isPlaying)
+                    {
+                        ArmAfterPlay();
                         EditorApplication.isPlaying = false;
+                    }
                     else
                         RunPendingRefresh();
                     break;

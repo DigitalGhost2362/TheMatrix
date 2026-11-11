@@ -62,6 +62,7 @@ namespace Feeder.MCP.Editor.Matrix
         readonly string _consoleLogPath = Application.consoleLogPath;
         readonly string _projectRoot = MatrixPluginEditor.ProjectRootPath;
         Timer? _heartbeatTimer;
+        readonly Action<PlayModeStateChange> _playModeHandler;
         int _heartbeatBusy;
         static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(2);
 
@@ -88,7 +89,7 @@ namespace Feeder.MCP.Editor.Matrix
             UpdateEditorState();
             EditorApplication.update += UpdateEditorState;
             UnityEditor.Compilation.CompilationPipeline.compilationStarted += OnCompilationStarted;
-            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+            _playModeHandler = Activity.EditorEvents.OnPlayModeChanged(OnPlayModeStateChanged);
             // a pool thread, so the matrix still hears from the editor while its main thread is held
             _heartbeatTimer = new Timer(_ => _ = SendHeartbeat(), null, HeartbeatInterval, HeartbeatInterval);
         }
@@ -378,6 +379,18 @@ namespace Feeder.MCP.Editor.Matrix
             return FmpJson.Parse<string?>(await connection.InvokeAsync("RemoveFromEditorLockQueue", FmpJson.Arguments(ticket), _lifetime.Token).ConfigureAwait(false)) ?? "nothing";
         }
 
+        const string EditorLockAgentsFeature = "editor-lock-agents";
+
+        // null until Register answers on the current link
+        public bool? ServerTellsAgentsApart => _serverCapabilities?.Contains(EditorLockAgentsFeature);
+
+        /// <summary>Lets one queued agent stop waiting for the agents it named with 'after'. Returns who.</summary>
+        public async Task<string> SkipEditorLockAfterAsync(string ticket)
+        {
+            var connection = RequireEditorLock(EditorLockAgentsFeature);
+            return FmpJson.Parse<string?>(await connection.InvokeAsync("SkipEditorLockAfter", FmpJson.Arguments(ticket), _lifetime.Token).ConfigureAwait(false)) ?? "nothing";
+        }
+
         /// <summary>Pauses or resumes the editor lock queue. Returns the state it is in now.</summary>
         public async Task<bool> SetEditorLockQueuePausedAsync(bool paused)
         {
@@ -391,7 +404,7 @@ namespace Feeder.MCP.Editor.Matrix
             if (connection?.State != FmpState.Connected || _serverCapabilities == null)
                 throw new InvalidOperationException("Feeder Local Matrix is not connected.");
             if (!_serverCapabilities.Contains(feature))
-                throw new InvalidOperationException($"This Feeder Local Matrix server does not keep the {(feature == EditorLockQueueFeature ? "editor lock queue" : "editor lock")}. Reinstall the server from the Matrix Bridge menu.");
+                throw new InvalidOperationException($"This Feeder Local Matrix server does not keep the {(feature == EditorLockFeature ? "editor lock" : "editor lock queue")}. Reinstall the server from the Matrix Bridge menu.");
             return connection;
         }
 
@@ -559,9 +572,24 @@ namespace Feeder.MCP.Editor.Matrix
             _serverCapabilities = response.Capabilities ?? Array.Empty<string>();
             if (!_serverCapabilities.Contains(EditorLockFeature))
                 BridgeLock.Publish(null);
+            SyncAgentHook(_serverCapabilities.Contains(EditorLockAgentsFeature));
             if (!response.RegistryUpToDate)
                 await _connection!.SendAsync("PublishRegistry", FmpJson.Arguments(snapshot), cancellationToken);
         }
+
+        // the Claude Code hook posts to this server: it must not stay installed for a server that has no such endpoint
+        void SyncAgentHook(bool serverTellsAgentsApart)
+            => _ = Feeder.Reflect.Utils.MainThread.Instance.RunAsync(() =>
+            {
+                try
+                {
+                    _logger.LogInformation("{line}", MatrixAgentHook.Sync(serverTellsAgentsApart));
+                }
+                catch (Exception e)
+                {
+                    _logger.LogWarning("Could not update the Claude Code hook in .claude/settings.local.json: {message}", e.Message);
+                }
+            });
 
         void SubscribeToRegistryChanges()
         {
@@ -916,7 +944,7 @@ namespace Feeder.MCP.Editor.Matrix
             Interlocked.Increment(ref _reconnectGeneration);
             EditorApplication.update -= UpdateEditorState;
             UnityEditor.Compilation.CompilationPipeline.compilationStarted -= OnCompilationStarted;
-            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+            EditorApplication.playModeStateChanged -= _playModeHandler;
             StopHeartbeat();
             _lifetime.Cancel();
             _toolsUpdatedSubscription?.Dispose();

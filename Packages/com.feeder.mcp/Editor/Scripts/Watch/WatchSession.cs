@@ -29,7 +29,7 @@ namespace Feeder.MCP.Editor.Watch
         {
             if (AssetDatabase.IsAssetImportWorkerProcess())
                 return;
-            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+            Activity.EditorEvents.OnPlayModeChanged(OnPlayModeStateChanged);
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             // update, not delayCall: delayCall waits until the Editor is focused again, update keeps running
             if (IsArmed)
@@ -143,10 +143,36 @@ namespace Feeder.MCP.Editor.Watch
             }
         }
 
+        // the same from the Editor's state, for a play mode event that never got here; false once it stopped the watch
+        internal static bool Sync()
+        {
+            if (EditorApplication.isPlaying)
+            {
+                if (_recorder == null)
+                {
+                    BeginRecording();
+                    WatchFrame.Show(true);
+                }
+            }
+            else if (_recorder != null && !EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                Stop(ReasonExitPlay);
+                return false;
+            }
+            return true;
+        }
+
         // a script recompile while playing reloads the domain; the session file is closed and reopened after
         static void OnBeforeAssemblyReload()
         {
-            _recorder?.End("domain reload", final: false);
+            try
+            {
+                _recorder?.End("domain reload", final: false);
+            }
+            catch (Exception e)
+            {
+                UnityEngine.Debug.LogException(e);
+            }
             _recorder = null;
         }
 

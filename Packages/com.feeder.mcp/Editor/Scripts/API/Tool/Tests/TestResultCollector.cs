@@ -41,10 +41,16 @@ namespace Feeder.MCP.Editor.API.TestRunner
         };
 
         // session scoped: a request id must not outlive the editor session that can still answer it
+        // kept in memory too: the heartbeat reads it on every editor tick
+        static string? _testCallRequestId;
         public static string TestCallRequestID
         {
-            get => UnityEditor.SessionState.GetString("Feeder_MCP_TestRunner_TestCallRequestID", string.Empty);
-            set => UnityEditor.SessionState.SetString("Feeder_MCP_TestRunner_TestCallRequestID", value);
+            get => _testCallRequestId ??= UnityEditor.SessionState.GetString("Feeder_MCP_TestRunner_TestCallRequestID", string.Empty);
+            set
+            {
+                _testCallRequestId = value;
+                UnityEditor.SessionState.SetString("Feeder_MCP_TestRunner_TestCallRequestID", value);
+            }
         }
 
         public static PlayerPrefsBool IncludePassingTests = new PlayerPrefsBool("Feeder_MCP_TestRunner_IncludePassingTests");

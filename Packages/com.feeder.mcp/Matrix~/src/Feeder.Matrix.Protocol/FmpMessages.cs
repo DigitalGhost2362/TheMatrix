@@ -186,6 +186,11 @@ public sealed record EditorLockState
     [Key(13)] public bool QueueHeldByPlayMode { get; init; }
     // the editor is in play mode an agent started and left on with nobody holding the lock; who left it
     [Key(14)] public string? PlayLeftBy { get; init; }
+    // the holder is a subagent of the session, and its type as the client names it
+    [Key(15)] public bool Subagent { get; init; }
+    [Key(16)] public string AgentType { get; set; } = string.Empty;
+    // the holder's client reports its subagents, so each of them claims for itself
+    [Key(17)] public bool Hooked { get; init; }
 }
 
 /// <summary>One session waiting for the editor lock.</summary>
@@ -200,4 +205,8 @@ public sealed record EditorLockWaiter
     [Key(5)] public long WaitingSinceUnixMs { get; set; }
     // a call of this session is waiting right now
     [Key(6)] public bool Attached { get; set; }
+    // the agents this one waits for before it takes its turn ('after'), comma separated; empty when it waits for nobody
+    [Key(7)] public string After { get; set; } = string.Empty;
+    [Key(8)] public bool Subagent { get; set; }
+    [Key(9)] public string AgentType { get; set; } = string.Empty;
 }

@@ -89,7 +89,7 @@ public sealed class FmpHub(
             ChosenProtocolVersion = FmpConstants.ProtocolVersion,
             RegistryUpToDate = link.Registry?.RegistryHash == request.ToolRegistryHash,
             AwaitedOperations = registry.AwaitedOperationIds,
-            Capabilities = [FmpCapabilities.Compile, FmpCapabilities.EditorLock, FmpCapabilities.EditorLockQueue, FmpCapabilities.PlayerLink],
+            Capabilities = [FmpCapabilities.Compile, FmpCapabilities.EditorLock, FmpCapabilities.EditorLockQueue, FmpCapabilities.EditorLockAgents, FmpCapabilities.PlayerLink],
         };
     }
 
@@ -128,6 +128,10 @@ public sealed class FmpHub(
     /// <summary>Takes one session out of the editor lock queue. Returns who was removed.</summary>
     public string RemoveFromEditorLockQueue(string ticket)
         => registry.IsRegistered(Context.ConnectionId) ? editorLock.RemoveWaiter(ticket) : "nothing";
+
+    /// <summary>Lets one queued agent stop waiting for the agents it named with 'after'. Returns who.</summary>
+    public string SkipEditorLockAfter(string ticket)
+        => registry.IsRegistered(Context.ConnectionId) ? editorLock.SkipAfter(ticket) : "nothing";
 
     /// <summary>Pauses or resumes the queue. Returns the state it is in now.</summary>
     public bool SetEditorLockQueuePaused(bool paused)

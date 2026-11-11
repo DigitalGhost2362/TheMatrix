@@ -137,6 +137,11 @@ namespace Feeder.MCP.Editor.Matrix
         public bool QueueHeldByPlayMode { get; set; }
         // an agent left play mode on and holds no lock; null from an older server
         public string? PlayLeftBy { get; set; }
+        // the holder is a subagent of its session, and its type as the client names it; a server that cannot tell sends false
+        public bool Subagent { get; set; }
+        public string AgentType { get; set; } = string.Empty;
+        // the holder's client reports its subagents, so each of them claims for itself
+        public bool Hooked { get; set; }
     }
 
     [Serializable]
@@ -149,6 +154,10 @@ namespace Feeder.MCP.Editor.Matrix
         public string SessionId { get; set; } = string.Empty;
         public long WaitingSinceUnixMs { get; set; }
         public bool Attached { get; set; }
+        // the agents this one waits for before it takes its turn, comma separated; empty when it waits for nobody
+        public string After { get; set; } = string.Empty;
+        public bool Subagent { get; set; }
+        public string AgentType { get; set; } = string.Empty;
     }
 
     [Serializable]

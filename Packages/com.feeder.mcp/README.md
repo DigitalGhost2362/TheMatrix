@@ -3,6 +3,9 @@
 Matrix Bridge exposes Unity Editor tools to MCP-compatible AI
 clients. The package ships with the local Windows x64 MCP server payload.
 
+A step-by-step guide with a searchable catalog of every tool ships with the package: open
+`Documentation~/index.html` in a browser (it works offline, straight from disk).
+
 ## Installation
 
 In Unity 2022.3 or newer, open **Window > Package Manager**, click **+**, choose
@@ -148,7 +151,19 @@ While a session holds the lock, the server refuses the other sessions' tools tha
 read-only, and says who holds the editor and for what. Read-only tools always run. A claim ends when
 its session releases it, when the session closes, or after 10 minutes without a call from it.
 
-The **Matrix Bridge** window shows the holder under the status: the agent's name, its task and how
+With Claude Code, each subagent is an agent of its own: it claims and waits in line for itself, and its
+claim ends when it ends. This needs the hook the editor adds to `.claude/settings.local.json` once it is linked to a server
+that supports it, and a Claude Code session started after it was added. Without the hook, and with other clients, a session and all
+its subagents are one agent.
+
+An agent whose work must follow another's joins the queue with `after`, the owner label of the agent it
+waits for: `editor-lock-acquire` with `task`, `owner` and `after: ["coder"]`. It gets the editor only
+when that agent has finished (its subagent ended, its session closed, or it called
+`editor-lock-release` with `done: true`), and it holds nobody back meanwhile.
+
+The **Matrix Bridge** window shows the holder and everyone waiting as cars on one track. A car marked
+`>` is a subagent, and a waiting car that reads `after <name>` waits for that agent: click it to let it
+go now. Under the status it shows the holder: the agent's name, its task and how
 long it has held the editor. The tooltip adds the client, the session and when an idle claim will be
 freed. Click the line to free an agent's claim, for example one left behind by a stuck session. With
 no claim the line reads `editor free`: the editor is yours. To work in it, ask the agents to stop first;

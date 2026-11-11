@@ -10,8 +10,9 @@ using ModelContextProtocol.Protocol;
 namespace Feeder.Matrix.Tools;
 
 /// <summary>
-/// One claim on the Unity editor at a time, held by an MCP session (an agent).
-/// While someone holds it, every other session gets its editor-changing tools refused; read-only tools always run.
+/// One claim on the Unity editor at a time, held by an agent: an MCP session, or one subagent inside it when the
+/// client reports its subagents (<see cref="AgentDirectory"/>).
+/// While someone holds it, every other agent gets its editor-changing tools refused; read-only tools always run.
 /// The claim ends on release, when the holder's MCP session closes, or when an agent stays idle past
 /// <see cref="MatrixOptions.EditorLockIdleTimeout"/>. It is mirrored to <c>Temp/agent-editor-lock/lock.json</c> so
 /// sessions that still claim with the lock-file scripts see it, and a live lock file written by such a session
@@ -46,6 +47,7 @@ public sealed class EditorLock
 
     readonly UnityLinkRegistry _registry;
     readonly McpClientTracker _clients;
+    readonly AgentDirectory _agents;
     readonly IHubContext<FmpHub, IFmpUnityClient> _hub;
     readonly TimeProvider _time;
     readonly IOptions<MatrixOptions> _options;
@@ -54,20 +56,27 @@ public sealed class EditorLock
     readonly object _gate = new();
     Holder? _holder;
     FileLock? _outside;
-    (string SessionId, string Reason, bool Implicit, string Owner, DateTimeOffset At)? _lastDropped;
-    // the session whose tool started the current play mode; kept across the domain reload of entering play
-    (string SessionId, string Owner)? _playOwner;
+    (string Key, string Reason, bool Implicit, string Owner, DateTimeOffset At)? _lastDropped;
+    // the agent whose tool started the current play mode; kept across the domain reload of entering play
+    (string Key, string Owner)? _playOwner;
     // when the play owner stopped holding the lock
     DateTimeOffset _playLeftAt;
     (string ConnectionId, string Reason)? _stopPlay;
     EditorLockState _published = new();
     readonly List<Waiter> _queue = [];
     readonly Dictionary<string, DateTimeOffset> _removed = [];
+    // agents whose place in the queue lapsed between two calls
+    readonly Dictionary<string, DateTimeOffset> _lapsed = [];
+    // main agents whose claim passed to a subagent they waited for, and to whom; told once
+    readonly Dictionary<string, string> _handed = [];
+    // the names agents go by, for 'after'
+    readonly List<Named> _named = [];
     bool _paused;
 
     public EditorLock(
         UnityLinkRegistry registry,
         McpClientTracker clients,
+        AgentDirectory agents,
         IHubContext<FmpHub, IFmpUnityClient> hub,
         TimeProvider time,
         IOptions<MatrixOptions> options,
@@ -75,16 +84,29 @@ public sealed class EditorLock
     {
         _registry = registry;
         _clients = clients;
+        _agents = agents;
         _hub = hub;
         _time = time;
         _options = options;
         _logger = logger;
         clients.SessionEnded += OnSessionEnded;
+        agents.AgentEnded += OnAgentEnded;
+        agents.SessionReplaced += OnSessionReplaced;
+    }
+
+    sealed class Named
+    {
+        public required string Label { get; init; }
+        public required string Key { get; set; }
+        public required string SessionId { get; set; }
+        public DateTimeOffset? Done { get; set; }
     }
 
     sealed class Holder
     {
-        public required string SessionId { get; init; }
+        public required LockCaller Caller { get; set; }
+        public string Key => Caller.Key!;
+        public string SessionId => Caller.SessionId!;
         public required string Owner { get; set; }
         public required string Task { get; set; }
         public string ClientName { get; init; } = string.Empty;
@@ -103,13 +125,22 @@ public sealed class EditorLock
     sealed class Waiter
     {
         public required string Ticket { get; init; }
-        public required string SessionId { get; init; }
+        public required LockCaller Caller { get; set; }
+        public string Key => Caller.Key!;
+        public string SessionId => Caller.SessionId!;
         public required string Owner { get; set; }
         public required string Task { get; set; }
         public string ClientName { get; init; } = string.Empty;
+        // names of the agents that must finish first
+        public string[] After { get; set; } = [];
+        public string? Failed { get; set; }
         public DateTimeOffset Enqueued { get; init; }
         public DateTimeOffset LastCall { get; set; }
         public TaskCompletionSource? Pending { get; set; }
+        // calls of this agent that wait on Pending now
+        public int Calls { get; set; }
+        // its earlier place lapsed and it joined again; said once
+        public bool Rejoined { get; set; }
         public bool Granted { get; set; }
         public bool Removed { get; set; }
         public bool Implicit { get; set; }
@@ -134,13 +165,16 @@ public sealed class EditorLock
                           "answers 'acquired' the moment it is your turn; on 'queued' call it again at once with the ticket to keep " +
                           $"your place. Release with {ReleaseName} as soon as the burst ends, because others may be waiting; a claim " +
                           "is freed on its own when your session closes or after a long idle stretch. Calling it again while you hold " +
-                          "it starts a new claim.",
+                          "it starts a new claim. A subagent claims for itself: it does not share its parent's claim. With 'after' " +
+                          "you join the queue now and get the editor only once the named agents have finished (a play test after the " +
+                          "agent that edits and compiles).",
             InputSchema = Schema("""
                 {"type":"object","properties":{
                   "task":{"type":"string","description":"What the claim is for, in a few words. Shown in the Unity editor."},
                   "owner":{"type":"string","description":"A label people recognize you by, e.g. 'claude-catwalk-score'. Defaults to your client name."},
                   "wait":{"type":"boolean","description":"Wait in the queue when the editor is taken. Default true; false answers 'busy' at once."},
-                  "ticket":{"type":"string","description":"The ticket of an earlier 'queued' answer: keeps your place in the queue."}},
+                  "ticket":{"type":"string","description":"The ticket of an earlier 'queued' answer: keeps your place in the queue."},
+                  "after":{"type":"array","items":{"type":"string"},"description":"Owner labels (or subagent types) of agents that must finish before you get the editor."}},
                  "required":["task"],"additionalProperties":false}
                 """),
         };
@@ -150,42 +184,50 @@ public sealed class EditorLock
             Title = "Editor / Lock / Release",
             Description = "Gives the shared Unity editor back after your burst: exit play mode and restore what you changed first. " +
                           "Only releases your own claim.",
-            InputSchema = Schema("""{"type":"object","properties":{},"additionalProperties":false}"""),
+            InputSchema = Schema("""
+                {"type":"object","properties":{
+                  "done":{"type":"boolean","description":"True when all your editor work is finished: agents that wait for you with 'after' may go. A subagent that ends is done on its own."}},
+                 "additionalProperties":false}
+                """),
             Annotations = new ToolAnnotations { IdempotentHint = true },
         };
         yield return new Tool
         {
             Name = StatusName,
             Title = "Editor / Lock / Status",
-            Description = "Says who holds the shared Unity editor (an agent session or a lock file), " +
+            Description = "Says who holds the shared Unity editor (an agent or a lock file), " +
                           "for what, since when, whether it is you, and who waits in the queue (with your position).",
-            InputSchema = Schema("""{"type":"object","properties":{},"additionalProperties":false}"""),
+            InputSchema = Schema("""
+                {"type":"object","properties":{
+                  "owner":{"type":"string","description":"Makes your label known before your first claim, so others can wait for you with 'after'. Say it when you start work that ends in a compile."}},
+                 "additionalProperties":false}
+                """),
             Annotations = new ToolAnnotations { ReadOnlyHint = true, IdempotentHint = true },
         };
     }
 
     #region MCP tools
 
-    public Task<CallToolResult> CallAsync(CallToolRequestParams request, string? sessionId, CancellationToken ct) => request.Name switch
+    public Task<CallToolResult> CallAsync(CallToolRequestParams request, LockCaller caller, CancellationToken ct) => request.Name switch
     {
-        AcquireName => AcquireAsync(sessionId, Text(request.Arguments, "owner"), Text(request.Arguments, "task"),
-            Flag(request.Arguments, "wait") ?? true, Text(request.Arguments, "ticket"), ct),
-        ReleaseName => Task.FromResult(Release(sessionId)),
-        _ => Task.FromResult(Status(sessionId)),
+        AcquireName => AcquireAsync(caller, Text(request.Arguments, "owner"), Text(request.Arguments, "task"),
+            Flag(request.Arguments, "wait") ?? true, Text(request.Arguments, "ticket"), ct, after: Texts(request.Arguments, "after")),
+        ReleaseName => Task.FromResult(Release(caller, Flag(request.Arguments, "done") ?? false)),
+        _ => Task.FromResult(Status(caller, Text(request.Arguments, "owner"))),
     };
 
     /// <summary>Claims the editor now or answers busy; never queues.</summary>
-    public CallToolResult Acquire(string? sessionId, string? owner, string? task)
+    public CallToolResult Acquire(LockCaller caller, string? owner, string? task)
     {
-        var result = Enter(sessionId, owner, task, wait: false, ticket: null, out _, out _);
+        var result = Enter(caller, owner, task, wait: false, ticket: null, out _, out _);
         _ = PublishAsync();
         return result!;
     }
 
     /// <summary>Claims the editor, or waits in the queue for at most one slice and answers queued.</summary>
-    public async Task<CallToolResult> AcquireAsync(string? sessionId, string? owner, string? task, bool wait, string? ticket, CancellationToken ct, string? implicitTool = null)
+    public async Task<CallToolResult> AcquireAsync(LockCaller caller, string? owner, string? task, bool wait, string? ticket, CancellationToken ct, string? implicitTool = null, string[]? after = null)
     {
-        var result = Enter(sessionId, owner, task, wait, ticket, out var waiter, out var signal, implicitTool);
+        var result = Enter(caller, owner, task, wait, ticket, out var waiter, out var signal, implicitTool, after);
         _ = PublishAsync();
         if (result is not null)
             return result;
@@ -199,7 +241,10 @@ public sealed class EditorLock
         catch (OperationCanceledException)
         {
             lock (_gate)
-                Drop(waiter!);
+            {
+                if (--waiter!.Calls <= 0)
+                    Drop(waiter);
+            }
             _ = PublishAsync();
             throw;
         }
@@ -210,11 +255,11 @@ public sealed class EditorLock
     }
 
     // null: the caller is queued and must wait on signal
-    CallToolResult? Enter(string? sessionId, string? owner, string? task, bool wait, string? ticket, out Waiter? waiter, out Task? signal, string? implicitTool = null)
+    CallToolResult? Enter(LockCaller caller, string? owner, string? task, bool wait, string? ticket, out Waiter? waiter, out Task? signal, string? implicitTool = null, string[]? after = null)
     {
         waiter = null;
         signal = null;
-        if (string.IsNullOrEmpty(sessionId))
+        if (caller.Key is not { } key)
             return Error("This connection has no MCP session id, so it cannot hold the editor lock.");
         task = Clip(task);
         if (task.Length == 0)
@@ -225,14 +270,16 @@ public sealed class EditorLock
             var now = _time.GetUtcNow();
             Maintain(now);
             var link = _registry.GetLatestLink();
-            var client = _clients.ClientOf(sessionId);
+            var client = _clients.ClientOf(caller.SessionId);
             owner = Clip(owner);
-            if (owner.Length == 0)
-                owner = string.IsNullOrEmpty(client?.Name) ? "agent" : client!.Name;
+            if (owner.Length > 0)
+                Name(caller, owner);
+            else
+                owner = DefaultOwner(caller, client);
 
-            if (_holder is { } held && held.SessionId == sessionId)
+            if (_holder is { } held && held.Key == key)
             {
-                _queue.RemoveAll(w => w.SessionId == sessionId);
+                _queue.RemoveAll(w => w.Key == key);
                 if (implicitTool is not null)
                 {
                     held.LastActivity = now;
@@ -251,28 +298,36 @@ public sealed class EditorLock
             if (ticket is not null && _removed.Remove(ticket))
                 return Removed();
 
-            waiter = _queue.Find(w => w.SessionId == sessionId);
+            var waitsFor = Labels(after);
+            if (AfterProblem(key, waitsFor) is { } problem)
+                return Error(problem);
+
+            waiter = _queue.Find(w => w.Key == key);
             if (waiter is null)
             {
-                var playOk = implicitTool is not null && _lastDropped is { Implicit: true } dropped && dropped.SessionId == sessionId;
+                var playOk = implicitTool is not null && _lastDropped is { Implicit: true } dropped && dropped.Key == key;
                 // only the agent that left play mode on can clean it up, so it goes ahead of the queue
-                var playOwner = PlayLeftOn(link)?.SessionId == sessionId;
-                if ((_queue.Count == 0 || playOwner) && Blocker(link, now, sessionId, playOk) is null)
+                var playOwner = PlayLeftOn(link)?.Key == key;
+                // sessions that wait for another agent to finish hold nobody back
+                if (Unfinished(waitsFor).Count == 0 && (!_queue.Exists(w => Unfinished(w.After).Count == 0) || playOwner) && Blocker(link, now, key, playOk) is null)
                 {
-                    Grant(sessionId, owner, task, link, now, fromQueue: false, implicitTool is not null);
+                    _lapsed.Remove(key);
+                    Grant(caller, owner, task, link, now, fromQueue: false, implicitTool is not null);
                     return Acquired($"acquired for \"{task}\". {EditorLine(link)} {Reminder}", task, owner, link, TimeSpan.Zero);
                 }
                 if (!wait)
-                    return Busy(Blocker(link, now));
+                    return Busy(AfterNote(waitsFor) ?? Blocker(link, now));
                 waiter = new Waiter
                 {
                     Implicit = implicitTool is not null,
                     PlayOk = playOk,
                     Ticket = Guid.NewGuid().ToString("N")[..12],
-                    SessionId = sessionId,
+                    Caller = caller,
                     Owner = owner,
                     Task = task,
                     ClientName = client?.Name ?? string.Empty,
+                    After = waitsFor,
+                    Rejoined = _lapsed.Remove(key),
                     Enqueued = now,
                 };
                 _queue.Add(waiter);
@@ -282,15 +337,17 @@ public sealed class EditorLock
                 waiter.Owner = owner;
                 waiter.Task = task;
                 waiter.Implicit = false;
+                if (after is not null)
+                    waiter.After = waitsFor;
             }
             waiter.LastCall = now;
             if (!wait)
                 return Queued(waiter, now, link);
 
-            waiter.Pending?.TrySetResult();
-            var pending = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            waiter.Pending = pending;
-            signal = pending.Task;
+            // a second call of the same agent waits with the first instead of ending it
+            waiter.Pending ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            waiter.Calls++;
+            signal = waiter.Pending.Task;
             Pump(now);
             return waiter.Granted ? Settle(waiter, signal, now) : null;
         }
@@ -299,12 +356,12 @@ public sealed class EditorLock
     // caller holds _gate; the answer of a waiting call that was granted, removed, dropped or timed out
     CallToolResult Settle(Waiter waiter, Task signal, DateTimeOffset now)
     {
-        if (waiter.Pending?.Task == signal)
+        if (--waiter.Calls <= 0 && waiter.Pending?.Task == signal)
             waiter.Pending = null;
         var link = _registry.GetLatestLink();
         if (waiter.Granted)
         {
-            if (_holder is { } held && held.SessionId == waiter.SessionId)
+            if (_holder is { } held && held.Key == waiter.Key)
                 return Acquired($"acquired for \"{held.Task}\" after waiting {Age(now - waiter.Enqueued)}. {EditorLine(link)} {Reminder} " +
                                 $"Make a tool call within {Age(_options.Value.EditorLockFirstCallDeadline)} or the turn passes on.",
                     held.Task, held.Owner, link, now - waiter.Enqueued);
@@ -312,6 +369,8 @@ public sealed class EditorLock
         }
         if (waiter.Removed)
             return Removed();
+        if (waiter.Failed is { } why)
+            return Error(why);
         if (_queue.Contains(waiter))
             return Queued(waiter, now, link);
         return Error($"Your place in the editor lock queue is gone (its session closed or the ticket expired). Call {AcquireName} again to join the end.");
@@ -325,9 +384,13 @@ public sealed class EditorLock
     CallToolResult Queued(Waiter waiter, DateTimeOffset now, UnityLink? link)
     {
         var position = _queue.IndexOf(waiter) + 1;
-        var blocker = Blocker(link, now) ?? "The editor is free and your turn comes next.";
+        var blocker = AfterNote(waiter.After) ?? Blocker(link, now) ?? "The editor is free and your turn comes next.";
+        var rejoined = waiter.Rejoined
+            ? $"Your earlier place lapsed (no call within {Age(_options.Value.EditorLockTicketGrace)} of a queued answer), so you joined the end. "
+            : string.Empty;
+        waiter.Rejoined = false;
         var result = ToolErrors.Create(ToolErrors.LockQueued,
-            $"queued: position {position} ({position - 1} ahead). {char.ToUpperInvariant(blocker[0])}{blocker[1..]} " +
+            $"queued: position {position} ({position - 1} ahead). {rejoined}{char.ToUpperInvariant(blocker[0])}{blocker[1..]} " +
             (waiter.Implicit
                 ? "The tool did not run. Call the same tool again at once to keep your place."
                 : $"Call {AcquireName} again at once with ticket \"{waiter.Ticket}\" to keep your place."),
@@ -365,12 +428,12 @@ public sealed class EditorLock
             new Dictionary<string, object?> { ["holder"] = _holder?.Owner ?? _outside?.Owner, ["queue_length"] = _queue.Count });
 
     // caller holds _gate
-    void Grant(string sessionId, string owner, string task, UnityLink? link, DateTimeOffset now, bool fromQueue, bool isImplicit = false)
+    void Grant(LockCaller caller, string owner, string task, UnityLink? link, DateTimeOffset now, bool fromQueue, bool isImplicit = false)
     {
-        var client = _clients.ClientOf(sessionId);
+        var client = _clients.ClientOf(caller.SessionId);
         _holder = new Holder
         {
-            SessionId = sessionId,
+            Caller = caller,
             Owner = owner,
             Task = task,
             ClientName = client?.Name ?? string.Empty,
@@ -383,14 +446,14 @@ public sealed class EditorLock
             Implicit = isImplicit,
         };
         _outside = null;
-        if (_lastDropped?.SessionId == sessionId)
+        if (_lastDropped?.Key == caller.Key)
             _lastDropped = null;
         WriteMirror(_holder, now);
-        _logger.LogInformation("Editor lock acquired by {Owner} (session {SessionId}) for {Task}", owner, sessionId, task);
+        _logger.LogInformation("Editor lock acquired by {Owner} (session {SessionId}) for {Task}", owner, caller.Key, task);
     }
 
     // caller holds _gate; why nobody can be granted the lock now, or null
-    string? Blocker(UnityLink? link, DateTimeOffset now, string? sessionId = null, bool playOk = false)
+    string? Blocker(UnityLink? link, DateTimeOffset now, string? key = null, bool playOk = false)
     {
         if (_holder is { } other)
             return Describe(other, now);
@@ -405,7 +468,7 @@ public sealed class EditorLock
             return null;
         if (PlayLeftOn(link) is { } left)
         {
-            if (left.SessionId == sessionId)
+            if (left.Key == key)
                 return null;
             if (TestsRunning(link))
                 return $"the editor is in play mode {left.Owner} left on while tests run; the queue waits until the test run ends.";
@@ -431,23 +494,41 @@ public sealed class EditorLock
     static bool TestsRunning(UnityLink? link) => ((link?.Heartbeat?.Phase ?? 0) & FmpPhases.RunningTests) != 0;
 
     // caller holds _gate; the agent that started play mode when nobody holds the lock now
-    (string SessionId, string Owner)? PlayLeftOn(UnityLink? link) => _holder is null && AgentPlaying(link) ? _playOwner : null;
+    (string Key, string Owner)? PlayLeftOn(UnityLink? link) => _holder is null && AgentPlaying(link) ? _playOwner : null;
 
-    // caller holds _gate; hands a free lock to the first queued session that has a call waiting
+    // caller holds _gate; hands a free lock to the first queued agent that has a call waiting and waits for nobody
     bool Pump(DateTimeOffset now)
     {
         if (_queue.Count == 0)
             return false;
+        var next = PassToSubagent();
         var link = _registry.GetLatestLink();
-        var owner = PlayLeftOn(link)?.SessionId;
-        var next = (owner is null ? null : _queue.Find(w => w.Pending is not null && w.SessionId == owner)) ?? _queue.Find(w => w.Pending is not null);
-        if (next is null || Blocker(link, now, next.SessionId, next.PlayOk) is not null)
+        var owner = PlayLeftOn(link)?.Key;
+        next ??= (owner is null ? null : _queue.Find(w => w.Pending is not null && w.Key == owner))
+                 ?? _queue.Find(w => w.Pending is not null && Unfinished(w.After).Count == 0);
+        if (next is null || Blocker(link, now, next.Key, next.PlayOk) is not null)
             return false;
         _queue.Remove(next);
         next.Granted = true;
-        Grant(next.SessionId, next.Owner, next.Task, link, now, fromQueue: true, next.Implicit);
+        Grant(next.Caller, next.Owner, next.Task, link, now, fromQueue: true, next.Implicit);
         next.Pending!.TrySetResult();
         return true;
+    }
+
+    // caller holds _gate; a main agent that waits for a subagent it spawned cannot use the editor, and the subagent
+    // would wait for its own parent: the claim passes to the subagent, ahead of the queue
+    Waiter? PassToSubagent()
+    {
+        if (_paused || _holder is not { Caller.IsSubagent: false, InFlight: 0 } parent || !_agents.MainAgentWaits(parent.SessionId))
+            return null;
+        var child = _queue.Find(w => w.Pending is not null && w.Caller.IsSubagent && w.SessionId == parent.SessionId && Unfinished(w.After).Count == 0);
+        if (child is null)
+            return null;
+        _handed[parent.Key] = child.Owner;
+        if (_playOwner?.Key == parent.Key)
+            _playOwner = (child.Key, child.Owner);
+        Free($"passed to its subagent {child.Owner}", pump: false);
+        return child;
     }
 
     // caller holds _gate; drops queued sessions that closed or stayed away past their ticket
@@ -457,14 +538,30 @@ public sealed class EditorLock
         var away = _options.Value.EditorLockWaitSlice + _options.Value.EditorLockTicketGrace;
         foreach (var waiter in _queue.ToArray())
         {
-            if (!_clients.IsOpen(waiter.SessionId) || (waiter.Pending is null && now - waiter.LastCall > away))
+            if (!_clients.IsOpen(waiter.SessionId))
             {
+                Drop(waiter);
+                changed = true;
+            }
+            else if (waiter.Pending is null && now - waiter.LastCall > away)
+            {
+                _lapsed[waiter.Key] = now;
+                Drop(waiter);
+                changed = true;
+            }
+            else if (now - waiter.Enqueued > _options.Value.EditorLockAfterGrace && Unfinished(waiter.After).Where(label => !IsKnown(label)).ToArray() is { Length: > 0 } unknown)
+            {
+                waiter.Failed = $"Nobody named {string.Join(", ", unknown.Select(u => $"'{u}'"))} showed up within {Age(_options.Value.EditorLockAfterGrace)}, so 'after' cannot be met. " +
+                                $"{KnownNames()} Call {AcquireName} again with a known name, or without 'after'.";
                 Drop(waiter);
                 changed = true;
             }
         }
         foreach (var ticket in _removed.Where(r => now - r.Value > TimeSpan.FromMinutes(10)).Select(r => r.Key).ToArray())
             _removed.Remove(ticket);
+        foreach (var key in _lapsed.Where(l => now - l.Value > TimeSpan.FromMinutes(10)).Select(l => l.Key).ToArray())
+            _lapsed.Remove(key);
+        _named.RemoveAll(n => n.Done is { } done && now - done > NameKept);
         return changed;
     }
 
@@ -484,26 +581,33 @@ public sealed class EditorLock
         waiter.Pending?.TrySetResult();
     }
 
-    public CallToolResult Release(string? sessionId)
+    public CallToolResult Release(LockCaller caller, bool done = false)
     {
         CallToolResult result;
+        var key = caller.Key;
         lock (_gate)
         {
             var now = _time.GetUtcNow();
             Maintain(now);
-            if (_holder is { } held && sessionId is not null && held.SessionId == sessionId)
+            if (done && key is not null)
+                Finish(n => n.Key == key, now);
+            if (_holder is { } held && held.Key == key)
             {
                 Free($"released by {held.Owner}");
-                result = Ok($"released after {Age(now - held.Acquired)}." + (PlayLeftOn(_registry.GetLatestLink())?.SessionId == sessionId
+                result = Ok($"released after {Age(now - held.Acquired)}." + (PlayLeftOn(_registry.GetLatestLink())?.Key == key
                     ? $" Play mode you started is still on: acquire again within {Age(_options.Value.EditorLockAbandonedPlayGrace)} (you go first) and exit it, or the next in line gets the editor with it."
                     : string.Empty));
             }
-            else if (_queue.Find(w => w.SessionId == sessionId) is { } waiting)
+            else if (_queue.Find(w => w.Key == key) is { } waiting)
             {
                 Drop(waiting);
                 result = Ok("you left the editor lock queue.");
             }
-            else if (_lastDropped is { } dropped && dropped.SessionId == sessionId)
+            else if (key is not null && _handed.Remove(key, out var child))
+            {
+                result = Ok($"nothing to release: your claim passed to your subagent {child} while you waited for it. Acquire again before more editor work.");
+            }
+            else if (_lastDropped is { } dropped && dropped.Key == key)
             {
                 _lastDropped = null;
                 result = Ok($"nothing to release: your claim was already freed ({dropped.Reason}). Acquire again before more editor work.");
@@ -516,30 +620,35 @@ public sealed class EditorLock
             {
                 result = Ok("nothing to release: nobody holds the lock.");
             }
+            if (done)
+                Pump(now);
         }
         _ = PublishAsync();
         return result;
     }
 
-    public CallToolResult Status(string? sessionId)
+    public CallToolResult Status(LockCaller caller, string? owner = null)
     {
+        var key = caller.Key;
         lock (_gate)
         {
             var now = _time.GetUtcNow();
             Maintain(now);
+            if (key is not null && Clip(owner) is { Length: > 0 } label)
+                Name(caller, label);
             var link = _registry.GetLatestLink();
-            var position = _queue.FindIndex(w => w.SessionId == sessionId) + 1;
+            var position = _queue.FindIndex(w => w.Key == key) + 1;
             string text;
             if (_holder is { } held)
             {
-                var mine = sessionId is not null && held.SessionId == sessionId;
+                var mine = held.Key == key;
                 if (mine)
                     held.AwaitingFirstCall = false;
                 text = (mine ? $"you hold it: \"{held.Task}\" since {Clock(held.Acquired)} ({Age(now - held.Acquired)}). " : Describe(held, now) + " ") + EditorLine(link);
             }
             else if (link?.ProjectRoot is { } root && ReadLiveOutsideLock(root, now) is { } outside)
                 text = DescribeOutside(outside, now) + " " + EditorLine(link);
-            else if (_lastDropped is { } dropped && dropped.SessionId == sessionId)
+            else if (_lastDropped is { } dropped && dropped.Key == key)
                 text = $"free. Your last claim was freed ({dropped.Reason}). " + EditorLine(link);
             else
                 text = "free. " + EditorLine(link);
@@ -547,7 +656,7 @@ public sealed class EditorLock
             if (_queue.Count > 0)
             {
                 text += $" Queue ({(_paused ? "paused by a person, " : string.Empty)}{_queue.Count} waiting): " +
-                        string.Join("; ", _queue.Select((w, i) => $"{i + 1}. {w.Owner} for \"{w.Task}\" ({Age(now - w.Enqueued)})"));
+                        string.Join("; ", _queue.Select((w, i) => $"{i + 1}. {w.Owner} for \"{w.Task}\" ({Age(now - w.Enqueued)}{(Unfinished(w.After) is { Count: > 0 } waits ? ", after " + string.Join(", ", waits) : string.Empty)})"));
                 if (position > 0)
                     text += $". You are number {position}, ticket \"{_queue[position - 1].Ticket}\".";
             }
@@ -555,7 +664,7 @@ public sealed class EditorLock
             result.StructuredContent = JsonSerializer.SerializeToElement(new Dictionary<string, object?>
             {
                 ["held"] = _holder is not null || _outside is not null,
-                ["mine"] = _holder is { } h && sessionId is not null && h.SessionId == sessionId,
+                ["mine"] = _holder is { } h && h.Key == key,
                 ["holder"] = _holder?.Owner ?? _outside?.Owner,
                 ["queue_paused"] = _paused,
                 ["position"] = position,
@@ -565,6 +674,7 @@ public sealed class EditorLock
                     ["owner"] = w.Owner,
                     ["task"] = w.Task,
                     ["waited_ms"] = (long)(now - w.Enqueued).TotalMilliseconds,
+                    ["after"] = Unfinished(w.After),
                 }).ToArray(),
             });
             return result;
@@ -576,7 +686,7 @@ public sealed class EditorLock
     #region Gate
 
     /// <summary>Why this session may not run the tool now, or null when it may.</summary>
-    public string? Refusal(string? sessionId, string toolName)
+    public string? Refusal(LockCaller caller, string toolName)
     {
         if (!_options.Value.EnforceEditorLock || Exempt.Contains(toolName) || IsReadOnly(toolName))
             return null;
@@ -585,7 +695,7 @@ public sealed class EditorLock
             var now = _time.GetUtcNow();
             if (Maintain(now))
                 _ = PublishAsync();
-            if (_holder is not { } held || (sessionId is not null && held.SessionId == sessionId))
+            if (_holder is not { } held || held.Key == caller.Key)
                 return null;
             return $"Refused '{toolName}': {Describe(held, now)} Until it is released only read-only tools run for other " +
                    $"sessions. Call {AcquireName} (it waits in line for its turn), or hand off (write a test case and stop).";
@@ -593,9 +703,9 @@ public sealed class EditorLock
     }
 
     /// <summary>The refusal as a tool result, or null when the session may run the tool.</summary>
-    public CallToolResult? RefusalResult(string? sessionId, string toolName)
+    public CallToolResult? RefusalResult(LockCaller caller, string toolName)
     {
-        if (Refusal(sessionId, toolName) is not { } text)
+        if (Refusal(caller, toolName) is not { } text)
             return null;
         lock (_gate)
             return ToolErrors.Create(ToolErrors.EditorLocked, text, retryAfterMs: 5000,
@@ -608,13 +718,13 @@ public sealed class EditorLock
     /// when granted; when the slice ends the tool does not run and the answer is the structured <c>lock_queued</c> error.
     /// Null means the tool may run. Read-only and exempt tools never wait.
     /// </summary>
-    public async Task<CallToolResult?> GateAsync(string? sessionId, string toolName, CancellationToken ct)
+    public async Task<CallToolResult?> GateAsync(LockCaller caller, string toolName, CancellationToken ct)
     {
-        if (!_options.Value.ImplicitLock || string.IsNullOrEmpty(sessionId))
-            return RefusalResult(sessionId, toolName);
+        if (!_options.Value.ImplicitLock || caller.Key is null)
+            return RefusalResult(caller, toolName);
         if (!_options.Value.EnforceEditorLock || Exempt.Contains(toolName) || IsReadOnly(toolName))
             return null;
-        var result = await AcquireAsync(sessionId, null, $"{toolName} (implicit)", wait: true, ticket: null, ct, toolName);
+        var result = await AcquireAsync(caller, null, $"{toolName} (implicit)", wait: true, ticket: null, ct, toolName);
         if (result.StructuredContent is { ValueKind: JsonValueKind.Object } body && body.TryGetProperty("acquired", out var granted) && granted.ValueKind == JsonValueKind.True)
             return null;
         result.IsError = true;
@@ -625,12 +735,12 @@ public sealed class EditorLock
     /// Counts a Unity call of the holder, so a long call never reads as idle. A read-only call renews the claim only while
     /// the editor works for the holder (<see cref="EditorWorks"/>): reading an idle editor is not using it.
     /// </summary>
-    public IDisposable Track(string? sessionId, string toolName)
+    public IDisposable Track(LockCaller caller, string toolName)
     {
         var reads = !_options.Value.EditorLockReadOnlyKeepsAlive && IsReadOnly(toolName);
         lock (_gate)
         {
-            if (_holder is not { } held || sessionId is null || held.SessionId != sessionId)
+            if (_holder is not { } held || held.Key != caller.Key)
                 return NoCall.Instance;
             var now = _time.GetUtcNow();
             var renews = !reads || EditorWorks(held, _registry.GetLatestLink(), now);
@@ -643,15 +753,20 @@ public sealed class EditorLock
         }
     }
 
-    /// <summary>What the holder of an explicit claim past <see cref="Cap"/> is told with every Unity tool result, or null.</summary>
-    public string? HolderNotice(string? sessionId)
+    /// <summary>
+    /// What a caller is told with a Unity tool result, or null: once, that its claim passed to a subagent it waited for;
+    /// with every result, that its explicit claim is past <see cref="Cap"/>.
+    /// </summary>
+    public string? HolderNotice(LockCaller caller)
     {
-        if (!_options.Value.EditorLockCapNudge)
-            return null;
         lock (_gate)
         {
+            if (caller.Key is { } key && _handed.Remove(key, out var child))
+                return $"Editor lock: your claim passed to your subagent {child} while you waited for it. {AcquireName} again before more editor work.";
+            if (!_options.Value.EditorLockCapNudge)
+                return null;
             var now = _time.GetUtcNow();
-            if (_holder is not { Implicit: false } held || held.SessionId != sessionId || now - held.Acquired <= Cap)
+            if (_holder is not { Implicit: false } held || held.Key != caller.Key || now - held.Acquired <= Cap)
                 return null;
             if (now - held.NoticeLogged >= NoticeLogBeat)
             {
@@ -729,12 +844,92 @@ public sealed class EditorLock
     {
         lock (_gate)
         {
+            var now = _time.GetUtcNow();
             foreach (var waiter in _queue.Where(w => w.SessionId == sessionId).ToArray())
                 Drop(waiter);
+            Finish(n => n.SessionId == sessionId, now);
+            _handed.Remove(sessionId);
             if (_holder is { } held && held.SessionId == sessionId)
                 Free("its MCP session closed", stopPlay: true);
+            else
+                Pump(now);
         }
         _ = PublishAsync();
+    }
+
+    // a subagent that ended without releasing would keep its claim until the idle timeout
+    void OnAgentEnded(string sessionId, string agentId)
+    {
+        var key = new LockCaller(sessionId, agentId).Key;
+        lock (_gate)
+        {
+            var now = _time.GetUtcNow();
+            foreach (var waiter in _queue.Where(w => w.Key == key).ToArray())
+                Drop(waiter);
+            Finish(n => n.Key == key, now);
+            if (_holder is { } held && held.Key == key)
+                Free("its subagent ended", stopPlay: true);
+            else
+                Pump(now);
+        }
+        _ = PublishAsync();
+    }
+
+    // a client that opened a new MCP session (a reconnect) is the same agents: its claims move with it instead of
+    // blocking it behind its own old session until that one times out
+    void OnSessionReplaced(string old, string current)
+    {
+        string Moved(string key) => key == old ? current : key.StartsWith(old + "#", StringComparison.Ordinal) ? current + key[old.Length..] : key;
+        lock (_gate)
+        {
+            var now = _time.GetUtcNow();
+            foreach (var waiter in _queue.Where(w => w.SessionId == old).ToArray())
+            {
+                if (_queue.Exists(w => w.Key == Moved(waiter.Key)))
+                    Drop(waiter);
+                else
+                    waiter.Caller = waiter.Caller with { SessionId = current };
+            }
+            foreach (var named in _named.Where(n => n.SessionId == old))
+            {
+                named.Key = Moved(named.Key);
+                named.SessionId = current;
+            }
+            if (_playOwner is { } play)
+                _playOwner = (Moved(play.Key), play.Owner);
+            if (_lastDropped is { } dropped)
+                _lastDropped = dropped with { Key = Moved(dropped.Key) };
+            if (_holder is { } held && held.SessionId == old)
+            {
+                DeleteMirror(held);
+                held.Caller = held.Caller with { SessionId = current };
+                WriteMirror(held, now);
+                _logger.LogInformation("Editor lock of {Owner} moved from session {Old} to {Current}: the client reconnected", held.Owner, old, current);
+            }
+        }
+        _ = PublishAsync();
+    }
+
+    /// <summary>Lets one queued agent stop waiting for the agents it named with 'after' (a person's choice in the editor). Returns who.</summary>
+    public string SkipAfter(string ticket)
+    {
+        string skipped;
+        lock (_gate)
+        {
+            if (_queue.Find(w => w.Ticket == ticket) is { } waiter)
+            {
+                waiter.After = [];
+                skipped = waiter.Owner;
+                _logger.LogInformation("{Owner} no longer waits for other agents: let through from the Unity editor", waiter.Owner);
+                Pump(_time.GetUtcNow());
+            }
+            else
+            {
+                skipped = "nothing";
+            }
+        }
+        _ = PublishAsync();
+        return skipped;
     }
 
     /// <summary>Removes one session from the queue (a person's choice in the editor). Returns who was removed.</summary>
@@ -790,11 +985,11 @@ public sealed class EditorLock
             else if (_playOwner is null && AgentPlaying(link))
             {
                 if (_holder is { } held)
-                    _playOwner = (held.SessionId, held.Owner);
+                    _playOwner = (held.Key, held.Owner);
                 else
                 {
                     // the claim of the agent that started it may have ended while the editor reloaded
-                    _playOwner = _lastDropped is { } dropped && now - dropped.At < PlayHandoff ? (dropped.SessionId, dropped.Owner) : (string.Empty, "an agent");
+                    _playOwner = _lastDropped is { } dropped && now - dropped.At < PlayHandoff ? (dropped.Key, dropped.Owner) : (string.Empty, "an agent");
                     _playLeftAt = now;
                 }
             }
@@ -839,9 +1034,13 @@ public sealed class EditorLock
                     Owner = w.Owner,
                     Task = w.Task,
                     ClientName = w.ClientName,
-                    SessionId = w.SessionId,
+                    // one value per agent: the editor keys its display by it
+                    SessionId = w.Key,
                     WaitingSinceUnixMs = w.Enqueued.ToUnixTimeMilliseconds(),
                     Attached = w.Pending is not null,
+                    After = string.Join(", ", Unfinished(w.After)),
+                    AgentType = w.Caller.AgentType,
+                    Subagent = w.Caller.IsSubagent,
                 }).ToArray(),
                 QueuePaused = _paused,
                 QueueHeldByPlayMode = _queue.Count > 0 && _holder is null && PlayLeftOn(link) is null
@@ -865,7 +1064,10 @@ public sealed class EditorLock
                 Task = held.Task,
                 ClientName = held.ClientName,
                 ClientVersion = held.ClientVersion,
-                SessionId = held.SessionId,
+                SessionId = held.Key,
+                AgentType = held.Caller.AgentType,
+                Subagent = held.Caller.IsSubagent,
+                Hooked = _agents.Reports(held.SessionId),
                 AcquiredUnixMs = held.Acquired.ToUnixTimeMilliseconds(),
                 LastActivityUnixMs = held.LastActivity.ToUnixTimeMilliseconds(),
                 ExpiresUnixMs = held.InFlight > 0 ? 0
@@ -892,6 +1094,22 @@ public sealed class EditorLock
 
     /// <summary>Sends the current state to every linked editor that shows it, when it changed (or to one link, always).</summary>
     public async Task PublishAsync(UnityLink? only = null)
+    {
+        // one at a time: two passes that ran side by side could deliver the older state last, and the editor kept it
+        await _publishing.WaitAsync();
+        try
+        {
+            await PublishNowAsync(only);
+        }
+        finally
+        {
+            _publishing.Release();
+        }
+    }
+
+    readonly SemaphoreSlim _publishing = new(1, 1);
+
+    async Task PublishNowAsync(UnityLink? only)
     {
         (string ConnectionId, string Reason)? stop;
         lock (_gate)
@@ -949,7 +1167,7 @@ public sealed class EditorLock
     }
 
     // caller holds _gate; the play session the holder started itself
-    bool InOwnPlay(Holder held, UnityLink? link) => _playOwner?.SessionId == held.SessionId && AgentPlaying(link);
+    bool InOwnPlay(Holder held, UnityLink? link) => _playOwner?.Key == held.Key && AgentPlaying(link);
 
     // caller holds _gate; a compile, a reload, an import, a held main thread (a player build), a test run or the holder's
     // own play session: reading the editor then is part of the burst
@@ -998,17 +1216,17 @@ public sealed class EditorLock
 
     // caller holds _gate
     // stopPlay: the holder is gone for good, so play mode it started is stopped instead of left to block the queue
-    void Free(string reason, bool stopPlay = false)
+    void Free(string reason, bool stopPlay = false, bool pump = true)
     {
         if (_holder is not { } held)
             return;
         var now = _time.GetUtcNow();
         _holder = null;
-        _lastDropped = (held.SessionId, reason, held.Implicit, held.Owner, now);
+        _lastDropped = (held.Key, reason, held.Implicit, held.Owner, now);
         DeleteMirror(held);
         _logger.LogInformation("Editor lock of {Owner} ended: {Reason}", held.Owner, reason);
         var link = _registry.GetLatestLink();
-        if (_playOwner?.SessionId == held.SessionId && AgentPlaying(link))
+        if (_playOwner?.Key == held.Key && AgentPlaying(link))
         {
             _playLeftAt = now;
             if (stopPlay && !TestsRunning(link))
@@ -1017,8 +1235,92 @@ public sealed class EditorLock
                 _logger.LogInformation("Stopping play mode {Owner} left on", held.Owner);
             }
         }
-        Pump(now);
+        if (pump)
+            Pump(now);
     }
+
+    #endregion
+
+    #region Names
+
+    static readonly TimeSpan NameKept = TimeSpan.FromMinutes(30);
+
+    // caller holds _gate; an agent that says its label can be waited for with 'after'
+    void Name(LockCaller caller, string label)
+    {
+        if (_named.Exists(n => n.Done is null && n.Key == caller.Key && Same(n.Label, label)))
+            return;
+        _named.Add(new Named { Label = label, Key = caller.Key!, SessionId = caller.SessionId! });
+    }
+
+    // caller holds _gate; these agents are done: whoever waits for them may go
+    void Finish(Predicate<Named> which, DateTimeOffset now)
+    {
+        foreach (var named in _named.Where(n => n.Done is null && which(n)))
+            named.Done = now;
+    }
+
+    // caller holds _gate; the labels of 'after' whose agents have not finished
+    List<string> Unfinished(string[] after)
+    {
+        var open = new List<string>();
+        foreach (var label in after)
+        {
+            var named = _named.FindAll(n => Same(n.Label, label));
+            if (named.Count > 0 ? named.Exists(n => n.Done is null) : _agents.TypeState(label) != AgentDirectory.Known.Ended)
+                open.Add(label);
+        }
+        return open;
+    }
+
+    // caller holds _gate
+    bool IsKnown(string label) => _named.Exists(n => Same(n.Label, label)) || _agents.TypeState(label) != AgentDirectory.Known.Unknown;
+
+    // caller holds _gate
+    string KnownNames()
+    {
+        var names = _named.Where(n => n.Done is null).Select(n => n.Label).Concat(_agents.LiveTypes()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        return names.Length == 0 ? "No agent has said its name yet." : $"Known now: {string.Join(", ", names)}.";
+    }
+
+    // caller holds _gate; why this 'after' can never be met, or null
+    string? AfterProblem(string key, string[] after)
+    {
+        foreach (var label in after)
+        {
+            var named = _named.FindAll(n => n.Done is null && Same(n.Label, label));
+            if (named.Exists(n => n.Key == key))
+                return $"'after' names yourself ({label}): you would wait for your own work to finish.";
+            if (named.Find(n => WaitsFor(n.Key, key, [])) is { } loop)
+                return $"'after' would never be met: {label} already waits for you to finish. One of you must go first.";
+        }
+        return null;
+    }
+
+    // caller holds _gate; true when the queued agent 'from' waits, directly or through others, for the agent 'target'
+    bool WaitsFor(string from, string target, HashSet<string> seen)
+    {
+        if (!seen.Add(from) || _queue.Find(w => w.Key == from) is not { } waiter)
+            return false;
+        foreach (var named in _named.Where(n => n.Done is null && waiter.After.Any(label => Same(n.Label, label))))
+            if (named.Key == target || WaitsFor(named.Key, target, seen))
+                return true;
+        return false;
+    }
+
+    // caller holds _gate
+    string? AfterNote(string[] after) => Unfinished(after) is { Count: > 0 } open
+        ? $"you wait for {string.Join(", ", open)} to finish ('after'); nobody is held back by you meanwhile."
+        : null;
+
+    static string[] Labels(string[]? after)
+        => (after ?? []).Select(Clip).Where(label => label.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+    static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    string DefaultOwner(LockCaller caller, Implementation? client)
+        => caller.IsSubagent ? $"{(caller.AgentType.Length > 0 ? caller.AgentType : "subagent")} {Short(caller.AgentId)}"
+            : string.IsNullOrEmpty(client?.Name) ? "agent" : client!.Name;
 
     #endregion
 
@@ -1106,7 +1408,7 @@ public sealed class EditorLock
                 ["acquired"] = holder.Acquired.ToOffset(_time.LocalTimeZone.GetUtcOffset(holder.Acquired)).ToString("yyyy-MM-ddTHH:mm:sszzz"),
                 ["heartbeat"] = now.ToUnixTimeSeconds(),
                 ["matrix"] = true,
-                ["session"] = holder.SessionId,
+                ["session"] = holder.Key,
                 ["client"] = holder.ClientName,
             }, FileJson);
             File.WriteAllText(Path.Combine(directory, "lock.json"), json + "\n");
@@ -1119,7 +1421,7 @@ public sealed class EditorLock
 
     void DeleteMirror(Holder holder)
     {
-        if (holder.Root is { } root && ReadFile(root) is { Matrix: true } file && file.Session == holder.SessionId)
+        if (holder.Root is { } root && ReadFile(root) is { Matrix: true } file && file.Session == holder.Key)
             DeleteDirectory(root);
     }
 
@@ -1164,7 +1466,8 @@ public sealed class EditorLock
         var over = age > Cap ? ", past the 15-minute cap" : string.Empty;
         var client = $"{held.ClientName} {held.ClientVersion}".Trim();
         var busy = held.InFlight > 0 ? $"{held.InFlight} call(s) running" : $"last call {Age(now - held.LastActivity)} ago";
-        return $"held by {held.Owner} ({(client.Length > 0 ? client + ", " : string.Empty)}session {Short(held.SessionId)}) for " +
+        var subagent = held.Caller.IsSubagent ? $", subagent {Short(held.Caller.AgentId)}" : string.Empty;
+        return $"held by {held.Owner} ({(client.Length > 0 ? client + ", " : string.Empty)}session {Short(held.SessionId)}{subagent}) for " +
                $"\"{held.Task}\" since {Clock(held.Acquired)} ({Age(age)}{over}; {busy}).";
     }
 
@@ -1177,7 +1480,7 @@ public sealed class EditorLock
     }
 
     // caller holds _gate
-    string EditorLine(UnityLink? link) => AgentPlaying(link) && _playOwner is { } left && left.SessionId != _holder?.SessionId
+    string EditorLine(UnityLink? link) => AgentPlaying(link) && _playOwner is { } left && left.Key != _holder?.Key
         ? $"Editor: in play mode left on by {left.Owner} (an agent); exit play mode first, before your own work."
         : link switch
     {
@@ -1215,6 +1518,11 @@ public sealed class EditorLock
 
     static string? Text(IDictionary<string, JsonElement>? args, string name)
         => args is not null && args.TryGetValue(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    static string[]? Texts(IDictionary<string, JsonElement>? args, string name)
+        => args is not null && args.TryGetValue(name, out var value) && value.ValueKind == JsonValueKind.Array
+            ? value.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!).ToArray()
+            : null;
 
     static JsonElement Schema(string json) => JsonSerializer.Deserialize<JsonElement>(json);
 

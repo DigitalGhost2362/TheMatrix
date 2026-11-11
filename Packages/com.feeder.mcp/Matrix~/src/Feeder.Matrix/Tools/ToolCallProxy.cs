@@ -68,7 +68,8 @@ public sealed class ServerTools(
     public bool Handles(string? name)
         => name == EditorHealth.ToolName || EditorLock.IsLockTool(name) || (name == ToolCallName && options.Value.EnableToolCallProxy);
 
-    public async ValueTask<CallToolResult> CallAsync(CallToolRequestParams request, string? sessionId, IUnityBackend backend, CancellationToken ct)
+    // aborted: the caller's HTTP request went away. It ends a wait in the lock queue; a Unity call already running finishes.
+    public async ValueTask<CallToolResult> CallAsync(CallToolRequestParams request, LockCaller caller, IUnityBackend backend, CancellationToken ct, CancellationToken aborted = default)
     {
         if (request.Name == EditorHealth.ToolName)
         {
@@ -84,22 +85,28 @@ public sealed class ServerTools(
             return result;
         }
         if (EditorLock.IsLockTool(request.Name))
-            return await editorLock.CallAsync(request, sessionId, ct);
-        return await ProxyAsync(request, sessionId, backend, ct);
+        {
+            using var wait = CancellationTokenSource.CreateLinkedTokenSource(ct, aborted);
+            return await editorLock.CallAsync(request, caller, wait.Token);
+        }
+        return await ProxyAsync(request, caller, backend, ct, aborted);
     }
 
     /// <summary>Runs a Unity tool for a session, unless another session or a person holds the editor lock.</summary>
-    public async ValueTask<CallToolResult> CallUnityAsync(CallToolRequestParams request, string? sessionId, IUnityBackend backend, CancellationToken ct)
+    public async ValueTask<CallToolResult> CallUnityAsync(CallToolRequestParams request, LockCaller caller, IUnityBackend backend, CancellationToken ct, CancellationToken aborted = default)
     {
-        if (await editorLock.GateAsync(sessionId, request.Name, ct) is { } refusal)
+        CallToolResult? refusal;
+        using (var wait = CancellationTokenSource.CreateLinkedTokenSource(ct, aborted))
+            refusal = await editorLock.GateAsync(caller, request.Name, wait.Token);
+        if (refusal is not null)
         {
-            logger.LogInformation("{Tool} refused for session {SessionId}: editor lock", request.Name, sessionId);
+            logger.LogInformation("{Tool} refused for session {SessionId}: editor lock", request.Name, caller.Key);
             return refusal;
         }
         CallToolResult result;
-        using (editorLock.Track(sessionId, request.Name))
+        using (editorLock.Track(caller, request.Name))
             result = await backend.CallToolAsync(request, ct);
-        if (editorLock.HolderNotice(sessionId) is { } notice)
+        if (editorLock.HolderNotice(caller) is { } notice)
         {
             result.Content = [.. result.Content ?? [], Block(notice)];
             if (result.StructuredContent is { ValueKind: JsonValueKind.Object } body)
@@ -112,8 +119,9 @@ public sealed class ServerTools(
         return result;
     }
 
-    async ValueTask<CallToolResult> ProxyAsync(CallToolRequestParams request, string? sessionId, IUnityBackend backend, CancellationToken ct)
+    async ValueTask<CallToolResult> ProxyAsync(CallToolRequestParams request, LockCaller caller, IUnityBackend backend, CancellationToken ct, CancellationToken aborted)
     {
+        var sessionId = caller.SessionId;
         var args = request.Arguments;
         if (args is null || !args.TryGetValue("name", out var nameElement) || nameElement.ValueKind != JsonValueKind.String)
             return Invalid("tool-call needs 'name', the Unity tool to call, as a string.");
@@ -160,7 +168,7 @@ public sealed class ServerTools(
         CallToolResult result;
         try
         {
-            result = await CallUnityAsync(new CallToolRequestParams { Name = name, Arguments = targetArguments }, sessionId, backend, ct);
+            result = await CallUnityAsync(new CallToolRequestParams { Name = name, Arguments = targetArguments }, caller, backend, ct, aborted);
         }
         catch (McpProtocolException e)
         {

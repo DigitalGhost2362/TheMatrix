@@ -17,10 +17,16 @@ namespace Feeder.MCP.Editor.API.TestRunner
 
         public enum SlotState { Free, Busy, Stale }
 
+        // kept in memory too: the heartbeat reads it on every editor tick
+        static bool? _executing;
         public static bool Executing
         {
-            get => SessionState.GetBool(ExecutingKey, false);
-            set => SessionState.SetBool(ExecutingKey, value);
+            get => _executing ??= SessionState.GetBool(ExecutingKey, false);
+            set
+            {
+                _executing = value;
+                SessionState.SetBool(ExecutingKey, value);
+            }
         }
 
         public static void Begin(string requestId)

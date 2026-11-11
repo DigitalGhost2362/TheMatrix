@@ -17,6 +17,7 @@ public sealed class EditorLockTests : IDisposable
     private readonly LockHub _hub = new();
     private readonly UnityLinkRegistry _registry = new();
     private readonly McpClientTracker _clients;
+    private readonly AgentDirectory _agents;
     private readonly MatrixOptions _options = new();
     private readonly EditorLock _lock;
     private readonly string _root = Path.Combine(Path.GetTempPath(), "matrix-lock-" + Guid.NewGuid().ToString("N"));
@@ -26,7 +27,8 @@ public sealed class EditorLockTests : IDisposable
     {
         Directory.CreateDirectory(Path.Combine(_root, "Temp"));
         _clients = new McpClientTracker(_hub, _time, NullLogger<McpClientTracker>.Instance);
-        _lock = new EditorLock(_registry, _clients, _hub, _time, Options.Create(_options), NullLogger<EditorLock>.Instance);
+        _agents = new AgentDirectory(_time, NullLogger<AgentDirectory>.Instance);
+        _lock = new EditorLock(_registry, _clients, _agents, _hub, _time, Options.Create(_options), NullLogger<EditorLock>.Instance);
         Open("sid-a", "claude-code");
         Open("sid-b", "codex");
         Open("sid-c", "gemini");
@@ -1438,6 +1440,318 @@ public sealed class EditorLockTests : IDisposable
         private DateTimeOffset _now = new(2026, 10, 5, 0, 0, 0, TimeSpan.Zero);
         public override DateTimeOffset GetUtcNow() => _now;
         public void Advance(TimeSpan delta) => _now += delta;
+    }
+
+    private static LockCaller Sub(string sessionId, string agentId, string type = "general-purpose") => new(sessionId, agentId, type);
+
+    private Task<CallToolResult> Wait(LockCaller caller, string? owner, params string[] after)
+        => _lock.AcquireAsync(caller, owner, "task of " + (owner ?? caller.Key), true, null, default, after: after);
+
+    private void Hook(string name, string session, string? toolUseId = null, string? tool = null, string? agentId = null, string? agentType = null)
+        => _agents.OnHook(JsonSerializer.SerializeToElement(new Dictionary<string, string?>
+        {
+            ["hook_event_name"] = name, ["session_id"] = session, ["tool_use_id"] = toolUseId, ["tool_name"] = tool,
+            ["agent_id"] = agentId, ["agent_type"] = agentType,
+        }.Where(pair => pair.Value is not null).ToDictionary(pair => pair.Key, pair => pair.Value)));
+
+    // a tool call as Claude Code makes it: the hook first, then the call with the same tool use id
+    private LockCaller Call(string mcpSession, string claudeSession, string toolUseId, string? agentId = null, string? agentType = null)
+    {
+        Hook("PreToolUse", claudeSession, toolUseId, "mcp__Feeder-MCP__script-execute", agentId, agentType);
+        return _agents.Resolve(mcpSession, toolUseId);
+    }
+
+    [Fact]
+    public void Tool_use_id_names_the_subagent_and_an_unknown_one_the_session()
+    {
+        var main = Call("sid-a", "claude-1", "use-1");
+        var sub = Call("sid-a", "claude-1", "use-2", "agent-1", "Explore");
+
+        Assert.Equal(new LockCaller("sid-a"), main);
+        Assert.Equal(new LockCaller("sid-a", "agent-1", "Explore"), sub);
+        Assert.NotEqual(main.Key, sub.Key);
+        Assert.Equal(new LockCaller("sid-a"), _agents.Resolve("sid-a", "never-seen"));
+        Assert.Equal(new LockCaller("sid-a"), _agents.Resolve("sid-a", null));
+        Assert.True(_agents.Reports("sid-a"));
+        Assert.False(_agents.Reports("sid-b"));
+    }
+
+    [Fact]
+    public async Task Subagent_does_not_share_the_claim_of_its_session()
+    {
+        Link();
+        _lock.Acquire("sid-a", "main", "compile");
+        var sub = Sub("sid-a", "agent-1");
+
+        Assert.Null(_lock.Refusal("sid-a", "script-execute"));
+        Assert.NotNull(_lock.Refusal(sub, "script-execute"));
+        Assert.False(_lock.Status(sub).StructuredContent!.Value.GetProperty("mine").GetBoolean());
+
+        var waiting = Wait(sub, null);
+        var state = _lock.Snapshot();
+        Assert.False(waiting.IsCompleted);
+        Assert.Equal(["general-purpose agent-1"], Order(state));
+        Assert.True(state.Waiting[0].Subagent);
+        Assert.NotEqual(state.SessionId, state.Waiting[0].SessionId);
+        Assert.Equal(1, _lock.Status(sub).StructuredContent!.Value.GetProperty("position").GetInt32());
+
+        _lock.Release("sid-a");
+        Assert.StartsWith("acquired", Text(await Done(waiting)));
+        Assert.True(_lock.Snapshot().Subagent);
+        Assert.NotNull(_lock.Refusal("sid-a", "script-execute"));
+        Assert.Null(_lock.Refusal(sub, "script-execute"));
+    }
+
+    [Fact]
+    public async Task Two_subagents_of_one_session_take_turns()
+    {
+        Link();
+        var first = Sub("sid-a", "agent-1");
+        var second = Sub("sid-a", "agent-2");
+        Assert.StartsWith("acquired", Text(await Done(Wait(first, "coder"))));
+
+        var waiting = Wait(second, "playtest");
+        Assert.False(waiting.IsCompleted);
+        Assert.Equal(["playtest"], Order(_lock.Snapshot()));
+
+        _lock.Release(first);
+        Assert.StartsWith("acquired", Text(await Done(waiting)));
+        Assert.Equal("playtest", _lock.Snapshot().Owner);
+    }
+
+    [Fact]
+    public async Task Parent_that_waits_for_its_subagent_passes_the_claim_ahead_of_the_queue()
+    {
+        Link();
+        _lock.Acquire(Call("sid-a", "claude-1", "use-1"), "main", "compile");
+        var other = Wait("sid-b");
+        Hook("PreToolUse", "claude-1", "spawn-1", "Agent");
+
+        var sub = Call("sid-a", "claude-1", "use-2", "agent-1", "playtester");
+        var granted = await Done(Wait(sub, null));
+
+        Assert.StartsWith("acquired", Text(granted));
+        Assert.Equal("playtester agent-1", _lock.Snapshot().Owner);
+        Assert.False(other.IsCompleted);
+        Assert.Contains("passed to your subagent playtester agent-1", _lock.HolderNotice("sid-a"));
+        Assert.Null(_lock.HolderNotice("sid-a"));
+
+        _lock.Release(sub);
+        Assert.StartsWith("acquired", Text(await Done(other)));
+    }
+
+    [Fact]
+    public async Task Parent_that_does_not_wait_keeps_its_claim()
+    {
+        Link();
+        _lock.Acquire(Call("sid-a", "claude-1", "use-1"), "main", "compile");
+        Hook("PreToolUse", "claude-1", "spawn-1", "Agent");
+        Hook("PostToolUse", "claude-1", "spawn-1", "Agent");
+
+        var waiting = Wait(Call("sid-a", "claude-1", "use-2", "agent-1", "playtester"), null);
+        await _lock.TickAsync();
+
+        Assert.False(waiting.IsCompleted);
+        Assert.Equal("main", _lock.Snapshot().Owner);
+    }
+
+    [Fact]
+    public async Task Subagent_that_ends_frees_its_claim_and_leaves_the_queue()
+    {
+        Link();
+        var holder = Call("sid-a", "claude-1", "use-1", "agent-1", "coder");
+        var queued = Call("sid-a", "claude-1", "use-2", "agent-2", "reviewer");
+        await Done(Wait(holder, null));
+        var gone = Wait(queued, null);
+        var next = Wait("sid-b");
+
+        Hook("SubagentStop", "claude-1", agentId: "agent-2", agentType: "reviewer");
+        Assert.Equal(["codex"], Order(_lock.Snapshot()));
+        Assert.True((await Done(gone)).IsError);
+
+        Hook("SubagentStop", "claude-1", agentId: "agent-1", agentType: "coder");
+        Assert.StartsWith("acquired", Text(await Done(next)));
+    }
+
+    [Fact]
+    public async Task After_waits_for_the_named_agent_to_finish_and_holds_nobody_back()
+    {
+        Link();
+        var coder = Sub("sid-a", "agent-1");
+        var playtest = Sub("sid-a", "agent-2");
+        _lock.Status(coder, "coder");
+
+        var waiting = Wait(playtest, "playtest", "coder");
+        var state = _lock.Snapshot();
+        Assert.False(waiting.IsCompleted);
+        Assert.False(state.Held);
+        Assert.Equal("coder", state.Waiting[0].After);
+        Assert.Contains("after coder", Text(_lock.Status("sid-b")));
+
+        // the editor is free for everyone else meanwhile, and one claim of the coder is not the end of its work
+        Assert.StartsWith("acquired", Text(await Done(Wait(coder, "coder"))));
+        _lock.Release(coder);
+        Assert.StartsWith("acquired", Text(_lock.Acquire("sid-b", "other", "unrelated")));
+        _lock.Release("sid-b");
+        Assert.False(waiting.IsCompleted);
+
+        _lock.Release(coder, done: true);
+        Assert.StartsWith("acquired", Text(await Done(waiting)));
+        Assert.Equal("playtest", _lock.Snapshot().Owner);
+    }
+
+    [Fact]
+    public async Task After_takes_a_subagent_type_and_ends_with_the_subagent()
+    {
+        Link();
+        Hook("SubagentStart", "claude-1", agentId: "agent-1", agentType: "coder");
+
+        var waiting = Wait("sid-b", "playtest", "coder");
+        await _lock.TickAsync();
+        Assert.False(waiting.IsCompleted);
+
+        Hook("SubagentStop", "claude-1", agentId: "agent-1", agentType: "coder");
+        await _lock.TickAsync();
+        Assert.StartsWith("acquired", Text(await Done(waiting)));
+    }
+
+    [Fact]
+    public async Task After_a_finished_agent_does_not_wait()
+    {
+        Link();
+        var coder = Sub("sid-a", "agent-1");
+        _lock.Acquire(coder, "coder", "compile");
+        _lock.Release(coder, done: true);
+
+        Assert.StartsWith("acquired", Text(await Done(Wait("sid-b", "playtest", "coder"))));
+    }
+
+    [Fact]
+    public async Task After_a_name_nobody_uses_fails_when_the_grace_ends()
+    {
+        Link();
+        _lock.Status("sid-a", "coder");
+        var waiting = Wait("sid-b", "playtest", "ghost");
+
+        _time.Advance(_options.EditorLockAfterGrace - TimeSpan.FromSeconds(1));
+        await _lock.TickAsync();
+        Assert.False(waiting.IsCompleted);
+
+        _time.Advance(TimeSpan.FromSeconds(2));
+        await _lock.TickAsync();
+        var failed = await Done(waiting);
+        Assert.True(failed.IsError);
+        Assert.Contains("Nobody named 'ghost'", Text(failed));
+        Assert.Contains("Known now: coder", Text(failed));
+        Assert.Empty(_lock.Snapshot().Waiting);
+    }
+
+    [Fact]
+    public async Task After_refuses_yourself_and_a_circle()
+    {
+        Link();
+        _lock.Status("sid-a", "coder");
+        _lock.Status("sid-b", "playtest");
+
+        Assert.Contains("names yourself", Text(await Done(Wait("sid-a", "coder", "coder"))));
+
+        var first = Wait("sid-a", "coder", "playtest");
+        var circle = await Done(Wait("sid-b", "playtest", "coder"));
+        Assert.True(circle.IsError);
+        Assert.Contains("already waits for you", Text(circle));
+        Assert.False(first.IsCompleted);
+    }
+
+    [Fact]
+    public async Task Person_lets_a_waiter_skip_after()
+    {
+        Link();
+        _lock.Status("sid-a", "coder");
+        var waiting = Wait("sid-b", "playtest", "coder");
+        var ticket = _lock.Snapshot().Waiting[0].Ticket;
+
+        Assert.Equal("playtest", _lock.SkipAfter(ticket));
+        Assert.StartsWith("acquired", Text(await Done(waiting)));
+        Assert.Equal("nothing", _lock.SkipAfter("no-such-ticket"));
+    }
+
+    [Fact]
+    public async Task Closed_session_counts_as_finished_for_after()
+    {
+        Link();
+        _lock.Status("sid-a", "coder");
+        var waiting = Wait("sid-b", "playtest", "coder");
+
+        await _clients.EndAsync("sid-a", _entries["sid-a"]);
+        Assert.StartsWith("acquired", Text(await Done(waiting)));
+    }
+
+    [Fact]
+    public async Task Second_call_of_a_waiting_agent_waits_with_the_first()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        var first = Wait("sid-b");
+        var second = Wait("sid-b");
+
+        Assert.False(first.IsCompleted);
+        Assert.False(second.IsCompleted);
+        Assert.Single(_lock.Snapshot().Waiting);
+
+        _lock.Release("sid-a");
+        Assert.StartsWith("acquired", Text(await Done(first)));
+        Assert.StartsWith("acquired", Text(await Done(second)));
+    }
+
+    [Fact]
+    public async Task One_of_two_waiting_calls_cancelled_keeps_the_place()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        using var cancel = new CancellationTokenSource();
+        var cancelled = Wait("sid-b", ct: cancel.Token);
+        var kept = Wait("sid-b");
+
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Done(cancelled));
+        Assert.True(_lock.Snapshot().Waiting[0].Attached);
+
+        _lock.Release("sid-a");
+        Assert.StartsWith("acquired", Text(await Done(kept)));
+    }
+
+    [Fact]
+    public async Task Agent_whose_place_lapsed_is_told_when_it_joins_again()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        _options.EditorLockWaitSlice = TimeSpan.FromMilliseconds(100);
+        var ticket = Ticket(await Done(Wait("sid-b")));
+
+        _time.Advance(_options.EditorLockWaitSlice + _options.EditorLockTicketGrace + TimeSpan.FromSeconds(1));
+        await _lock.TickAsync();
+        Assert.Empty(_lock.Snapshot().Waiting);
+
+        Assert.Contains("Your earlier place lapsed", Text(await Done(Wait("sid-b", ticket))));
+        Assert.DoesNotContain("lapsed", Text(await Done(Wait("sid-b", ticket))));
+    }
+
+    [Fact]
+    public async Task Client_that_reconnects_keeps_its_claim_and_its_place()
+    {
+        Link();
+        Open("sid-a2", "claude-code");
+        _lock.Acquire(Call("sid-a", "claude-1", "use-1"), "main", "compile");
+        var sub = Wait(Call("sid-a", "claude-1", "use-2", "agent-1", "playtester"), null);
+
+        // the same client, on a new MCP session
+        var again = Call("sid-a2", "claude-1", "use-3");
+
+        Assert.Null(_lock.Refusal(again, "script-execute"));
+        Assert.True(_lock.Status(again).StructuredContent!.Value.GetProperty("mine").GetBoolean());
+        Assert.StartsWith("released", Text(_lock.Release(again)));
+        Assert.StartsWith("acquired", Text(await Done(sub)));
+        Assert.Null(_lock.Refusal(Call("sid-a2", "claude-1", "use-4", "agent-1", "playtester"), "script-execute"));
     }
 
     private sealed class LockHub : IHubContext<FmpHub, IFmpUnityClient>

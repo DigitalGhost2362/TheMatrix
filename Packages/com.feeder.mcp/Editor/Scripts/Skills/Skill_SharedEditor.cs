@@ -94,11 +94,14 @@ Three tools, served by the Matrix server itself (they answer even while Unity re
   first-come queue** for about 50 seconds and answers `acquired` the moment it is your turn; if your
   turn has not come it answers `queued` (not an error) with your position, the holder and a `ticket`:
   **call acquire again at once with that `ticket`** to keep your place, and repeat until `acquired`.
-  A ticket not used again within about 80 seconds is dropped. `wait: false` skips the queue and answers
-  `busy:` with the holder, its client and session, its task and since when.
-- **`editor-lock-release`** - gives the Editor back. Only releases your own claim.
+  A ticket not used again within about 80 seconds is dropped; the next answer then says your earlier
+  place lapsed and you joined the end. `wait: false` skips the queue and answers
+  `busy:` with the holder, its client and session, its task and since when. `after` makes you wait
+  for other agents to finish first (see ""Waiting for another agent"" below).
+- **`editor-lock-release`** - gives the Editor back. Only releases your own claim. `done: true` also
+  tells the agents that wait for you with `after` that your Editor work is over.
 - **`editor-lock-status`** - who holds it, for what, since when, whether it is you, who waits in the
-  queue and your own position. Read-only.
+  queue and your own position. Read-only. `owner` makes your label known before your first claim.
 
 Implicit claim (on by default; `FeederMatrix:ImplicitLock=false` in the server settings turns it off,
 then a tool is refused at once while someone else holds the lock and runs freely while nobody does).
@@ -119,13 +122,23 @@ tools never) follows one rule when your session holds no lock:
 
 How the claim behaves:
 
-- It belongs to your MCP session. Subagents that run inside your session share it: never let two of
-  them work the Editor at once.
+- It belongs to you, the agent that made the call. With Claude Code and the Matrix hook (the Editor adds it
+  to `.claude/settings.local.json` when its server supports it), a subagent is an agent of its own: it does not share its parent's
+  claim, it waits in line for itself, the Matrix Bridge window shows it as its own car, and its claim
+  ends when it ends. A session that does not report its subagents (no hook, or another client) is one
+  agent together with all of them: there, never let two of them work the Editor at once.
+- A main agent that holds the lock and then waits for a subagent it spawned passes the claim to that
+  subagent when it asks for the Editor. The main agent's next tool result says so; acquire again before
+  more Editor work. Releasing before you spawn is still the clean way.
+- With the hook, a client that reconnects on a new MCP session keeps its claim and its place in line.
+- Two calls of one agent sent together wait in line together. A waiting call your client cancels or
+  drops leaves the queue.
 - Editor-changing tool calls count as activity. Read-only calls (screenshots, console, queries, status
   tools) count only while the Editor works for you: compiling, reloading, importing, building, running
   tests, or in a play session your own tool started. Reading an idle Editor does not keep your claim.
 - A claim with no activity for **10 minutes** is freed (**2 minutes** while other sessions wait; a call
-  still running keeps it), and so is a claim whose MCP session closed. There is no heartbeat to send.
+  still running keeps it), and so is a claim whose MCP session closed or whose subagent ended. There is
+  no heartbeat to send.
 - Past the 15-minute cap every tool result ends with a line starting `Editor lock:` (also in
   `structuredContent.lock_notice`). Obey it: finish the step, exit play mode you started, release, and
   acquire again for the next burst.
@@ -149,6 +162,25 @@ How the claim behaves:
   scripts. A live lock file written by such a session keeps the queue waiting (Matrix cannot tell
   which session it is, so it refuses nobody's tools for it); one with no heartbeat for 20 minutes is
   removed.
+
+### Waiting for another agent (`after`)
+
+When your work must follow another agent's (a play test after the agent that edits and compiles), do
+not poll and do not guess: call `editor-lock-acquire` with `after: [""<its owner label>""]`. You join the
+queue at once, the Matrix Bridge window shows whom you wait for, and you get the Editor only when that
+agent has finished: its subagent ended, its session closed, or it called `editor-lock-release` with
+`done: true`. You hold nobody back meanwhile. Keep calling acquire with the `ticket`, as in any queue.
+
+- The agent you wait for must be known by that label: it claims with that `owner`, or says it early with
+  `editor-lock-status` and `owner` (do that at the start of work that ends in a compile). The type name
+  of a running subagent works too.
+- When you spawn subagents that depend on each other, give each its `owner` label in its prompt and tell
+  the later one which label to put in `after`.
+- A label nobody uses within 2 minutes fails the acquire and lists the labels known now. A label that is
+  your own, or of an agent that already waits for you, is refused at once.
+- A main agent others wait for calls `editor-lock-release` with `done: true` when its Editor work is
+  over; a subagent is done when it ends.
+- A person can let a waiting agent go ahead from the Matrix Bridge window (click its car).
 
 Outcomes:
 
@@ -275,6 +307,10 @@ answers it itself, even while the Editor is hung or reloading. Read its first li
 - **Main thread stalled ... Likely cause: <tool>** -> your own call holds it (a long or endless
   `script-execute`). Wait for it, or ask the user before going further.
 - **Not linked** -> the Editor is closed or Matrix is off; report the task as not verified.
+
+A Console warning that starts `[Matrix Bridge] Cleared an agent play mark that outlived play mode` means a
+play mode handler of another package throws, and Unity then skips every handler after it. Matrix recovered;
+find that exception in the Console and report it to the user. Do not fix or remove the other package yourself.
 
 ## Rule 9 - Long jobs
 

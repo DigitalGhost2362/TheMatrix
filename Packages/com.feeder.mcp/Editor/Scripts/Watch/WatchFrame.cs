@@ -58,6 +58,8 @@ namespace Feeder.MCP.Editor.Watch
             if (now < _nextCheck)
                 return;
             _nextCheck = now + 0.5;
+            if (!WatchSession.Sync())
+                return;
             var recording = WatchSession.Recorder != null;
             foreach (var view in Views())
             {

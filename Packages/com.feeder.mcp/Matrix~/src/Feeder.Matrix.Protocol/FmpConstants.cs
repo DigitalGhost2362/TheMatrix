@@ -29,6 +29,9 @@ public static class FmpCapabilities
     /// <summary>The editor lock keeps a queue: the hub serves <c>RemoveFromEditorLockQueue</c> and <c>SetEditorLockQueuePaused</c>, and the lock state lists the waiting sessions.</summary>
     public const string EditorLockQueue = "editor-lock-queue";
 
+    /// <summary>The editor lock tells subagents apart and takes 'after': the hub serves <c>SkipEditorLockAfter</c>, and the lock state says who is a subagent and whom a waiter waits for.</summary>
+    public const string EditorLockAgents = "editor-lock-agents";
+
     /// <summary>The hub serves <c>RegisterPlayer</c>: a built player links next to the editor and runs the tools marked <see cref="FmpToolTargets.Runtime"/>.</summary>
     public const string PlayerLink = "player-link";
 

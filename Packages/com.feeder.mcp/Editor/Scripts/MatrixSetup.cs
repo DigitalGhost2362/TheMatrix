@@ -26,6 +26,7 @@ namespace Feeder.MCP.Editor
             "- Start the local server and connect the editor (Matrix does nothing until this runs)\n" +
             "- Ignore .mcp.json and .codex/config.toml in .gitignore (their port differs per machine)\n" +
             "- Keep only the core MCP tools enabled to save tokens; tool-set-enabled-state turns more on when needed\n" +
+            "- Add a Claude Code hook to .claude/settings.local.json (while the server supports it), so each subagent queues for the editor on its own\n" +
             "- Regenerate the agent skills\n\n" +
             "Change these editor settings so agents can share the editor:\n- " +
             string.Join("\n- ", MatrixEditorSettings.Prefs.Select(pref => pref.label).Append(MatrixEditorSettings.RunInBackgroundLabel)) + "\n\n" +
@@ -37,6 +38,7 @@ namespace Feeder.MCP.Editor
             "- Put back the values these settings had before the first Setup:\n  " +
             string.Join("\n  ", MatrixEditorSettings.Prefs.Select(pref => pref.label.Split(':')[0]).Append("Player Settings > Run In Background")) + "\n" +
             "- Remove the lines Setup added to .gitignore\n" +
+            "- Remove the Claude Code hook from .claude/settings.local.json\n" +
             "- Restore which MCP tools were enabled\n" +
             "- Turn Matrix off: stop the local server, disconnect the editor, turn Hyper Testing Mode off\n" +
             "- Close every Matrix window\n\n" +
@@ -68,6 +70,7 @@ namespace Feeder.MCP.Editor
             {
                 Step("Editor settings", MatrixEditorSettings.Apply),
                 Step("Git", IgnoreMachineSpecificFiles),
+                Step("Agents", () => MatrixAgentHook.Sync(MatrixPluginEditor.Instance.ServerTellsAgentsApart)),
                 Step("Tools", () => ApplyToolSet(all: false)),
                 Step("Skills", () => $"Skills: regenerated for {BridgeAgents.RegenerateSkills()} client(s)"),
                 $"Next: ask your agent to run /{API.Skill_SetupChecklist.SkillId} (faster play mode, Windows Defender exclusion).",
@@ -92,6 +95,7 @@ namespace Feeder.MCP.Editor
             var message = string.Join("\n\n", new[]
             {
                 Step("Settings", MatrixEditorSettings.Revert),
+                Step("Agents", MatrixAgentHook.Remove),
                 Step("Matrix", TurnOff),
             });
 

@@ -193,6 +193,35 @@ namespace Feeder.MCP.Editor.Tests.Utils
         }
 
         [Test]
+        public void Collector_Resubscribe_StillStoresEachLogOnce()
+        {
+            var storage = new MemoryLogStorage();
+            var marker = "MxTest_" + Guid.NewGuid().ToString("N");
+            using (var collector = new UnityLogCollector(storage))
+            {
+                collector.Resubscribe();
+                collector.Resubscribe();
+                Debug.Log(marker);
+            }
+
+            Assert.AreEqual(1, storage.Entries.Count(e => e.Message.Contains(marker)));
+        }
+
+        [Test]
+        public void Collector_ResubscribeAfterDispose_DoesNotListenAgain()
+        {
+            var storage = new MemoryLogStorage();
+            var marker = "MxTest_" + Guid.NewGuid().ToString("N");
+            var collector = new UnityLogCollector(storage);
+            collector.Dispose();
+
+            collector.Resubscribe();
+            Debug.Log(marker);
+
+            Assert.IsFalse(storage.Entries.Any(e => e.Message.Contains(marker)));
+        }
+
+        [Test]
         public void Collector_ClearAndSave_ReachTheStorage()
         {
             var storage = new MemoryLogStorage();

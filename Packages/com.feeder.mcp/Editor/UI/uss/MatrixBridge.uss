@@ -383,6 +383,50 @@
     transition-timing-function: ease-in-cubic;
 }
 
+/* the cars past the last row, as one */
+.mb-car--more {
+    align-items: center;
+    justify-content: center;
+    border-left-color: rgba(0, 255, 65, 0.45);
+}
+
+/* a pet rides on the roof, beside the LOCK / QUEUE label: the track grows only while one is shown */
+.mb-track--pets {
+    height: 88px;
+}
+
+.mb-track--pets .mb-track__rail {
+    top: 84px;
+}
+
+.mb-track--pets .mb-track__label {
+    top: 19px;
+}
+
+.mb-track--pets .mb-track__drop {
+    top: 32px;
+}
+
+.mb-track--pets .mb-car {
+    top: 36px;
+}
+
+.mb-car__pet {
+    position: absolute;
+    right: 4px;
+    top: -36px;
+    width: 36px;
+    height: 36px;
+    overflow: hidden;
+}
+
+.mb-car__pet-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    -unity-background-scale-mode: stretch-to-fill;
+}
+
 .mb-queue__button {
     padding: 0 4px 0 4px;
     border-width: 1px;

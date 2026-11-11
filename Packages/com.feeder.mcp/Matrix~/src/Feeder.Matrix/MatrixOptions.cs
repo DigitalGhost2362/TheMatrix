@@ -70,6 +70,9 @@ public sealed class MatrixOptions
     /// <summary>A queued session that is not waiting in a call is dropped this long after its slice ended.</summary>
     public TimeSpan EditorLockTicketGrace { get; set; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>How long a queued agent waits for a name in its 'after' that nobody has used yet, before its acquire fails.</summary>
+    public TimeSpan EditorLockAfterGrace { get; set; } = TimeSpan.FromMinutes(2);
+
     /// <summary>A session granted the lock from the queue loses it when it makes no tool call for this long.</summary>
     public TimeSpan EditorLockFirstCallDeadline { get; set; } = TimeSpan.FromSeconds(60);
 

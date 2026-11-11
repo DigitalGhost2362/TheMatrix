@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Feeder.MCP.Editor.Matrix;
+using Feeder.MCP.Editor.Utils;
 using Feeder.Rx;
 using UnityEditor;
 using UnityEngine;
@@ -73,6 +74,10 @@ namespace Feeder.MCP.Editor.UI
                 text.AppendLine($"Last heartbeat: {Format(Age(state.LastActivityUnixMs))} ago");
             if (state.ExpiresUnixMs > 0)
                 text.AppendLine($"Freed on its own at {Clock(state.ExpiresUnixMs)} if it stays idle");
+            if (state.Subagent)
+                text.AppendLine($"A subagent{(state.AgentType.Length > 0 ? $" ({state.AgentType})" : string.Empty)}: it claims for itself, not for its session.");
+            else if (state.Kind == KindAgent && !state.Hooked)
+                text.AppendLine("This session does not report its subagents, so any it has share this claim.");
             if (state.Waiting.Length > 0)
                 text.AppendLine($"Waiting: {state.Waiting.Length} (the first gets the editor when it is freed)");
             text.Append("Click for options.");
@@ -143,6 +148,33 @@ namespace Feeder.MCP.Editor.UI
             }
         }
 
+        static async void SkipAfter(EditorLockWaiter waiter)
+        {
+            try
+            {
+                await MatrixPluginEditor.Instance.SkipEditorLockAfterAsync(waiter.Ticket);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Matrix Bridge] Could not let {waiter.Owner} go ahead: {e.Message}");
+            }
+        }
+
+        static void ShowWaiterMenu(EditorLockWaiter waiter, Rect at)
+        {
+            var who = waiter.Owner.Length > 0 ? waiter.Owner : "a session";
+            var menu = new GenericMenu();
+            menu.AddItem(new GUIContent($"Let {who} go now (it waits for {waiter.After})"), false, () => SkipAfter(waiter));
+            menu.AddItem(new GUIContent($"Take {who} out of the queue"), false, () => Remove(waiter));
+            menu.DropDown(at);
+        }
+
+        // as in MatrixBridge.uss: the track and the step from one row of cars to the next, without and with pets
+        const float TrackHeight = 70f;
+        const float PetTrackHeight = 88f;
+        const float RowPitch = 52f;
+        const float PetRowPitch = 82f;
+        const int MaxRows = 3;
         const float CarWidth = 118f;
         const float CarPitch = CarWidth + 10f;
         const float EnterFrom = 140f;
@@ -165,6 +197,31 @@ namespace Feeder.MCP.Editor.UI
         const int DecodeSteps = 6;
         const long DecodeStepMs = 60;
 
+        // the atlas holds one baked animation per row, up to 20 frames of 72px; a pet shows at half size.
+        // each pose group lists the rows a pet picks from, and a pet picks again every few seconds
+        const string PetAtlasPath = "Editor/UI/Pets/clawd-pets.png";
+        const int PetColumns = 20;
+        const float PetSize = 36f;
+        const double CheerSeconds = 1.5;
+        const double PetPhaseSeconds = 10, PetSwapMinSeconds = 8, PetSwapMaxSeconds = 14;
+        const int PetTyping = 0, PetBuilding = 1, PetGaming = 2, PetTesting = 3, PetLoading = 4, PetCarrying = 5,
+            PetCelebrating = 6, PetOverheated = 7, PetAngry = 8, PetIdle = 9, PetYawning = 10, PetSleeping = 11, PetCoffee = 12;
+        static readonly int[][] PetGroups =
+        {
+            new[] { 0, 1, 2, 3, 4, 5, 6 }, new[] { 7, 8 }, new[] { 9, 10, 11 }, new[] { 12, 13, 14 }, new[] { 15, 16 },
+            new[] { 17, 18 }, new[] { 19, 20, 21, 22 }, new[] { 23, 24 }, new[] { 25, 26 }, new[] { 27, 28, 29, 30, 31 },
+            new[] { 32, 33, 34 }, new[] { 35 }, new[] { 36, 37 },
+        };
+        static readonly (int Frames, int Ms)[] PetFrames =
+        {
+            (15, 100), (20, 200), (20, 200), (20, 200), (12, 100), (20, 150), (20, 150), (10, 100), (20, 150), (20, 200),
+            (20, 125), (20, 200), (20, 150), (20, 150), (20, 200), (20, 150), (20, 150), (20, 100), (20, 150), (20, 100),
+            (20, 150), (20, 150), (20, 150), (20, 150), (20, 120), (10, 100), (20, 150), (20, 800), (20, 250), (20, 150),
+            (20, 200), (20, 150), (20, 150), (20, 300), (20, 200), (20, 300), (20, 200), (20, 100),
+        };
+        static Texture2D? _petAtlas;
+        static bool _petAtlasMissing;
+
         sealed class Car
         {
             public readonly VisualElement Root = new();
@@ -176,11 +233,20 @@ namespace Feeder.MCP.Editor.UI
             public readonly Label[] Rain = new Label[RainColumns];
             public readonly float[] RainY = new float[RainColumns];
             public readonly float[] RainSpeed = new float[RainColumns];
+            public readonly VisualElement Pet = new() { pickingMode = PickingMode.Ignore };
+            public readonly VisualElement PetSheet = new() { pickingMode = PickingMode.Ignore };
+            public bool HasPet;
+            public double CheerUntil;
+            public readonly double PetPhase = _rng.NextDouble() * PetPhaseSeconds;
+            public int PetGroup = -1;
+            public int PetRow;
+            public double PetSwapAt;
             public EditorLockWaiter? Waiter;
             public string NameText = string.Empty;
             public string SubText = string.Empty;
             public int Decode;
             public float X = float.NaN;
+            public float Y;
             public bool Entering;
         }
 
@@ -198,6 +264,10 @@ namespace Feeder.MCP.Editor.UI
         static Texture2D? _railTexture, _tintGreen, _tintAmber, _dropTexture, _glowTexture;
         static readonly Dictionary<string, Car> _cars = new();
         static readonly List<Car> _order = new();
+        // owners more than one car goes by: those cars also show the end of their id
+        static readonly HashSet<string> _shared = new();
+        static VisualElement? _more;
+        static Label? _moreLabel;
 
         /// <summary>
         /// Draws the holder and the sessions waiting for the editor as cars on one track: the holder is the
@@ -218,6 +288,11 @@ namespace Feeder.MCP.Editor.UI
 
             ShowHeader(state);
             ShowCars(state);
+            var pets = false;
+            foreach (var car in _order)
+                pets |= car.HasPet;
+            _track?.EnableInClassList("mb-track--pets", pets);
+            TickPets();
             Layout();
             return true;
         }
@@ -247,6 +322,14 @@ namespace Feeder.MCP.Editor.UI
             _lockLabel = TrackLabel("◆ LOCK", "mb-track__label--lock");
             _queueLabel = TrackLabel("QUEUE  ›", "mb-track__label--queue");
             _drops.Clear();
+            _more = new VisualElement();
+            _more.AddToClassList("mb-car");
+            _more.AddToClassList("mb-car--more");
+            _moreLabel = new Label();
+            _moreLabel.AddToClassList("mb-car__name");
+            _more.Add(_moreLabel);
+            BridgeFont.Apply(_more);
+            _track.Add(_more);
             _track.RegisterCallback<GeometryChangedEvent>(_ => Layout());
             _track.schedule.Execute(TickRain).Every(RainStepMs);
             view.Add(_track);
@@ -274,6 +357,13 @@ namespace Feeder.MCP.Editor.UI
             // cars are keyed by session, so the waiter that gets the editor stays the same car and becomes the holder
             var seen = new HashSet<string>();
             _order.Clear();
+            _shared.Clear();
+            var owners = new HashSet<string>();
+            if (state.Held)
+                owners.Add(state.Owner);
+            foreach (var waiter in state.Waiting)
+                if (!owners.Add(waiter.Owner))
+                    _shared.Add(waiter.Owner);
             if (state.Held)
                 AddCar(HolderKey(state), null, state, seen);
             foreach (var waiter in state.Waiting)
@@ -336,12 +426,18 @@ namespace Feeder.MCP.Editor.UI
             car.Root.Add(car.Name);
             car.Root.Add(car.Sub);
             car.Root.Add(car.Remove);
+            car.Pet.AddToClassList("mb-car__pet");
+            car.PetSheet.AddToClassList("mb-car__pet-sheet");
+            car.Pet.Add(car.PetSheet);
+            car.Root.Add(car.Pet);
             BridgeFont.Apply(car.Root);
             car.Root.style.opacity = 0f;
             car.Root.RegisterCallback<ClickEvent>(_ =>
             {
                 if (car.Waiter == null)
                     ShowMenu(car.Root.worldBound);
+                else if (car.Waiter.After.Length > 0)
+                    ShowWaiterMenu(car.Waiter, car.Root.worldBound);
             });
             car.Remove.RegisterCallback<ClickEvent>(evt =>
             {
@@ -361,10 +457,11 @@ namespace Feeder.MCP.Editor.UI
             car.Root.EnableInClassList("mb-car--blocking", holder && IsBlocking(state));
             car.Root.EnableInClassList("mb-car--waiter", !holder);
             car.Clip.style.backgroundImage = holder ? Ramp(ref _tintAmber, Amber, 0.16f, 0.03f, 0.7f) : Ramp(ref _tintGreen, Green, 0.10f, 0.02f, 0.7f);
+            ShowPet(car);
 
             if (waiter == null)
             {
-                car.NameText = state.Kind == KindOutside ? $"{Name(state)} (lock file)" : Name(state);
+                car.NameText = state.Kind == KindOutside ? $"{Name(state)} (lock file)" : Who(Name(state), state.Subagent, state.SessionId);
                 car.SubText = Sub(state.Task, state.AcquiredUnixMs);
                 ShowText(car);
                 car.Root.tooltip = Tooltip(state);
@@ -373,11 +470,13 @@ namespace Feeder.MCP.Editor.UI
 
             var who = waiter.Owner.Length > 0 ? waiter.Owner : "a session";
             var client = waiter.ClientName.Length > 0 && waiter.ClientName != waiter.Owner ? $" ({waiter.ClientName})" : string.Empty;
-            car.NameText = who + client;
-            car.SubText = Sub(waiter.Task, waiter.WaitingSinceUnixMs);
+            car.NameText = Who(who, waiter.Subagent, waiter.SessionId) + client;
+            car.SubText = Sub(waiter.After.Length > 0 ? "after " + waiter.After : waiter.Task, waiter.WaitingSinceUnixMs);
             ShowText(car);
             car.Root.tooltip = $"{who}{client} waits for the editor" + Environment.NewLine
+                + (waiter.Subagent ? $"A subagent{(waiter.AgentType.Length > 0 ? $" ({waiter.AgentType})" : string.Empty)}" + Environment.NewLine : string.Empty)
                 + (waiter.Task.Length > 0 ? $"Task: {waiter.Task}" + Environment.NewLine : string.Empty)
+                + (waiter.After.Length > 0 ? $"After: {waiter.After} must finish first. Click to let it go now." + Environment.NewLine : string.Empty)
                 + $"Since: {Clock(waiter.WaitingSinceUnixMs)} ({Format(Age(waiter.WaitingSinceUnixMs))})";
             car.Remove.tooltip = $"Take {who} out of the queue";
         }
@@ -390,10 +489,23 @@ namespace Feeder.MCP.Editor.UI
             if (float.IsNaN(width) || width <= 0f)
                 return;
 
-            var used = _order.Count * CarPitch - (CarPitch - CarWidth);
+            // cars that do not fit in one row go to the next; past the last row the rest is one "+N" car
+            var pets = _track.ClassListContains("mb-track--pets");
+            var rowPitch = pets ? PetRowPitch : RowPitch;
+            var perRow = Mathf.Max(1, Mathf.FloorToInt((width + CarPitch - CarWidth) / CarPitch));
+            var slots = Mathf.Min(_order.Count, perRow * RowsThatFit(pets ? PetTrackHeight : TrackHeight, rowPitch));
+            var shown = slots < _order.Count ? slots - 1 : slots;
+            var rows = Mathf.Max(1, Mathf.CeilToInt(slots / (float)perRow));
+            var used = Mathf.Min(slots, perRow) * CarPitch - (CarPitch - CarWidth);
             var start = Mathf.Max(0f, (width - used) / 2f);
             for (var i = 0; i < _order.Count; i++)
-                Place(_order[i], start + i * CarPitch, i);
+            {
+                _order[i].Root.style.display = i < shown ? DisplayStyle.Flex : DisplayStyle.None;
+                if (i < shown)
+                    Place(_order[i], start + i % perRow * CarPitch, i / perRow * rowPitch, i);
+            }
+            _track.style.height = rows > 1 ? (pets ? PetTrackHeight : TrackHeight) + (rows - 1) * rowPitch : StyleKeyword.Null;
+            ShowMore(shown, start + shown % perRow * CarPitch, shown / perRow * rowPitch);
 
             if (_rail != null)
             {
@@ -404,10 +516,10 @@ namespace Feeder.MCP.Editor.UI
             var held = _order.Count > 0 && _order[0].Waiter == null;
             var firstWaiter = held ? 1 : 0;
             PlaceLabel(_lockLabel, held, start);
-            PlaceLabel(_queueLabel, _order.Count > firstWaiter, start + firstWaiter * CarPitch);
+            PlaceLabel(_queueLabel, _order.Count > firstWaiter && perRow > firstWaiter, start + firstWaiter * CarPitch);
 
-            // a light drop falls in each gap between two cars
-            var gaps = Mathf.Max(0, _order.Count - 1);
+            // a light drop falls in each gap between two cars of the first row
+            var gaps = Mathf.Max(0, Mathf.Min(slots, perRow) - 1);
             while (_drops.Count < gaps)
             {
                 var drop = new VisualElement { pickingMode = PickingMode.Ignore };
@@ -440,19 +552,51 @@ namespace Feeder.MCP.Editor.UI
             label.style.left = x;
         }
 
-        static void Place(Car car, float x, int index)
+        // how many rows the window has room for: the track sits in a column that never scrolls, so a row that does not fit would be cut off
+        static int RowsThatFit(float oneRow, float rowPitch)
+        {
+            var column = _queueView?.parent;
+            if (column == null || _track == null)
+                return 1;
+            var used = 0f;
+            foreach (var child in column.Children())
+                if (child.resolvedStyle.display != DisplayStyle.None)
+                    used += child.layout.height + child.resolvedStyle.marginTop + child.resolvedStyle.marginBottom;
+            var room = column.layout.height - used + _track.layout.height - oneRow;
+            return float.IsNaN(room) ? 1 : Mathf.Clamp(1 + Mathf.FloorToInt(room / rowPitch), 1, MaxRows);
+        }
+
+        // the cars past the last row, as one car that lists them
+        static void ShowMore(int shown, float x, float y)
+        {
+            if (_more == null || _moreLabel == null)
+                return;
+            var hidden = _order.Count - shown;
+            _more.style.display = hidden > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            if (hidden <= 0)
+                return;
+            _more.style.translate = new Translate(x, y);
+            _moreLabel.text = $"+{hidden}";
+            var list = new StringBuilder($"{hidden} more waiting:");
+            for (var i = shown; i < _order.Count; i++)
+                list.Append(Environment.NewLine).Append(_order[i].NameText).Append("  -  ").Append(_order[i].SubText);
+            _more.tooltip = list.ToString();
+        }
+
+        static void Place(Car car, float x, float y, int index)
         {
             car.Root.style.transitionDelay = new List<TimeValue> { new(index * StaggerMs, TimeUnit.Millisecond) };
+            car.Y = y;
             if (float.IsNaN(car.X))
             {
                 // a change made before the car's first style pass jumps instead of animating, so the drive-in waits for its first layout
-                car.Root.style.translate = new Translate(x + EnterFrom, 0);
+                car.Root.style.translate = new Translate(x + EnterFrom, y);
                 car.Entering = true;
                 void Enter() => car.Root.schedule.Execute(() =>
                 {
                     car.Entering = false;
                     car.Root.style.opacity = 1f;
-                    car.Root.style.translate = new Translate(car.X, 0);
+                    car.Root.style.translate = new Translate(car.X, car.Y);
                     Decode(car);
                 });
                 // a car placed from the track's own first layout is already laid out and gets no further geometry event
@@ -471,7 +615,7 @@ namespace Feeder.MCP.Editor.UI
             }
             car.X = x;
             if (!car.Entering)
-                car.Root.style.translate = new Translate(x, 0);
+                car.Root.style.translate = new Translate(x, y);
         }
 
         static void Leave(Car car)
@@ -480,12 +624,13 @@ namespace Feeder.MCP.Editor.UI
             car.Root.pickingMode = PickingMode.Ignore;
             car.Root.style.transitionDelay = new List<TimeValue> { new(0, TimeUnit.Millisecond) };
             car.Root.style.opacity = 0f;
-            car.Root.style.translate = new Translate(car.X + LeaveTo, 0);
+            car.Root.style.translate = new Translate(car.X + LeaveTo, car.Y);
             car.Root.schedule.Execute(car.Root.RemoveFromHierarchy).StartingIn(LeaveMs);
         }
 
         static void Pop(Car car)
         {
+            car.CheerUntil = EditorApplication.timeSinceStartup + CheerSeconds;
             car.Root.AddToClassList("mb-car--pop");
             car.Root.schedule.Execute(() => car.Root.RemoveFromClassList("mb-car--pop")).StartingIn(PopMs);
         }
@@ -528,6 +673,7 @@ namespace Feeder.MCP.Editor.UI
                 _drops[i].style.translate = new Translate(0, DropTravel * t);
                 _drops[i].style.opacity = t < 0.3f ? t / 0.3f : (1f - t) / 0.7f;
             }
+            TickPets();
             foreach (var car in _cars.Values)
                 for (var i = 0; i < RainColumns; i++)
                 {
@@ -540,6 +686,84 @@ namespace Feeder.MCP.Editor.UI
                     car.RainY[i] = y;
                     car.Rain[i].style.translate = new Translate(0, y);
                 }
+        }
+
+        // every session rides on the roof of its car, posed by what it does or how long it has waited
+        static void ShowPet(Car car)
+        {
+            car.HasPet = PetAtlas() != null;
+            car.Pet.style.display = car.HasPet ? DisplayStyle.Flex : DisplayStyle.None;
+            if (!car.HasPet)
+                return;
+            car.PetSheet.style.backgroundImage = _petAtlas;
+            car.PetSheet.style.width = PetColumns * PetSize;
+            car.PetSheet.style.height = PetFrames.Length * PetSize;
+        }
+
+        static void TickPets()
+        {
+            if (_state.Value is not { } state)
+                return;
+            var now = EditorApplication.timeSinceStartup;
+            foreach (var car in _cars.Values)
+            {
+                if (!car.HasPet)
+                    continue;
+                var group = PetGroupOf(car, state, now);
+                if (group != car.PetGroup || now >= car.PetSwapAt)
+                    PickPetRow(car, group, now);
+                var (frames, ms) = PetFrames[car.PetRow];
+                var frame = (int)((now + car.PetPhase) * 1000.0 / ms) % frames;
+                car.PetSheet.style.translate = new Translate(-frame * PetSize, -car.PetRow * PetSize);
+            }
+        }
+
+        static void PickPetRow(Car car, int group, double now)
+        {
+            var rows = PetGroups[group];
+            var pick = _rng.Next(rows.Length);
+            if (group == car.PetGroup && rows.Length > 1 && rows[pick] == car.PetRow)
+                pick = (pick + 1) % rows.Length;
+            car.PetGroup = group;
+            car.PetRow = rows[pick];
+            car.PetSwapAt = now + PetSwapMinSeconds + _rng.NextDouble() * (PetSwapMaxSeconds - PetSwapMinSeconds);
+        }
+
+        static int PetGroupOf(Car car, EditorLockState state, double now)
+        {
+            if (car.Waiter is { } waiter)
+            {
+                if (state.QueuePaused)
+                    return PetCoffee;
+                var waited = Age(waiter.WaitingSinceUnixMs).TotalMinutes;
+                return waited < 1 ? PetIdle : waited < 3 ? PetYawning : PetSleeping;
+            }
+            if (now < car.CheerUntil)
+                return PetCelebrating;
+            if (IsBlocking(state))
+                return PetAngry;
+            if (IsPastCap(state))
+                return PetOverheated;
+            var task = state.Task.ToLowerInvariant();
+            return task.Contains("play") ? PetGaming
+                : task.Contains("test") ? PetTesting
+                : task.Contains("compil") || task.Contains("build") ? PetBuilding
+                : task.Contains("refresh") || task.Contains("import") ? PetLoading
+                : task.Contains("save") || task.Contains("scene") || task.Contains("prefab") ? PetCarrying
+                : PetTyping;
+        }
+
+        static Texture2D? PetAtlas()
+        {
+            if (_petAtlas != null || _petAtlasMissing)
+                return _petAtlas;
+            _petAtlas = EditorAssetLoader.LoadAssetAtPath<Texture2D>(EditorAssetLoader.GetEditorAssetPaths(PetAtlasPath));
+            if (_petAtlas == null)
+            {
+                _petAtlasMissing = true;
+                Debug.LogWarning($"[Matrix Bridge] The queue pets are off: {PetAtlasPath} is missing from the package.");
+            }
+            return _petAtlas;
         }
 
         // horizontal alpha ramp through (0, a0), (mid, a1), (1, a2); runtime textures are lost on a domain reload, so they are rebuilt when gone
@@ -649,6 +873,10 @@ namespace Feeder.MCP.Editor.UI
         }
 
         static string Name(EditorLockState state) => state.Owner.Length > 0 ? state.Owner : "a session";
+
+        // a subagent is marked, and cars that go by one owner also show the end of their own id
+        static string Who(string owner, bool subagent, string id)
+            => (subagent ? "› " : string.Empty) + owner + (_shared.Contains(owner) && id.Length > 0 ? " " + id.Substring(Math.Max(0, id.Length - 4)) : string.Empty);
 
         static string Task(EditorLockState state) => state.Task.Length > 0 ? state.Task + "  -  " : string.Empty;
 

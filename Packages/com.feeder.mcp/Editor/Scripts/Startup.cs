@@ -1,4 +1,5 @@
 #nullable enable
+using Feeder.MCP.Editor.Activity;
 using Feeder.MCP.Editor.UI;
 using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Utils;
@@ -22,7 +23,13 @@ namespace Feeder.MCP.Editor
                 return;
 
             if (MatrixActivation.IsEnabled)
+            {
                 Activate();
+                EditorEvents.NextTick(AfterDomainLoad);
+                // a domain reloaded on the way into play mode: EnteredPlayMode may never reach this package
+                if (EditorApplication.isPlayingOrWillChangePlaymode)
+                    PlaySessionGuard.Arm(ResubscribeLogCollector);
+            }
         }
 
         internal static void Activate()
@@ -46,7 +53,7 @@ namespace Feeder.MCP.Editor
             BridgeAgents.RegenerateSkillsIfChanged();
 
             // Write MCP config files for auto-configure-enabled agents (once per session).
-            EditorApplication.delayCall += AutoConfigureAgents;
+            EditorEvents.NextTick(AutoConfigureAgents);
         }
     }
 }

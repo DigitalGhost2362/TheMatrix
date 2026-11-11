@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Feeder.MCP.Utils;
 using Feeder.Logging;
+using Feeder.Rx;
 using UnityEditor;
 using UnityEngine;
 using ILogger = Feeder.Logging.ILogger;
@@ -25,9 +26,9 @@ namespace Feeder.MCP.Editor.Activity
             if (AssetDatabase.IsAssetImportWorkerProcess())
                 return;
 
-            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
-            if (AgentActivity.IsAgentPlay)
-                EditorApplication.delayCall += ShowIfAgentPlay;
+            // the state, not a play mode event: the frame goes with the mark however play mode ended
+            AgentActivity.Changed.Subscribe(_ => Sync());
+            Sync();
         }
 
         internal static void Show()
@@ -42,11 +43,17 @@ namespace Feeder.MCP.Editor.Activity
                 ViewFrame.Hide(view, FrameName);
         }
 
-        static void OnPlayModeStateChanged(PlayModeStateChange state)
+        static bool _shown;
+
+        static void Sync()
         {
-            if (state == PlayModeStateChange.EnteredPlayMode)
-                EditorApplication.delayCall += ShowIfAgentPlay;
-            else if (state == PlayModeStateChange.ExitingPlayMode)
+            if (AgentActivity.IsAgentPlay == _shown)
+                return;
+            _shown = !_shown;
+            // the Game view builds its UI after play mode starts and after a domain reload
+            if (_shown)
+                EditorEvents.NextTick(ShowIfAgentPlay);
+            else
                 Hide();
         }
 

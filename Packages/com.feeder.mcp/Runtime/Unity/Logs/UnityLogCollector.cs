@@ -29,6 +29,16 @@ namespace Feeder.MCP
             Application.logMessageReceivedThreaded += OnLogMessageReceived;
         }
 
+        // the Editor stops calling log handlers when play mode ends, until one is added again
+        public void Resubscribe()
+        {
+            if (_isDisposed.Value)
+                return;
+
+            Application.logMessageReceivedThreaded -= OnLogMessageReceived;
+            Application.logMessageReceivedThreaded += OnLogMessageReceived;
+        }
+
         public void Clear()
         {
             if (_isDisposed.Value)

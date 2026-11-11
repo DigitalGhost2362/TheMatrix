@@ -202,3 +202,23 @@ implicit claim older than `EditorLockImplicitMaxAge` (default 5 minutes) ends be
 does an explicit claim older than `EditorLockHardCap` when that is set. The matrix mirrors every claim to
 `Temp/agent-editor-lock/lock.json` (with `"matrix": true`), so sessions using the lock-file protocol see
 it.
+
+**Agents and `after` (additive).** Added 2026-11-11. A matrix that tells the subagents of one MCP session
+apart lists `"editor-lock-agents"` in `UnityRegisterResponse.capabilities`. A claim then belongs to an
+agent: the session, or one subagent inside it.
+
+- `EditorLockState.sessionId` and `EditorLockWaiter.sessionId` hold one value per agent
+  (`<session>#<agent id>` for a subagent), so an editor that keys its display by it needs no change.
+- `EditorLockState` gains `subagent` (key 15, bool), `agentType` (key 16, string) and `hooked` (key 17,
+  bool: the holder's client reports its subagents).
+- `EditorLockWaiter` gains `after` (key 7, string: the labels it still waits for, comma separated),
+  `subagent` (key 8, bool) and `agentType` (key 9, string).
+- `SkipEditorLockAfter(ticket) -> string` (U->B): a person lets one waiter stop waiting for the agents it
+  named; returns who, or `nothing`.
+
+The matrix learns which agent makes a call from the client, outside FMP: Claude Code posts its hook
+events (`PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `SubagentStart`, `SubagentStop`) to
+`POST /hooks/claude` on the matrix port, and the `tools/call` that follows carries the same tool use id
+in `_meta["claudecode/toolUseId"]`. The answer is `200` with an empty body. The path sits behind the
+same loopback, origin and bearer token checks as `/mcp`. A call no hook announced belongs to its
+session.

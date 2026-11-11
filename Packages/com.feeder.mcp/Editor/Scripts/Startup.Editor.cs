@@ -1,4 +1,5 @@
 #nullable enable
+using Feeder.MCP.Editor.Activity;
 using Feeder.MCP.Runtime.Utils;
 using Feeder.Fmp;
 using Feeder.Logging;
@@ -16,17 +17,25 @@ namespace Feeder.MCP.Editor
             EditorApplication.quitting += OnEditorQuitting;
 
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
-            AssemblyReloadEvents.afterAssemblyReload += OnAfterAssemblyReload;
+            EditorEvents.OnAfterAssemblyReload(AfterDomainLoad);
 
             // Handle Play mode state changes to ensure reconnection after exiting Play mode
-            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+            EditorEvents.OnPlayModeChanged(OnPlayModeStateChanged);
         }
         static void OnEditorQuitting() => TryDisconnectAndCleanup(nameof(OnEditorQuitting));
         static void OnBeforeAssemblyReload()
         {
-            if (MatrixPluginEditor.HasInstance)
-                MatrixPluginEditor.Instance.AnnounceReload();
-            TryDisconnectAndCleanup(nameof(OnBeforeAssemblyReload), onlyIfConnected: true);
+            try
+            {
+                if (MatrixPluginEditor.HasInstance)
+                    MatrixPluginEditor.Instance.AnnounceReload();
+                TryDisconnectAndCleanup(nameof(OnBeforeAssemblyReload), onlyIfConnected: true);
+            }
+            catch (System.Exception e)
+            {
+                // must not cut the reload chain for the packages after this one
+                _logger.LogWarning(e, "{class} {method}: {message}", nameof(Startup), nameof(OnBeforeAssemblyReload), e.Message);
+            }
         }
 
         /// <summary>
@@ -97,6 +106,18 @@ namespace Feeder.MCP.Editor
                 }
             }
         }
+        static bool _afterDomainLoadRan;
+
+        // afterAssemblyReload is skipped when a handler of another package throws before this one, so the first
+        // editor tick of the domain calls this too
+        static void AfterDomainLoad()
+        {
+            if (_afterDomainLoadRan)
+                return;
+            _afterDomainLoadRan = true;
+            OnAfterAssemblyReload();
+        }
+
         static void OnAfterAssemblyReload()
         {
             var isCi = EnvironmentUtils.IsCi();
@@ -136,6 +157,7 @@ namespace Feeder.MCP.Editor
                     break;
 
                 case PlayModeStateChange.EnteredEditMode:
+                    ResubscribeLogCollector();
                     // Unity has returned to Edit mode - ensure connection is re-established
                     // if the configuration expects it to be connected
                     var isCi = EnvironmentUtils.IsCi();
@@ -163,8 +185,16 @@ namespace Feeder.MCP.Editor
 
                 case PlayModeStateChange.EnteredPlayMode:
                     _logger.LogTrace("Entered Play mode");
+                    PlaySessionGuard.Arm(ResubscribeLogCollector);
                     break;
             }
+        }
+
+        // leaving play mode silences every log handler, the collector's included, until one subscribes again
+        static void ResubscribeLogCollector()
+        {
+            if (MatrixPluginEditor.HasInstance)
+                MatrixPluginEditor.Instance.LogCollector?.Resubscribe();
         }
     }
 }

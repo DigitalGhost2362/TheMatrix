@@ -53,6 +53,33 @@ public class EditorLockEndpointTests(EditorLockFactory factory) : IClassFixture<
         Assert.Equal("pong", Text(await CallAsync(b, "ping", "{}")));
     }
 
+    [Fact]
+    public async Task Hook_tells_a_subagent_from_the_main_agent_of_its_session()
+    {
+        var a = await InitializeAsync("claude-code");
+        await HookAsync(a, """{"hook_event_name":"PreToolUse","session_id":"claude-1","tool_use_id":"use-main","tool_name":"mcp__Feeder-MCP__editor-lock-acquire"}""");
+        Assert.StartsWith("acquired", Text(await CallAsync(a, "editor-lock-acquire", """{"owner":"main","task":"compile"}""", "use-main")));
+
+        await HookAsync(a, """{"hook_event_name":"PreToolUse","session_id":"claude-1","agent_id":"agent-1","agent_type":"playtester","tool_use_id":"use-sub","tool_name":"mcp__Feeder-MCP__ping"}""");
+        var refused = await CallAsync(a, "ping", "{}", "use-sub");
+        Assert.True(refused.GetProperty("isError").GetBoolean());
+        Assert.Contains("held by main", Text(refused));
+
+        // a call no hook announced belongs to the session, as without the hook
+        Assert.Equal("pong", Text(await CallAsync(a, "ping", "{}")));
+        Assert.StartsWith("released", Text(await CallAsync(a, "editor-lock-release", "{}")));
+    }
+
+    private static async Task HookAsync(Session session, string body)
+    {
+        var response = await session.Client.PostAsync("/hooks/claude", new StringContent(body, Encoding.UTF8, "application/json"));
+        response.EnsureSuccessStatusCode();
+        Assert.Empty(await response.Content.ReadAsStringAsync());
+    }
+
+    private Task<JsonElement> CallAsync(Session session, string name, string arguments, string toolUseId)
+        => RpcAsync(session, "tools/call", $"{{\"name\":\"{name}\",\"arguments\":{arguments},\"_meta\":{{\"claudecode/toolUseId\":\"{toolUseId}\"}}}}");
+
     private static string Text(JsonElement result) => result.GetProperty("content")[0].GetProperty("text").GetString()!;
 
     private sealed record Session(HttpClient Client, string Id);
