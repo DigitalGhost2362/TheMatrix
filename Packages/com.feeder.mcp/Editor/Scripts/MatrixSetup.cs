@@ -21,12 +21,26 @@ namespace Feeder.MCP.Editor
         const string LogPrefix = "[Matrix Setup]";
         const string IgnoreHeader = "# Matrix MCP: per-machine files (the port derives from the project path)";
 
-        const string ConfirmMessage =
+        static string ConfirmMessage =>
             "Turn Matrix MCP on for this project and prepare this machine:\n\n" +
             "- Start the local server and connect the editor (Matrix does nothing until this runs)\n" +
             "- Ignore .mcp.json and .codex/config.toml in .gitignore (their port differs per machine)\n" +
             "- Keep only the core MCP tools enabled to save tokens; tool-set-enabled-state turns more on when needed\n" +
-            "- Regenerate the agent skills";
+            "- Regenerate the agent skills\n\n" +
+            "Change these editor settings so agents can share the editor:\n- " +
+            string.Join("\n- ", MatrixEditorSettings.Prefs.Select(pref => pref.label).Append(MatrixEditorSettings.RunInBackgroundLabel)) + "\n\n" +
+            "The Preferences apply to every Unity project on this machine. With Auto Refresh off, press Ctrl+R after editing files outside Unity.\n\n" +
+            "The values from before the first Setup are kept: Tools > Feeder > Matrix Bridge > Revert Setups... puts them back.";
+
+        static string RevertMessage =>
+            "Undo Matrix Setup on this machine and project:\n\n" +
+            "- Put back the values these settings had before the first Setup:\n  " +
+            string.Join("\n  ", MatrixEditorSettings.Prefs.Select(pref => pref.label.Split(':')[0]).Append("Player Settings > Run In Background")) + "\n" +
+            "- Remove the lines Setup added to .gitignore\n" +
+            "- Restore which MCP tools were enabled\n" +
+            "- Turn Matrix off: stop the local server, disconnect the editor, turn Hyper Testing Mode off\n" +
+            "- Close every Matrix window\n\n" +
+            "Client configs (.mcp.json and similar) and generated skill files stay.";
 
         static readonly string[] MachineSpecificFiles = { ".mcp.json", ".codex/config.toml" };
 
@@ -39,6 +53,7 @@ namespace Feeder.MCP.Editor
             "console-get-logs",
             "editor-application-get-state",
             "screenshot-game-view",
+            "assets-refresh",
         };
 
         public static void Run()
@@ -47,12 +62,15 @@ namespace Feeder.MCP.Editor
                 return;
 
             MatrixActivation.Enable();
+            MatrixEditorSettings.CaptureIfMissing();
 
             var message = string.Join("\n\n", new[]
             {
+                Step("Editor settings", MatrixEditorSettings.Apply),
                 Step("Git", IgnoreMachineSpecificFiles),
                 Step("Tools", () => ApplyToolSet(all: false)),
                 Step("Skills", () => $"Skills: regenerated for {BridgeAgents.RegenerateSkills()} client(s)"),
+                $"Next: ask your agent to run /{API.Skill_SetupChecklist.SkillId} (faster play mode, Windows Defender exclusion).",
             });
 
             Debug.Log($"{LogPrefix}\n{message}");
@@ -62,8 +80,39 @@ namespace Feeder.MCP.Editor
                 message: message,
                 width: 480,
                 minWidth: 480,
-                height: 340,
-                minHeight: 340);
+                height: 460,
+                minHeight: 460);
+        }
+
+        public static void Revert()
+        {
+            if (!EditorUtility.DisplayDialog(Title, RevertMessage, "Revert", "Cancel"))
+                return;
+
+            var message = string.Join("\n\n", new[]
+            {
+                Step("Settings", MatrixEditorSettings.Revert),
+                Step("Matrix", TurnOff),
+            });
+
+            Debug.Log($"{LogPrefix} reverted\n{message}");
+            CloseMatrixWindows();
+            EditorUtility.DisplayDialog(Title, "Setup reverted\n\n" + message, "OK");
+        }
+
+        static string TurnOff()
+        {
+            if (HyperTesting.HyperTestingActivation.IsEnabled)
+                HyperTesting.HyperTestingActivation.Disable();
+            MatrixActivation.Disable();
+            return "Matrix: off, server stopped, editor disconnected";
+        }
+
+        static void CloseMatrixWindows()
+        {
+            var assembly = typeof(MatrixSetup).Assembly;
+            foreach (var window in Resources.FindObjectsOfTypeAll<EditorWindow>().Where(window => window.GetType().Assembly == assembly))
+                window.Close();
         }
 
         internal static string BuildIgnoreAppend(string existing, IEnumerable<string> files, out int added)
@@ -109,7 +158,10 @@ namespace Feeder.MCP.Editor
             var existing = File.Exists(path) ? File.ReadAllText(path) : string.Empty;
             var tail = BuildIgnoreAppend(existing, MachineSpecificFiles, out var added);
             if (added > 0)
+            {
                 File.AppendAllText(path, tail);
+                MatrixEditorSettings.RecordGitignoreAppend(tail);
+            }
 
             var lines = new List<string>
             {

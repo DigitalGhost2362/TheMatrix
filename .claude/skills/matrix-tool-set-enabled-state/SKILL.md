@@ -9,7 +9,7 @@ Enable or disable MCP tools by name. Allows controlling which tools are availabl
 
 ## Inputs
 
-- `tools` — array of `ToolToggleInput { Name, Enabled }`. Non-empty.
+- `tools` — array of `ToolToggleInput { Name, Enabled }`. Non-empty. A `Name` of `group:Vision` (or just `Vision` when no tool has that name) switches every tool of that group; `unity-tool-list` shows each tool's `group`.
 - `includeLogs` (default `false`) — when true, returns per-step operation logs alongside the success map.
 
 ## Behavior
@@ -40,7 +40,7 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `tools` | `any` | Yes | Array of tools with their desired enabled state. |
+| `tools` | `any` | Yes | Array of tools with their desired enabled state. Name is a tool name or 'group:<GroupName>' (see 'group' in unity-tool-list). |
 | `includeLogs` | `any` | No | Include operation logs in the result. Default: false |
 
 ### Input JSON Schema

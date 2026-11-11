@@ -1,5 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using Feeder.Matrix.Health;
 using Feeder.Matrix.Protocol;
 using Feeder.Matrix.Unity;
 using Microsoft.AspNetCore.SignalR;
@@ -31,6 +32,7 @@ public sealed class EditorLock
     // what the lock-file scripts treat as stale
     static readonly TimeSpan FileTtl = TimeSpan.FromMinutes(20);
     static readonly TimeSpan MirrorBeat = TimeSpan.FromMinutes(1);
+    static readonly TimeSpan NoticeLogBeat = TimeSpan.FromMinutes(1);
     const int MaxTextLength = 120;
 
     // not marked read-only, yet they change nothing another session's play test depends on
@@ -91,6 +93,7 @@ public sealed class EditorLock
         public DateTimeOffset Acquired { get; set; }
         public DateTimeOffset LastActivity { get; set; }
         public DateTimeOffset MirrorWritten { get; set; }
+        public DateTimeOffset NoticeLogged { get; set; }
         public int InFlight { get; set; }
         public DateTimeOffset GrantedAt { get; init; }
         public bool AwaitingFirstCall { get; set; }
@@ -618,17 +621,47 @@ public sealed class EditorLock
         return result;
     }
 
-    /// <summary>Counts a Unity call of the holder as activity, so a long call never reads as idle.</summary>
-    public IDisposable Track(string? sessionId)
+    /// <summary>
+    /// Counts a Unity call of the holder, so a long call never reads as idle. A read-only call renews the claim only while
+    /// the editor works for the holder (<see cref="EditorWorks"/>): reading an idle editor is not using it.
+    /// </summary>
+    public IDisposable Track(string? sessionId, string toolName)
     {
+        var reads = !_options.Value.EditorLockReadOnlyKeepsAlive && IsReadOnly(toolName);
         lock (_gate)
         {
             if (_holder is not { } held || sessionId is null || held.SessionId != sessionId)
                 return NoCall.Instance;
+            var now = _time.GetUtcNow();
+            var renews = !reads || EditorWorks(held, _registry.GetLatestLink(), now);
             held.InFlight++;
+            // any call shows the granted session is there, a read-only one too
             held.AwaitingFirstCall = false;
-            held.LastActivity = _time.GetUtcNow();
-            return new TrackedCall(this, held);
+            if (renews)
+                held.LastActivity = now;
+            return new TrackedCall(this, held, renews);
+        }
+    }
+
+    /// <summary>What the holder of an explicit claim past <see cref="Cap"/> is told with every Unity tool result, or null.</summary>
+    public string? HolderNotice(string? sessionId)
+    {
+        if (!_options.Value.EditorLockCapNudge)
+            return null;
+        lock (_gate)
+        {
+            var now = _time.GetUtcNow();
+            if (_holder is not { Implicit: false } held || held.SessionId != sessionId || now - held.Acquired <= Cap)
+                return null;
+            if (now - held.NoticeLogged >= NoticeLogBeat)
+            {
+                held.NoticeLogged = now;
+                _logger.LogInformation("Editor lock of {Owner} (session {SessionId}) is past the cap at {Age} with {Waiting} waiting; its tool results say so",
+                    held.Owner, held.SessionId, Age(now - held.Acquired), _queue.Count);
+            }
+            return $"Editor lock: you have held the editor for {Age(now - held.Acquired)} for \"{held.Task}\", past the 15-minute cap" +
+                   (_queue.Count > 0 ? $", and {_queue.Count} session(s) are waiting" : string.Empty) +
+                   $". Finish this step (exit play mode you started), call {ReleaseName} now and acquire again for the next burst.";
         }
     }
 
@@ -637,7 +670,7 @@ public sealed class EditorLock
         => _registry.IsRuntimeTool(toolName) || _registry.GetLatestLink()?.Registry?.Tools
             .FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.OrdinalIgnoreCase))?.ReadOnly == true;
 
-    sealed class TrackedCall(EditorLock owner, Holder holder) : IDisposable
+    sealed class TrackedCall(EditorLock owner, Holder holder, bool renews) : IDisposable
     {
         int _done;
 
@@ -648,7 +681,8 @@ public sealed class EditorLock
             lock (owner._gate)
             {
                 holder.InFlight = Math.Max(0, holder.InFlight - 1);
-                holder.LastActivity = owner._time.GetUtcNow();
+                if (renews)
+                    holder.LastActivity = owner._time.GetUtcNow();
             }
         }
     }
@@ -908,11 +942,21 @@ public sealed class EditorLock
     TimeSpan IdleLimit(Holder held)
     {
         // a play session waits on the game, not on tool calls
-        if (_playOwner?.SessionId == held.SessionId && AgentPlaying(_registry.GetLatestLink()))
+        if (InOwnPlay(held, _registry.GetLatestLink()))
             return _options.Value.EditorLockPlayIdleTimeout;
         var limit = _queue.Count > 0 ? _options.Value.EditorLockWaitingIdleTimeout : _options.Value.EditorLockIdleTimeout;
         return held.Implicit && _options.Value.EditorLockImplicitIdle < limit ? _options.Value.EditorLockImplicitIdle : limit;
     }
+
+    // caller holds _gate; the play session the holder started itself
+    bool InOwnPlay(Holder held, UnityLink? link) => _playOwner?.SessionId == held.SessionId && AgentPlaying(link);
+
+    // caller holds _gate; a compile, a reload, an import, a held main thread (a player build), a test run or the holder's
+    // own play session: reading the editor then is part of the burst
+    bool EditorWorks(Holder held, UnityLink? link, DateTimeOffset now)
+        => link is { Connected: false } or { EditorState: FmpEditorState.Compiling or FmpEditorState.Reloading } or { Heartbeat.Updating: true }
+           || (link?.Heartbeat is { LastMainTickUnixMs: > 0 } beat && now - DateTimeOffset.FromUnixTimeMilliseconds(beat.LastMainTickUnixMs) > EditorHealth.StallAfter)
+           || TestsRunning(link) || InOwnPlay(held, link);
 
     // caller holds _gate; true when it freed a claim
     bool ExpireIfIdle(DateTimeOffset now)
@@ -923,6 +967,21 @@ public sealed class EditorLock
         {
             Free($"no tool call within {Age(_options.Value.EditorLockFirstCallDeadline)} of being granted its turn");
             return true;
+        }
+        if (_queue.Count > 0 && held.InFlight == 0)
+        {
+            var age = now - held.Acquired;
+            var maxAge = _options.Value.EditorLockImplicitMaxAge;
+            if (held.Implicit && age > maxAge && !InOwnPlay(held, _registry.GetLatestLink()))
+            {
+                Free($"implicit claim older than {Age(maxAge)} while others wait");
+                return true;
+            }
+            if (!held.Implicit && _options.Value.EditorLockHardCap is { } hardCap && age > hardCap)
+            {
+                Free($"past the hard cap of {Age(hardCap)} while others wait", stopPlay: true);
+                return true;
+            }
         }
         if (held.InFlight == 0 && now - held.LastActivity > IdleLimit(held))
         {

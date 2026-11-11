@@ -1,11 +1,11 @@
 ---
 name: matrix-screenshot-game-view
-description: Capture a screenshot of the Unity Editor's Game View by reading its internal render texture directly. Image size matches the current Game View resolution; the tool corrects Y-flip on DirectX / Metal so the output is always upright. Requires an open Game View window.
+description: Capture a screenshot of the Unity Editor's Game View by reading its internal render texture directly. Image size matches the current Game View resolution; the tool corrects Y-flip on DirectX / Metal so the output is always upright. Requires an open Game View window. Scaled to `maxResolution` (default 1024; 0 = full size).
 ---
 
 # Screenshot / Game View
 
-Captures a screenshot from the Unity Editor Game View and returns it as an image. Reads the Game View's own render texture directly via the Unity Editor API. The image size matches the current Game View resolution. Returns the image directly for visual inspection by the LLM.
+Captures a screenshot from the Unity Editor Game View and returns it as an image. Reads the Game View's own render texture directly via the Unity Editor API. The image size matches the current Game View resolution, scaled so its longest side is at most `maxResolution` (default 1024; pass 0 for full size). Returns the image directly for visual inspection by the LLM.
 
 ## Behavior
 
@@ -18,7 +18,8 @@ Call this tool through the MCP client connected to the local Matrix Bridge serve
 Example input:
 ```json
 {
-  "nothing": "value"
+  "nothing": "value",
+  "maxResolution": 0
 }
 ```
 
@@ -31,6 +32,7 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `nothing` | `string` | No |  |
+| `maxResolution` | `integer` | No | Longest side of the returned image in pixels; larger captures are scaled down to save tokens. Default: 1024. 0 = full size (still capped at 3840). |
 
 ### Input JSON Schema
 
@@ -40,6 +42,9 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
   "properties": {
     "nothing": {
       "type": "string"
+    },
+    "maxResolution": {
+      "type": "integer"
     }
   }
 }

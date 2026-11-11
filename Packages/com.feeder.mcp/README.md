@@ -81,13 +81,27 @@ Open **Tools > Feeder > Matrix Bridge > Skills**. It lists every MCP tool with i
 Run **Tools > Feeder > Matrix Bridge > Setup...** once on each machine. It:
 
 - turns Matrix on for the project on this machine: it starts the local server and links the editor;
-- adds `.mcp.json` to the project's `.gitignore`; if the file is already committed, it prints
-  `git rm --cached .mcp.json` for you to run;
+- adds `.mcp.json` and `.codex/config.toml` to the project's `.gitignore`; if a file is already committed, it prints
+  the git command for you to run;
 - keeps only the core MCP tools enabled and disables the rest, to cut the tokens sent with every
   request; switch more on in **Tools > Feeder > Matrix Bridge > Skills**, or a client enables them on demand with
   `tool-set-enabled-state`;
-- writes the Claude Code MCP config, then installs or verifies the Claude Code CLI (Node.js is
-  installed with winget if missing).
+- regenerates the agent skills;
+- changes these editor settings so agents can share the editor:
+  - Preferences > Asset Pipeline > Auto Refresh: Disabled. A file an agent writes on disk no longer compiles the
+    moment someone clicks the editor, in the middle of another session's play test; agents refresh through
+    `assets-refresh`, which waits for the editor lock. Press Ctrl+R after editing files outside Unity.
+  - Preferences > General > Script Changes While Playing: Recompile After Finished Playing.
+  - Player Settings > Run In Background: On, so play mode keeps running while the agent's terminal has focus.
+
+The two Preferences apply to every Unity project on this machine; Run In Background is saved in
+`ProjectSettings/ProjectSettings.asset`. The first Setup records the values from before, and
+**Tools > Feeder > Matrix Bridge > Revert Setups...** puts them back, removes the `.gitignore` lines Setup added,
+restores which tools were enabled, turns Matrix and Hyper Testing Mode off and closes the Matrix windows. Client
+configs and generated skill files stay.
+
+Steps that depend on the project or need admin rights (entering play mode without a domain reload, a Windows
+Defender exclusion) are in the `matrix-setup-checklist` skill: ask your agent to run it.
 
 ## Editor health and tool-call
 

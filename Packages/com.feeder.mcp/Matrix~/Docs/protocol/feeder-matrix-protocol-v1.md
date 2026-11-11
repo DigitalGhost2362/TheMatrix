@@ -195,7 +195,10 @@ changes (at most every 5 s for the holder's activity and the lock file).
 `outside` lock file; returns what was freed. Answers only a registered link.
 
 **Lifetime.** An agent claim ends on `editor-lock-release`, when its MCP session ends, or after
-`EditorLockIdleTimeout` (default 10 minutes) with no call from it and none running, or when a person
-frees it from the editor. The matrix mirrors every claim to
+`EditorLockIdleTimeout` (default 10 minutes) with no activity from it and no call running, or when a person
+frees it from the editor. Read-only calls count as activity only while the editor compiles, reloads,
+imports, builds, runs tests or is in the play session the holder started. While other sessions wait, an
+implicit claim older than `EditorLockImplicitMaxAge` (default 5 minutes) ends between two calls, and so
+does an explicit claim older than `EditorLockHardCap` when that is set. The matrix mirrors every claim to
 `Temp/agent-editor-lock/lock.json` (with `"matrix": true`), so sessions using the lock-file protocol see
 it.

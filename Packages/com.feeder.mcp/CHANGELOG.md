@@ -2,6 +2,35 @@
 
 All notable changes to this package are documented here.
 
+## [Unreleased]
+
+### Added
+
+- `Tools > Feeder > Matrix Bridge > Revert Setups...` puts back the settings the first Setup changed, removes the
+  `.gitignore` lines it added, restores which tools were enabled, turns Matrix and Hyper Testing Mode off and closes
+  the Matrix windows. Its confirm dialog lists every change first.
+- `matrix-setup-checklist` skill: turning off domain reload on entering play mode after checking the project's
+  static state, and a Windows Defender exclusion for the project folder.
+
+### Changed
+
+- Setup also sets Auto Refresh to Disabled, Script Changes While Playing to Recompile After Finished Playing
+  and Run In Background to On, and lists these in its confirm dialog. The two Preferences are machine-wide. `assets-refresh` joins the core tools, since agents now refresh on their own.
+
+- Editor lock: read-only calls of the holder (screenshots, console, queries, status tools) renew its claim only while
+  the editor compiles, reloads, imports, builds, runs tests or is in the play session the holder started. Reading an
+  idle editor no longer keeps a claim alive. `FeederMatrix:EditorLockReadOnlyKeepsAlive=true` restores the old behavior.
+- Editor lock: while other sessions wait, an implicit claim older than 5 minutes is handed to the next in line between
+  two calls, except in the play session its holder started. `FeederMatrix:EditorLockImplicitMaxAge` sets the age.
+- `FeederMatrix:EditorLockHardCap` (off by default) frees an explicit claim older than the given time between two calls
+  while other sessions wait.
+
+### Fixed
+
+- Editor lock: the holder of a claim past the 15 minute cap was never told. Every Unity tool result it gets now ends
+  with an `Editor lock:` line (also in `structuredContent.lock_notice`) asking it to release and acquire again.
+  `FeederMatrix:EditorLockCapNudge=false` turns it off.
+
 ## [1.1.0] - 2026-11-09
 
 ### Added

@@ -37,6 +37,21 @@ public sealed class MatrixOptions
     /// <summary>An implicit claim with no tool call for this long is freed.</summary>
     public TimeSpan EditorLockImplicitIdle { get; set; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>An implicit claim older than this gives way between two calls while other sessions wait, except in the play session its holder started.</summary>
+    public TimeSpan EditorLockImplicitMaxAge { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>An explicit claim older than this is freed between two calls while other sessions wait. Null (the default) frees none by age.</summary>
+    public TimeSpan? EditorLockHardCap { get; set; }
+
+    /// <summary>The holder of an explicit claim past the 15-minute cap is told to release with every Unity tool result.</summary>
+    public bool EditorLockCapNudge { get; set; } = true;
+
+    /// <summary>
+    /// Read-only calls of the holder renew its claim like any other call. Off (the default), they renew it only while the
+    /// editor compiles, reloads, imports, builds, runs tests or is in the play session the holder started.
+    /// </summary>
+    public bool EditorLockReadOnlyKeepsAlive { get; set; }
+
     /// <summary>An agent's editor claim with no tool call for this long is freed.</summary>
     public TimeSpan EditorLockIdleTimeout { get; set; } = TimeSpan.FromMinutes(10);
 

@@ -99,8 +99,9 @@ tools never) follows one rule when your session holds no lock:
 
 - Editor free and nobody waiting -> the tool runs and your session gets an **implicit claim**, shown in
   the Matrix Bridge window as `<tool> (implicit)`. It is freed after **30 seconds** without a call
-  from you (a running call keeps it), or when your session closes. Keep calling and it stays yours.
-  For a play session or several steps in a row, still claim with `editor-lock-acquire`.
+  from you (a running call keeps it), or when your session closes. Keep calling editor-changing tools
+  and it stays yours while nobody waits. For a play session or several steps in a row, still claim
+  with `editor-lock-acquire`.
 - Editor taken, or others waiting -> the call waits in the same first-come queue as
   `editor-lock-acquire` (about 50 seconds) and the tool runs the moment you are granted the Editor.
   When the wait runs out the tool did **not** run: the answer is the error `lock_queued` with your
@@ -112,9 +113,17 @@ How the claim behaves:
 
 - It belongs to your MCP session. Subagents that run inside your session share it: never let two of
   them work the Editor at once.
-- Every tool call you make counts as activity. A claim with no call from you for **10 minutes** is
-  freed (**2 minutes** while other sessions wait; a call still running keeps it), and so is a claim
-  whose MCP session closed. There is no heartbeat to send.
+- Editor-changing tool calls count as activity. Read-only calls (screenshots, console, queries, status
+  tools) count only while the Editor works for you: compiling, reloading, importing, building, running
+  tests, or in a play session your own tool started. Reading an idle Editor does not keep your claim.
+- A claim with no activity for **10 minutes** is freed (**2 minutes** while other sessions wait; a call
+  still running keeps it), and so is a claim whose MCP session closed. There is no heartbeat to send.
+- Past the 15-minute cap every tool result ends with a line starting `Editor lock:` (also in
+  `structuredContent.lock_notice`). Obey it: finish the step, exit play mode you started, release, and
+  acquire again for the next burst.
+- An implicit claim older than **5 minutes** is handed to the next session in line between two of your
+  calls (not during a play session your own tool started). Your next editor-changing tool then waits in
+  line like anyone's.
 - In a play session your own tool started, the claim (implicit too) is freed only after **10 minutes**
   without a call, even while others wait. When it is freed that way, or your session closes, Matrix
   exits that play mode for you. A person's play mode and a play mode test run are never stopped.
@@ -268,8 +277,9 @@ A tool call ends at the project's tool timeout. For work that takes longer:
 - Or start the job inside Unity and come back for the result. Schedule it from `EditorApplication.update`
   (it runs while the Editor is in the background; `EditorApplication.delayCall` does not), remove the
   callback when it ran, and write a marker file under `Temp/` with the job's name and state
-  (`started`, `done`, `failed`). Poll the marker, not the connection. While you poll, keep calling
-  tools at least every few minutes, or release and claim again, so your claim does not go idle.
+  (`started`, `done`, `failed`). Poll the marker, not the connection. While you poll, read the job's
+  state with `script-execute` at least every few minutes, or release and claim again, so your claim
+  does not go idle: read-only tools do not keep it while the Editor itself is idle.
 - Before you schedule a job again, read its marker and `editor-application-get-state`. A dropped
   connection or a domain reload does not mean the job did not run: never schedule it a second time
   because the link went away.

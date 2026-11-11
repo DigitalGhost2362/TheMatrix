@@ -99,6 +99,10 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
           "type": "boolean",
           "description": "Whether the tool is enabled. A disabled tool is registered but cannot be called until tool-set-enabled-state turns it on."
         },
+        "group": {
+          "type": "string",
+          "description": "Skill group the tool belongs to. tool-set-enabled-state accepts 'group:<Name>' to switch the whole group."
+        },
         "description": {
           "type": "string",
           "description": "Tool description."

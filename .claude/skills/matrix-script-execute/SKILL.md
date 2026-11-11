@@ -26,7 +26,11 @@ A call that runs longer than the project's tool timeout fails with a timeout. Fo
 
 ## Keeping data between calls
 
-Each call loads a fresh copy of your code, so its `static` fields start empty every time. To keep a value until the next call, store it in the domain: `AppDomain.CurrentDomain.SetData("my-key", value)` and `AppDomain.CurrentDomain.GetData("my-key")`. A domain reload (compile, entering play mode) clears it.
+Running the same code again reuses the assembly loaded for it, so its `static` fields keep their values between those runs (a counter goes 1, 2, 3) until a domain reload (compile, entering play mode) clears them. Any change to the code or to the loaded assemblies compiles a new assembly with empty statics. Pass `freshAssembly=true` when the code must start from empty statics every time; that loads a new assembly per call, which Unity only frees on a domain reload. To share a value between different pieces of code, store it in the domain: `AppDomain.CurrentDomain.SetData("my-key", value)` and `AppDomain.CurrentDomain.GetData("my-key")`.
+
+## Replaying a run
+
+The last 20 runs are kept until the Editor closes; 'script-execute-history' lists them with an id. Pass that id as `replayId` (leave `csharpCode` empty) to run it again with the same class, method, mode and parameters; parameters you pass now replace the stored ones.
 
 ## Watching something change over time
 
@@ -59,7 +63,9 @@ Example input:
   "methodName": "value",
   "parameters": {},
   "isMethodBody": false,
-  "timeoutSeconds": 0
+  "timeoutSeconds": 0,
+  "freshAssembly": false,
+  "replayId": 0
 }
 ```
 
@@ -71,12 +77,14 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `csharpCode` | `string` | Yes | C# code to compile and execute. In full code mode (default, isMethodBody=false): must define a complete class with a static method. Example: 'using UnityEngine; public class Script { public static void Main() { Debug.Log("Hello"); } }'. Do NOT use top-level statements. In body-only mode (isMethodBody=true): provide only the method body statements. The tool auto-generates usings, class, and method header. Example body: 'go.SetActive(false);'. A body may 'return' a value (e.g. 'return go.name;'), which becomes the result. Custom helper classes can still be defined inline in the body-only string after the main logic, but for complex additional class definitions use full code mode instead. |
+| `csharpCode` | `string` | No | C# code to compile and execute. In full code mode (default, isMethodBody=false): must define a complete class with a static method. Example: 'using UnityEngine; public class Script { public static void Main() { Debug.Log("Hello"); } }'. Do NOT use top-level statements. In body-only mode (isMethodBody=true): provide only the method body statements. The tool auto-generates usings, class, and method header. Example body: 'go.SetActive(false);'. A body may 'return' a value (e.g. 'return go.name;'), which becomes the result. Custom helper classes can still be defined inline in the body-only string after the main logic, but for complex additional class definitions use full code mode instead. |
 | `className` | `string` | No | The name of the class containing the method to execute. In body-only mode this becomes the generated class name. |
 | `methodName` | `string` | No | The name of the method to execute. Must be a static method. In body-only mode this becomes the generated method name. |
 | `parameters` | `any` | No | Serialized parameters to pass to the method. Each entry must specify 'name' and 'typeName'. Supported parameter types include primitives, strings, and Unity object references: - 'UnityEngine.GameObject': resolves an actual GameObject from value '{"instanceID": N}', '{"name": "..."}', or '{"path": "..."}'. - 'UnityEngine.Component' (or any component subtype): resolves from '{"instanceID": N}'. - 'Feeder.MCP.Data.GameObjectRef': passes a GameObjectRef POCO directly;   the method body calls goRef.FindGameObject() to resolve it. - 'Feeder.MCP.Data.ComponentRef': passes a ComponentRef POCO. - 'Feeder.MCP.Data.ObjectRef': passes a base ObjectRef POCO. If the method does not require parameters, leave this empty. |
 | `isMethodBody` | `boolean` | No | When true, 'csharpCode' is treated as just the method body. The tool auto-generates standard using directives (System, UnityEngine, Feeder.MCP.Data, Feeder.MCP.Runtime.Extensions, UnityEditor), the class definition, and the method signature (returns object when the body has 'return value;', otherwise void). Parameters from the 'parameters' list are automatically added to the method signature using their typeName and name. When false (default), 'csharpCode' must be a complete C# compilation unit with class and method definitions. |
 | `timeoutSeconds` | `integer` | No | Seconds this call may run before it times out. 0 (default) keeps the project's tool timeout. Set it for code that runs long on purpose; the server caps it (30 minutes by default). |
+| `freshAssembly` | `boolean` | No | When true, the code is loaded as a new assembly for this call, so its static fields start empty. Default false: identical code reuses its loaded assembly and static fields persist between runs until a domain reload. |
+| `replayId` | `integer` | No | Id of an earlier run (see script-execute-history). Repeats that run; csharpCode may then be empty. Passed 'parameters' replace the stored ones. 0 = off. |
 
 ### Input JSON Schema
 
@@ -100,6 +108,12 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
       "type": "boolean"
     },
     "timeoutSeconds": {
+      "type": "integer"
+    },
+    "freshAssembly": {
+      "type": "boolean"
+    },
+    "replayId": {
       "type": "integer"
     }
   },
@@ -146,10 +160,7 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
       ],
       "additionalProperties": false
     }
-  },
-  "required": [
-    "csharpCode"
-  ]
+  }
 }
 ```
 

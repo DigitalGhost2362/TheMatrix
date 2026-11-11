@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Feeder.Matrix.Backends;
 using Feeder.Matrix.Health;
 using Feeder.Matrix.Unity;
@@ -95,8 +96,20 @@ public sealed class ServerTools(
             logger.LogInformation("{Tool} refused for session {SessionId}: editor lock", request.Name, sessionId);
             return refusal;
         }
-        using (editorLock.Track(sessionId))
-            return await backend.CallToolAsync(request, ct);
+        CallToolResult result;
+        using (editorLock.Track(sessionId, request.Name))
+            result = await backend.CallToolAsync(request, ct);
+        if (editorLock.HolderNotice(sessionId) is { } notice)
+        {
+            result.Content = [.. result.Content ?? [], Block(notice)];
+            if (result.StructuredContent is { ValueKind: JsonValueKind.Object } body)
+            {
+                var json = JsonObject.Create(body)!;
+                json["lock_notice"] = notice;
+                result.StructuredContent = JsonSerializer.SerializeToElement(json);
+            }
+        }
+        return result;
     }
 
     async ValueTask<CallToolResult> ProxyAsync(CallToolRequestParams request, string? sessionId, IUnityBackend backend, CancellationToken ct)

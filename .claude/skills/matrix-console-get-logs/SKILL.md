@@ -18,7 +18,7 @@ Retrieves Unity Editor logs. Useful for debugging and monitoring Unity Editor ac
 - `include` / `exclude` — regular expressions on the message; `exclude: "^\\[Matrix"` hides Matrix's own lines.
 - `groupDuplicates` — one entry per identical message with its `Count`.
 
-Entries come oldest first. Without the new inputs the result holds the same entries as before.
+Entries come oldest first. Without the new inputs the result holds the same entries as before. To read only what is new since your last call, or to learn when `maxEntries` cut the result, use 'console-get-logs-page'.
 
 ## How to Call
 
@@ -156,6 +156,9 @@ Read the /feeder-mcp-initial-setup skill for local connection setup.
           "type": "string"
         },
         "Count": {
+          "type": "integer"
+        },
+        "Seq": {
           "type": "integer"
         }
       },

@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Feeder.Matrix.Backends;
+using Feeder.Matrix.Health;
 using Feeder.Matrix.Protocol;
 using Feeder.Matrix.Tools;
 using Feeder.Matrix.Unity;
@@ -117,7 +119,7 @@ public sealed class EditorLockTests : IDisposable
         Link();
         _lock.Acquire("sid-a", "claude-catwalk", "run play mode tests");
 
-        using (_lock.Track("sid-a"))
+        using (_lock.Track("sid-a", "script-execute"))
         {
             _time.Advance(_options.EditorLockIdleTimeout + TimeSpan.FromMinutes(5));
             Assert.NotNull(_lock.Refusal("sid-b", "tests-run"));
@@ -186,7 +188,7 @@ public sealed class EditorLockTests : IDisposable
         Link();
         _lock.Acquire("sid-a", "claude", "long compile");
 
-        using (_lock.Track("sid-a"))
+        using (_lock.Track("sid-a", "script-execute"))
         {
             _time.Advance(_options.EditorLockIdleTimeout + TimeSpan.FromMinutes(1));
             Assert.NotNull(_lock.Refusal("sid-b", "script-execute"));
@@ -529,7 +531,7 @@ public sealed class EditorLockTests : IDisposable
         await Done(b);
 
         _time.Advance(TimeSpan.FromSeconds(30));
-        using (_lock.Track("sid-b"))
+        using (_lock.Track("sid-b", "script-execute"))
             _time.Advance(TimeSpan.FromSeconds(40));
         await _lock.TickAsync();
 
@@ -551,7 +553,7 @@ public sealed class EditorLockTests : IDisposable
         Assert.Equal("codex", _lock.Snapshot().Owner);
 
         var c = Wait("sid-c");
-        using (_lock.Track("sid-b"))
+        using (_lock.Track("sid-b", "script-execute"))
         {
             _time.Advance(_options.EditorLockWaitingIdleTimeout + TimeSpan.FromMinutes(1));
             await _lock.TickAsync();
@@ -749,7 +751,7 @@ public sealed class EditorLockTests : IDisposable
         Link();
         await Gate("sid-a");
 
-        using (_lock.Track("sid-a"))
+        using (_lock.Track("sid-a", "script-execute"))
         {
             _time.Advance(_options.EditorLockImplicitIdle + TimeSpan.FromMinutes(1));
             Assert.Equal("sid-a", _lock.Snapshot().SessionId);
@@ -1121,6 +1123,312 @@ public sealed class EditorLockTests : IDisposable
 
         Assert.Null(_lock.Snapshot().PlayLeftBy);
         Assert.StartsWith("acquired", Text(await Done(Wait("sid-b"))));
+    }
+
+    #endregion
+
+    #region Long claims
+
+    private async Task<CallToolResult> Call(string sessionId, string tool)
+    {
+        var settings = Options.Create(_options);
+        var tools = new ServerTools(_registry, _clients, new EditorHealth(_registry, settings, _time), _lock, settings, NullLogger<ServerTools>.Instance);
+        return await tools.CallUnityAsync(new CallToolRequestParams { Name = tool }, sessionId, new EchoBackend(), default);
+    }
+
+    private async Task Calls(string sessionId, string tool, TimeSpan every, TimeSpan total)
+    {
+        for (var passed = TimeSpan.Zero; passed < total; passed += every)
+        {
+            _time.Advance(every);
+            await Call(sessionId, tool);
+        }
+    }
+
+    [Fact]
+    public async Task Holder_past_the_cap_is_told_on_every_tool_result()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "long burst");
+        await Calls("sid-a", "script-execute", TimeSpan.FromMinutes(1), EditorLock.Cap - TimeSpan.FromMinutes(1));
+        Assert.DoesNotContain(EditorLock.ReleaseName, Text(await Call("sid-a", "script-execute")));
+
+        _time.Advance(TimeSpan.FromMinutes(2));
+        var late = await Call("sid-a", "rql-query");
+
+        Assert.StartsWith("ran rql-query", Text(late));
+        Assert.Contains(EditorLock.ReleaseName, Text(late));
+        Assert.Contains("long burst", Text(late));
+        Assert.Equal("rql-query", late.StructuredContent!.Value.GetProperty("tool").GetString());
+        Assert.Contains(EditorLock.ReleaseName, late.StructuredContent!.Value.GetProperty("lock_notice").GetString());
+        Assert.DoesNotContain(EditorLock.ReleaseName, Text(await Call("sid-b", "rql-query")));
+    }
+
+    [Fact]
+    public async Task Read_only_calls_do_not_keep_an_idle_claim()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "burst");
+
+        await Calls("sid-a", "rql-query", TimeSpan.FromMinutes(1), _options.EditorLockIdleTimeout + TimeSpan.FromMinutes(1));
+
+        Assert.Null(_lock.Refusal("sid-b", "script-execute"));
+        Assert.Contains("already freed", Text(_lock.Release("sid-a")));
+    }
+
+    [Fact]
+    public async Task Editor_changing_calls_keep_the_claim()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "burst");
+
+        await Calls("sid-a", "script-execute", TimeSpan.FromMinutes(1), _options.EditorLockIdleTimeout + TimeSpan.FromMinutes(1));
+
+        Assert.NotNull(_lock.Refusal("sid-b", "script-execute"));
+    }
+
+    [Fact]
+    public async Task Read_only_calls_keep_the_claim_in_the_holders_own_play_session()
+    {
+        AgentPlaying();
+        _ = Wait("sid-b");
+
+        await Calls("sid-a", "rql-query", TimeSpan.FromMinutes(1), _options.EditorLockPlayIdleTimeout + TimeSpan.FromMinutes(1));
+        await _lock.TickAsync();
+
+        Assert.Equal("sid-a", _lock.Snapshot().SessionId);
+    }
+
+    private async Task KeepCallingWhileHeld(string sessionId, TimeSpan every, TimeSpan total)
+    {
+        for (var passed = TimeSpan.Zero; passed < total && _lock.Snapshot().SessionId == sessionId; passed += every)
+        {
+            _time.Advance(every);
+            await _lock.TickAsync();
+            if (_lock.Snapshot().SessionId == sessionId)
+                await Call(sessionId, "script-execute");
+        }
+    }
+
+    [Fact]
+    public async Task Implicit_claim_gives_way_after_its_max_age_when_others_wait()
+    {
+        Link();
+        await Call("sid-a", "script-execute");
+        var b = Wait("sid-b");
+
+        await KeepCallingWhileHeld("sid-a", TimeSpan.FromSeconds(20), TimeSpan.FromMinutes(6));
+
+        Assert.Equal("sid-b", _lock.Snapshot().SessionId);
+        Assert.StartsWith("acquired", Text(await Done(b)));
+    }
+
+    [Fact]
+    public async Task Implicit_claim_nobody_waits_for_is_not_cut_by_age()
+    {
+        Link();
+        await Call("sid-a", "script-execute");
+
+        await KeepCallingWhileHeld("sid-a", TimeSpan.FromSeconds(20), TimeSpan.FromMinutes(6));
+
+        Assert.Equal("sid-a", _lock.Snapshot().SessionId);
+    }
+
+    [Fact]
+    public void Notice_goes_only_to_the_holder_of_an_explicit_claim_past_the_cap()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "long burst");
+        _ = Wait("sid-b");
+        using var call = _lock.Track("sid-a", "script-execute");
+
+        _time.Advance(EditorLock.Cap);
+        Assert.Null(_lock.HolderNotice("sid-a"));
+
+        _time.Advance(TimeSpan.FromMinutes(1));
+        var notice = _lock.HolderNotice("sid-a");
+        Assert.Contains("16m 0s", notice);
+        Assert.Contains("\"long burst\"", notice);
+        Assert.Contains("1 session(s) are waiting", notice);
+        Assert.Contains(EditorLock.ReleaseName, notice);
+        Assert.Null(_lock.HolderNotice("sid-b"));
+        Assert.Null(_lock.HolderNotice(null));
+
+        _options.EditorLockCapNudge = false;
+        Assert.Null(_lock.HolderNotice("sid-a"));
+    }
+
+    [Fact]
+    public async Task Implicit_claim_past_the_cap_gets_no_notice()
+    {
+        Link();
+        await Call("sid-a", "script-execute");
+
+        await KeepCallingWhileHeld("sid-a", TimeSpan.FromSeconds(20), EditorLock.Cap + TimeSpan.FromMinutes(1));
+
+        Assert.Equal("sid-a", _lock.Snapshot().SessionId);
+        Assert.Null(_lock.HolderNotice("sid-a"));
+        Assert.DoesNotContain(EditorLock.ReleaseName, Text(await Call("sid-a", "script-execute")));
+    }
+
+    [Fact]
+    public async Task Acquiring_again_starts_a_new_cap()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first burst");
+        await Calls("sid-a", "script-execute", TimeSpan.FromMinutes(1), EditorLock.Cap + TimeSpan.FromMinutes(1));
+        Assert.NotNull(_lock.HolderNotice("sid-a"));
+
+        _lock.Acquire("sid-a", "claude", "second burst");
+
+        Assert.Null(_lock.HolderNotice("sid-a"));
+    }
+
+    [Fact]
+    public async Task Option_restores_read_only_calls_keeping_the_claim()
+    {
+        Link();
+        _options.EditorLockReadOnlyKeepsAlive = true;
+        _lock.Acquire("sid-a", "claude", "burst");
+
+        await Calls("sid-a", "rql-query", TimeSpan.FromMinutes(1), _options.EditorLockIdleTimeout + TimeSpan.FromMinutes(1));
+
+        Assert.NotNull(_lock.Refusal("sid-b", "script-execute"));
+    }
+
+    [Theory]
+    [InlineData(FmpEditorState.Compiling, 0, true)]
+    [InlineData(FmpEditorState.Reloading, 0, true)]
+    [InlineData(FmpEditorState.Ready, FmpPhases.RunningTests, true)]
+    [InlineData(FmpEditorState.Ready, 0, false)]
+    public async Task Read_only_calls_keep_the_claim_while_the_editor_compiles_reloads_or_runs_tests(FmpEditorState state, int phase, bool connected)
+    {
+        var link = Link();
+        _lock.Acquire("sid-a", "claude", "compile and test");
+        Beat(link, state, agentPlay: false, phase: phase);
+        link.Connected = connected;
+
+        await Calls("sid-a", "rql-query", TimeSpan.FromMinutes(1), _options.EditorLockIdleTimeout + TimeSpan.FromMinutes(1));
+
+        Assert.NotNull(_lock.Refusal("sid-b", "script-execute"));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Read_only_calls_keep_the_claim_while_assets_import_or_a_build_holds_the_main_thread(bool importing)
+    {
+        var link = Link();
+        _lock.Acquire("sid-a", "claude", "player build");
+        link.Heartbeat = new HeartbeatMessage
+        {
+            UnityInstanceId = "inst",
+            Updating = importing,
+            LastMainTickUnixMs = importing ? 0 : _time.GetUtcNow().ToUnixTimeMilliseconds(),
+        };
+
+        await Calls("sid-a", "rql-query", TimeSpan.FromMinutes(1), _options.EditorLockIdleTimeout + TimeSpan.FromMinutes(1));
+
+        Assert.NotNull(_lock.Refusal("sid-b", "script-execute"));
+    }
+
+    [Fact]
+    public async Task Read_only_calls_on_a_ticking_editor_do_not_keep_the_claim()
+    {
+        var link = Link();
+        _lock.Acquire("sid-a", "claude", "burst");
+
+        for (var minute = 0; minute <= _options.EditorLockIdleTimeout.TotalMinutes; minute++)
+        {
+            _time.Advance(TimeSpan.FromMinutes(1));
+            link.Heartbeat = new HeartbeatMessage { UnityInstanceId = "inst", LastMainTickUnixMs = _time.GetUtcNow().ToUnixTimeMilliseconds() };
+            await Call("sid-a", "rql-query");
+        }
+
+        Assert.Null(_lock.Refusal("sid-b", "script-execute"));
+    }
+
+    [Fact]
+    public async Task Running_read_only_call_keeps_the_claim_until_it_ends()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "burst");
+
+        using (_lock.Track("sid-a", "rql-query"))
+        {
+            _time.Advance(_options.EditorLockIdleTimeout + TimeSpan.FromMinutes(1));
+            await _lock.TickAsync();
+            Assert.Equal("sid-a", _lock.Snapshot().SessionId);
+        }
+
+        await _lock.TickAsync();
+        Assert.False(_lock.Snapshot().Held);
+    }
+
+    [Fact]
+    public async Task Granted_session_whose_first_call_only_reads_keeps_its_turn()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "first");
+        var b = Wait("sid-b");
+        _lock.Release("sid-a");
+        await Done(b);
+
+        using (_lock.Track("sid-b", "rql-query"))
+            _time.Advance(TimeSpan.FromSeconds(1));
+        _time.Advance(_options.EditorLockFirstCallDeadline + TimeSpan.FromSeconds(1));
+        await _lock.TickAsync();
+
+        Assert.Equal("codex", _lock.Snapshot().Owner);
+    }
+
+    [Fact]
+    public async Task Implicit_claim_in_its_own_play_session_is_not_cut_by_age()
+    {
+        var link = Link(agentPlay: true);
+        await Call("sid-a", "script-execute");
+        Beat(link, FmpEditorState.Playing);
+        _ = Wait("sid-b");
+
+        await KeepCallingWhileHeld("sid-a", TimeSpan.FromSeconds(20), _options.EditorLockImplicitMaxAge + TimeSpan.FromMinutes(1));
+
+        Assert.Equal("sid-a", _lock.Snapshot().SessionId);
+        Assert.Empty(Stops(link));
+    }
+
+    [Fact]
+    public async Task Hard_cap_frees_an_explicit_claim_only_with_waiters_and_only_when_set()
+    {
+        Link();
+        _lock.Acquire("sid-a", "claude", "long burst");
+        var b = Wait("sid-b");
+        await Calls("sid-a", "script-execute", TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(31));
+        await _lock.TickAsync();
+        Assert.Equal("sid-a", _lock.Snapshot().SessionId);
+
+        _lock.Release("sid-b");
+        _options.EditorLockHardCap = TimeSpan.FromMinutes(30);
+        await _lock.TickAsync();
+        Assert.Equal("sid-a", _lock.Snapshot().SessionId);
+
+        var c = Wait("sid-c");
+        await _lock.TickAsync();
+
+        Assert.StartsWith("acquired", Text(await Done(c)));
+        Assert.Contains("past the hard cap of 30m 0s", Text(_lock.Release("sid-a")));
+        await Done(b);
+    }
+
+    private sealed class EchoBackend : IUnityBackend
+    {
+        public ValueTask<IReadOnlyList<Tool>> ListToolsAsync(CancellationToken ct) => ValueTask.FromResult<IReadOnlyList<Tool>>([]);
+
+        public ValueTask<CallToolResult> CallToolAsync(CallToolRequestParams request, CancellationToken ct)
+            => ValueTask.FromResult(new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = "ran " + request.Name }],
+                StructuredContent = JsonSerializer.SerializeToElement(new Dictionary<string, object?> { ["tool"] = request.Name }),
+            });
     }
 
     #endregion
