@@ -1,0 +1,59 @@
+<!--
+title: Connect your AI client
+nav: Connect a client
+lead: Your client needs one thing: the address of the Matrix server. Matrix writes it into the client's config file for you, either automatically (Claude Code) or with one click in the Bridge window.
+-->
+<h2>Claude Code: already done</h2>
+<p>After Setup, Matrix writes <code>.mcp.json</code> in the project root on every Editor load, with this machine's port:</p>
+<pre data-label=".mcp.json"><code>{
+  "mcpServers": {
+    "Feeder-MCP": {
+      "type": "http",
+      "url": "http://localhost:25213/mcp"
+    }
+  }
+}</code></pre>
+<ol class="steps">
+  <li><strong>Start Claude Code in the project folder</strong>Open a terminal in the folder that holds <code>Assets</code> and <code>Packages</code>, and run <code>claude</code>. A session that was already open does not see the new server: start a new one.</li>
+  <li><strong>Approve the server</strong>The first time, Claude Code asks whether to use the <code>Feeder-MCP</code> server from <code>.mcp.json</code>. Approve it.</li>
+  <li><strong>Check the link</strong>Type <code>/mcp</code>. <code>Feeder-MCP</code> should read <strong>connected</strong>. Then go to <a href="first-session.html">Your first session</a>.</li>
+</ol>
+<div class="note"><span class="note-t">Your port is your own</span>The port comes from the project's folder path, so it differs between machines and between two copies of the same project. Never copy <code>.mcp.json</code> from a teammate; Matrix rewrites it on each Editor load.</div>
+
+<h2>Any other client: one click</h2>
+<ol class="steps">
+  <li><strong>Open the Bridge window</strong>Choose [[menu:Tools > Feeder > Matrix Bridge > Bridge]].</li>
+  <li><strong>Click your client's name</strong>The row at the bottom lists clients. Click a name to write its config; click <code>+N</code> to see the rest. A dot under the name means it is wired. An amber dot means the config is out of date: click to rewrite it.</li>
+  <li><strong>Restart the client</strong>Most clients read their MCP config only when they start or when you open the project again.</li>
+</ol>
+[[shot:bridge-online.png|The Bridge window reading ONLINE, with the client names claude, codex, cursor, deepseek, gemini and +11 along the bottom|<b>Bridge window.</b> Click a client name at the bottom to wire it. The green mark under <code>claude</code> means that client is wired.]]
+<p>Click a wired name again to remove its entry. Matrix only ever edits its own <code>Feeder-MCP</code> entry and leaves the rest of the file alone.</p>
+
+<h2>Supported clients</h2>
+<p>Where Matrix writes each config. Files inside the project hold this machine's port: keep them out of version control (see <a href="team.html">Team projects</a>).</p>
+<div class="clients">
+  <div class="client auto"><img src="assets/img/clients/claude-64.png" alt="" width="28" height="28">Claude Code<small>.mcp.json, automatic</small></div>
+  <div class="client"><span class="ph">DS</span>DeepSeek<small>Bridge window</small></div>
+  <div class="client"><img src="assets/img/clients/codex-64.png" alt="" width="28" height="28">Codex<small>.codex/config.toml</small></div>
+  <div class="client"><img src="assets/img/clients/cursor-64.png" alt="" width="28" height="28">Cursor<small>.cursor/mcp.json</small></div>
+  <div class="client"><img src="assets/img/clients/gemini-64.png" alt="" width="28" height="28">Gemini<small>.gemini/settings.json</small></div>
+  <div class="client"><img src="assets/img/clients/github-copilot-64.png" alt="" width="28" height="28">GitHub Copilot CLI<small>.mcp.json</small></div>
+  <div class="client"><img src="assets/img/clients/vs-code-64.png" alt="" width="28" height="28">VS Code (Copilot)<small>.vscode/mcp.json</small></div>
+  <div class="client"><img src="assets/img/clients/visual-studio-64.png" alt="" width="28" height="28">Visual Studio (Copilot)<small>.vs/mcp.json</small></div>
+  <div class="client"><img src="assets/img/clients/rider-64.png" alt="" width="28" height="28">Rider (Junie)<small>.junie/mcp/mcp.json</small></div>
+  <div class="client"><img src="assets/img/clients/claude-64.png" alt="" width="28" height="28">Claude Desktop<small>user config folder</small></div>
+  <div class="client"><img src="assets/img/clients/cline-64.png" alt="" width="28" height="28">Cline<small>user config folder</small></div>
+  <div class="client"><img src="assets/img/clients/kilo-code-64.png" alt="" width="28" height="28">Kilo Code<small>.kilocode/mcp.json</small></div>
+  <div class="client"><img src="assets/img/clients/zoo-code-64.png" alt="" width="28" height="28">Zoo Code<small>.roo/mcp.json</small></div>
+  <div class="client"><img src="assets/img/clients/open-code-64.png" alt="" width="28" height="28">Open Code<small>opencode.json</small></div>
+  <div class="client"><img src="assets/img/clients/antigravity-64.png" alt="" width="28" height="28">Antigravity<small>~/.gemini/config</small></div>
+  <div class="client"><img src="assets/img/clients/unity-64.png" alt="" width="28" height="28">Unity AI<small>UserSettings/mcp.json</small></div>
+</div>
+
+<h2>A client that is not listed</h2>
+<p>Any client that speaks MCP over Streamable HTTP works. In the Bridge window, open the <code>...</code> menu and copy the endpoint, then add it to your client by hand under the name <code>Feeder-MCP</code>. For a listed client whose file you manage yourself, right-click its name and choose <strong>Copy config JSON</strong>.</p>
+<pre data-label="endpoint"><code>http://localhost:&lt;port&gt;/mcp</code></pre>
+<p>The port is in <code>UserSettings/Feeder-MCP-Config.json</code> (<code>host</code>) and in the Bridge window under the state word. The server listens on <code>127.0.0.1</code> only: other machines cannot reach it.</p>
+
+<h2>Turn auto-configure off</h2>
+<p>Matrix rewrites <code>.mcp.json</code> on each load so the port is always right. If you manage that file yourself, set <code>"claude-code": false</code> under <code>agentAutoConfigure</code> in <code>UserSettings/Feeder-MCP-Config.json</code>. The same switch exists for the other clients you wired.</p>

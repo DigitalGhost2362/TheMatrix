@@ -1,0 +1,25 @@
+<!--
+title: Batch mode and CI
+nav: Batch mode and CI
+lead: Start Matrix from the command line with no window and nobody to click: a build machine, a nightly job, or an AI client running headless.
+-->
+<h2>Start it</h2>
+<pre data-label="command line"><code>Unity -batchmode -nographics -projectPath &lt;project&gt; -executeMethod Feeder.MCP.Editor.MatrixBatch.Run
+      [-matrixIdleSeconds 900] [-matrixMaxSeconds 0] [-matrixReadyTimeoutSeconds 180]
+      [-matrixQuitFile &lt;path&gt;] [-matrixReadyFile &lt;path&gt;]</code></pre>
+<div class="note warn"><span class="note-t">Leave out -quit</span>With <code>-quit</code>, Unity exits as soon as the method returns and the server goes with it.</div>
+<p>The entry installs and starts the project's server (also when <code>CI=true</code>), links the Editor and writes a ready file. It does not need Setup and does not write client config files.</p>
+
+<h2>Connect your client</h2>
+<p>Wait for <code>Temp/matrix-batch.ready.json</code> (or the path you passed with <code>-matrixReadyFile</code>). It holds <code>mcpUrl</code>: give that URL to your client as an MCP server over HTTP.</p>
+
+<h2>When it stops</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>Stops the Editor when</th></tr></thead>
+  <tbody>
+    <tr><td><code>-matrixIdleSeconds</code></td><td>900</td><td>no tool was called for this long (0 = never)</td></tr>
+    <tr><td><code>-matrixMaxSeconds</code></td><td>0</td><td>this much time has passed in total (0 = no limit)</td></tr>
+    <tr><td><code>-matrixQuitFile</code></td><td><code>Temp/matrix-batch.quit</code></td><td>this file appears: create it to stop the run cleanly</td></tr>
+    <tr><td><code>-matrixReadyTimeoutSeconds</code></td><td>180</td><td>the server is not ready in time: exits with code 2</td></tr>
+  </tbody>
+</table></div>

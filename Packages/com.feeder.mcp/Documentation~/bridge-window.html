@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en" data-page="bridge-window">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Bridge window - Matrix Bridge docs</title>
+<meta name="description" content="The Bridge window is the control panel of the link: whether Unity is reachable, who is connected, which tool is running, who holds the Editor, and which clients are wired.">
+<meta name="theme-color" content="#07090a">
+<link rel="icon" href="assets/img/logo_window_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script>document.documentElement.classList.add('js')</script>
+</head>
+<body class="docpage">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button class="icon-btn menu-btn" type="button" aria-label="Open the page list" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html" aria-label="Matrix Bridge docs home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#06140b" stroke="#1d5a34"/><path d="M9 10l6 6-6 6" fill="none" stroke="#00ff41" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="19" y="9" width="3.2" height="14" rx="1.2" fill="#00ff41"/></svg><span>Matrix Bridge</span><span class="ver">v1.1.0</span></a>
+  <nav class="topnav" aria-label="Main"><a href="install.html" aria-current="page">Guide</a><a href="tools.html">Tools</a><a href="changelog.html">What's new</a></nav>
+  <span class="spacer"></span>
+  <button class="search-btn" type="button" aria-label="Search the docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span class="lbl">Search docs and tools</span><kbd>Ctrl K</kbd></button>
+</header>
+<div class="progress" aria-hidden="true"></div>
+<div class="layout">
+<aside class="sidebar" aria-label="Pages"><h3>Get started</h3><ul><li><a href="index.html">Overview</a></li><li><a href="install.html">Install and update</a></li><li><a href="setup.html">Turn Matrix on</a></li><li><a href="connect.html">Connect a client</a></li><li><a href="first-session.html">Your first session</a></li></ul><h3>Everyday use</h3><ul><li><a href="bridge-window.html" aria-current="page">Bridge window</a></li><li><a href="skills-window.html">Skills window</a></li><li><a href="queries.html">Queries</a></li><li><a href="editor-lock.html">Editor lock</a></li><li><a href="team.html">Team projects</a></li></ul><h3>Going further</h3><ul><li><a href="runtime-tools.html">Runtime tools</a></li><li><a href="batch-ci.html">Batch mode and CI</a></li><li><a href="hyper-testing.html">Hyper Testing<span class="tag-x">exp</span></a></li><li><a href="health.html">Health and timeouts</a></li></ul><h3>Reference</h3><ul><li><a href="tools.html">Tool catalog</a></li><li><a href="reference.html">Menus, files, settings</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li><li><a href="changelog.html">What&#x27;s new</a></li></ul></aside>
+<main id="main" class="doc">
+  <p class="crumb">Everyday use</p>
+  <h1>The Bridge window</h1>
+  <p class="lead">The Bridge window is the control panel of the link: whether Unity is reachable, who is connected, which tool is running, who holds the Editor, and which clients are wired.</p>
+  <div class="doc-body">
+<p>Open it with <span class="menu" role="text" aria-label="Tools &gt; Feeder &gt; Matrix Bridge &gt; Bridge"><span class="sr">Tools &gt; Feeder &gt; Matrix Bridge &gt; Bridge</span><span aria-hidden="true" style="display:contents"><span class="m">Tools</span><span class="sep" aria-hidden="true"></span><span class="m">Feeder</span><span class="sep" aria-hidden="true"></span><span class="m">Matrix Bridge</span><span class="sep" aria-hidden="true"></span><span class="m">Bridge</span></span></span>. Dock it anywhere; a short wide strip is enough.</p>
+<figure class="shot rv"><a class="shot-frame" href="assets/img/bridge-online.png"><img src="assets/img/bridge-online.png" alt="The Bridge window: the word ONLINE, the line localhost:25213 - 2 agents, the line editor free, and client names along the bottom" width="433" height="226" loading="lazy" decoding="async"></a><figcaption><b>Bridge window, linked and idle.</b> Two client sessions are connected and nobody holds the Editor.</figcaption></figure>
+
+<h2 id="reading-it-from-top-to-bottom">Reading it from top to bottom<a class="anchor" href="#reading-it-from-top-to-bottom" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><div class="table-wrap"><table>
+  <thead><tr><th>Part</th><th>What it tells you</th></tr></thead>
+  <tbody>
+    <tr><td>State word</td><td><strong>OFFLINE</strong>: not linked. <strong>LINKING</strong>: starting the server or reconnecting, for example after a script reload. <strong>ONLINE</strong>: ready. <strong>WORKING</strong>: a tool is running right now. <strong>PLAY TESTING</strong>: a session is playing the game. <strong>FAULT</strong>: the server failed to start; click the word to retry.</td></tr>
+    <tr><td><code>localhost:25213 - 2 agents</code></td><td>The server address and how many client sessions are connected.</td></tr>
+    <tr><td><code>&gt; script-execute</code></td><td>The tool that is running, shown while the state reads WORKING.</td></tr>
+    <tr><td><code>editor free</code> or a lock card</td><td>Who holds the Editor. A card shows the client's name, its task and for how long it has held it. See <a href="editor-lock.html">Several agents, one Editor</a>.</td></tr>
+    <tr><td>Client names</td><td>Click to wire or unwire a client. A mark under the name means it is wired; amber means its config is out of date. Right-click a name to copy its config JSON.</td></tr>
+  </tbody>
+</table></div></div>
+<p>The window's tab icon dims while the Editor is not linked, so you can tell from a docked tab.</p>
+
+<h2 id="turn-the-link-on-and-off">Turn the link on and off<a class="anchor" href="#turn-the-link-on-and-off" aria-label="Link to this section">#</a></h2>
+<p>Click the state word. While it reads <strong>ONLINE</strong>, a click turns Matrix off for this project on this machine: the server stops and nothing starts on the next load. Click <strong>OFFLINE</strong> to turn it back on. The same two clicks restart the server, for example after you edit its settings file.</p>
+
+<h2 id="the-menu">The ... menu<a class="anchor" href="#the-menu" aria-label="Link to this section">#</a></h2>
+<p>The <code>...</code> button in the top right corner opens these items:</p>
+<div class="table-wrap"><div class="table-wrap"><table>
+  <thead><tr><th>Item</th><th>Use it to</th></tr></thead>
+  <tbody>
+    <tr><td>Copy endpoint</td><td>Paste the server URL into a client that Matrix does not list.</td></tr>
+    <tr><td>Change port</td><td>Pick another port when the default one is taken. Only while offline. A client whose config still has the old port shows an amber mark: click it to rewrite the config.</td></tr>
+    <tr><td>Logging</td><td>Set how much the server writes to its log. Raise it only while chasing a problem.</td></tr>
+    <tr><td>Skills</td><td>Open the <a href="skills-window.html">Skills window</a>.</td></tr>
+    <tr><td>Rain</td><td>Turn the falling-glyph background off on machines where it lags.</td></tr>
+    <tr><td>Open logs</td><td>Open the server log folder, <code>Temp/feeder-matrix</code>.</td></tr>
+    <tr><td>Open config file</td><td>Show <code>UserSettings/Feeder-MCP-Config.json</code>. See <a href="reference.html#settings-file">Settings file</a>.</td></tr>
+    <tr><td>Reinstall server</td><td>Extract the bundled server again. Use it when the server fails to start after an update.</td></tr>
+  </tbody>
+</table></div></div>
+
+<h2 id="scene-view-toolbar">Scene view toolbar<a class="anchor" href="#scene-view-toolbar" aria-label="Link to this section">#</a></h2>
+<p>Once Matrix is on, the Scene view gets a small <strong>Matrix Bridge</strong> overlay in its toolbar. Click it to open the Bridge window from where you are working.</p>
+  </div>
+  <nav class="pager" aria-label="Previous and next page"><a class="prev" href="first-session.html"><small>Previous</small><span>Your first session</span></a><a class="next" href="skills-window.html"><small>Next</small><span>Skills window</span></a></nav>
+</main>
+<nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#reading-it-from-top-to-bottom">Reading it from top to bottom</a></li><li><a href="#turn-the-link-on-and-off">Turn the link on and off</a></li><li><a href="#the-menu">The ... menu</a></li><li><a href="#scene-view-toolbar">Scene view toolbar</a></li></ul></nav>
+</div>
+<footer class="foot"><div class="in">
+  <span>Matrix Bridge 1.1.0 - MIT license. These pages ship inside the package in <code>Documentation~</code>.</span>
+  <span><a href="install.html">Install</a> - <a href="troubleshooting.html">Troubleshooting</a> - <a href="changelog.html">What's new</a></span>
+</div></footer>
+<div class="search" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="box">
+    <input type="search" placeholder="Search pages and tools, e.g. lock, setup, rql-query" aria-label="Search" role="combobox" aria-controls="search-results" aria-expanded="true" autocomplete="off">
+    <ul id="search-results" role="listbox"></ul>
+    <div class="hint"><span><kbd>Up</kbd> <kbd>Down</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
+<script src="assets/search-index.js" defer></script><script src="assets/vendor/lenis.min.js" defer></script><script src="assets/site.js" defer></script>
+</body>
+</html>

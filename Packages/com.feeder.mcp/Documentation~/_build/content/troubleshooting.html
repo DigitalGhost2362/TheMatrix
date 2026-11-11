@@ -1,0 +1,51 @@
+<!--
+title: Troubleshooting
+nav: Troubleshooting
+lead: Find your symptom, try the fix. Most problems come down to an old client session, a dialog open in Unity, or a file edited outside Unity.
+-->
+<h2>The Matrix Bridge menu items are greyed out</h2>
+<p>Matrix is not turned on for this project on this machine. Run [[menu:Tools > Feeder > Matrix Bridge > Setup...]]. If you turned it off from the Bridge window, click <strong>OFFLINE</strong> there instead.</p>
+
+<h2>My client has no Unity tools</h2>
+<ul>
+  <li><strong>Start a new session.</strong> A client session opened before Setup, or before the config was written, does not see the server.</li>
+  <li><strong>Start it in the right folder.</strong> Claude Code reads <code>.mcp.json</code> from the folder you start it in: the one that holds <code>Assets</code>.</li>
+  <li><strong>Approve the server.</strong> In Claude Code, <code>/mcp</code> shows <code>Feeder-MCP</code>. If it is disabled or waiting for approval, approve it.</li>
+  <li><strong>Check the config exists.</strong> For other clients, open the <a href="bridge-window.html">Bridge window</a> and make sure the client's name has a mark under it. Click it if not, then restart the client.</li>
+</ul>
+
+<h2>The client says the editor is not linked</h2>
+<ol class="steps">
+  <li><strong>Look at the Bridge window</strong>It should read ONLINE. LINKING for more than a minute, or FAULT, points at the server: click the word to retry.</li>
+  <li><strong>Ask for editor-health</strong>[[tool:editor-health]] names what holds Unity: a modal dialog, a compile, a script reload. Close the dialog or wait for the reload.</li>
+  <li><strong>Reinstall the server</strong>From the Bridge window's <code>...</code> menu, choose <strong>Reinstall server</strong>. Do this after a package update that left the server failing to start.</li>
+  <li><strong>Read the logs</strong>[[menu:Tools > Feeder > Matrix Bridge > Server > Open Logs]].</li>
+</ol>
+
+<h2>Calls time out while Unity compiles or imports</h2>
+<p>Normal for long imports: calls wait up to <code>reconnectGraceMs</code> (180 s) for a reload. For longer work, raise the deadlines in <code>UserSettings/Feeder-MCP-Config.json</code> (see <a href="health.html#deadlines">Deadlines</a>), or ask the client to run long C# with <code>timeoutSeconds</code>.</p>
+
+<h2>My script changes do not show up</h2>
+<p>Setup turned Auto Refresh off. Press <kbd>Ctrl</kbd> + <kbd>R</kbd> in Unity after you edit files outside Unity. Changes your client makes are refreshed through [[tool:assets-refresh]].</p>
+<p>If a script changes while you play, Unity now compiles it after you stop playing.</p>
+
+<h2>A new tool is "not found"</h2>
+<p>The tool is off, or the client has not reloaded its tool list. Switch it on in the <a href="skills-window.html">Skills window</a>. Claude Code sees it at once; other clients need a reconnect, or can call it through [[tool:tool-call]] meanwhile.</p>
+
+<h2>A tool waits, or says the editor is held</h2>
+<p>Another session holds the editor lock. The Bridge window names the holder and its task. Wait, or free a stuck claim from the lock line menu. See <a href="editor-lock.html">Several agents, one Editor</a>.</p>
+
+<h2>Play mode stops when I switch to my terminal</h2>
+<p>Run In Background is off. Setup turns it on; if you reverted Setup, turn it on in Player Settings.</p>
+
+<h2>The port is taken</h2>
+<p>Another program uses this project's port. In the Bridge window, click the state word to go offline, then choose <strong>Change port</strong> from the <code>...</code> menu. Clients with an amber mark have the old port: click them to rewrite their config.</p>
+
+<h2>The Bridge window lags</h2>
+<p>Turn the rain background off: <code>...</code> menu, <strong>Rain</strong>.</p>
+
+<h2>Teammates see .mcp.json changes in their diff</h2>
+<p>The file was committed before Setup ignored it. See <a href="team.html#what-to-commit-and-what-to-ignore">Team projects</a> for the command to run.</p>
+
+<h2>Still stuck</h2>
+<p>Collect three things and send them with your report: the result of [[tool:editor-health]], the server log from [[menu:Tools > Feeder > Matrix Bridge > Server > Open Logs]], and the version in Package Manager.</p>

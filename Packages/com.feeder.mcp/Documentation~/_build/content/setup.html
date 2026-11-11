@@ -1,0 +1,60 @@
+<!--
+title: Turn Matrix on
+nav: Turn Matrix on
+lead: Run Setup once on each machine. It starts the local server, links the Editor, and changes a few Editor settings so an AI client can work in Unity without fighting you for it.
+-->
+<h2>Run Setup</h2>
+<ol class="steps">
+  <li><strong>Open Setup</strong>Choose [[menu:Tools > Feeder > Matrix Bridge > Setup...]].</li>
+  <li><strong>Read the list and click Run</strong>The dialog lists every change before it makes any. The same list is below.</li>
+  <li><strong>Read the result</strong>A <strong>Setup finished</strong> window reports each step. The other Matrix Bridge menu items are now enabled, and the <a href="bridge-window.html">Bridge window</a> reads <strong>ONLINE</strong>.</li>
+</ol>
+<p>The on/off choice is stored for this machine and this project folder, outside the project. It is never committed, so each teammate decides for themselves.</p>
+
+<h2>What Setup changes</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Change</th><th>Why</th><th>Where it is stored</th></tr></thead>
+  <tbody>
+    <tr><td>Starts the local server and links the Editor</td><td>Matrix does nothing until this runs. From now on it starts on every Editor load.</td><td>This machine and project folder</td></tr>
+    <tr><td>Adds <code>.mcp.json</code> and <code>.codex/config.toml</code> to <code>.gitignore</code></td><td>Both hold the server port, and the port differs on every machine. If a file is already committed, Setup prints the git command to run.</td><td><code>.gitignore</code></td></tr>
+    <tr><td>Keeps only the core tools switched on</td><td>Every switched-on tool costs tokens in every request. The core set is enough to start; your client switches on more when it needs them.</td><td><code>UserSettings/Feeder-MCP-Config.json</code></td></tr>
+    <tr><td>Regenerates the skill files</td><td>Clients that read skills learn how to use each tool.</td><td><code>.claude/skills/matrix-*</code></td></tr>
+    <tr><td>Auto Refresh: <strong>Disabled</strong></td><td>A file the AI writes no longer compiles the moment you click into Unity, in the middle of another session's play test. The AI refreshes with [[tool:assets-refresh]].</td><td>Preferences, every project on this machine</td></tr>
+    <tr><td>Script Changes While Playing: <strong>Recompile After Finished Playing</strong></td><td>A script edit does not break a running play test.</td><td>Preferences, every project on this machine</td></tr>
+    <tr><td>Run In Background: <strong>On</strong></td><td>Play mode keeps running while your terminal or client has focus.</td><td><code>ProjectSettings/ProjectSettings.asset</code></td></tr>
+  </tbody>
+</table></div>
+
+<div class="note warn"><span class="note-t">Auto Refresh is off now</span>After you edit a file outside Unity yourself, press <kbd>Ctrl</kbd> + <kbd>R</kbd> in Unity to import it. Changes made through the AI client are refreshed for you.</div>
+
+<h2>The core tools</h2>
+<p>Setup leaves these switched on. Together they cost about 4.5k tokens per request.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Tool</th><th>What your client uses it for</th></tr></thead>
+  <tbody>
+    <tr><td>[[tool:rql-query]], [[tool:rql-schema]]</td><td>Read anything in the open scenes, assets and console with one query.</td></tr>
+    <tr><td>[[tool:console-get-logs]]</td><td>Read the Console.</td></tr>
+    <tr><td>[[tool:editor-application-get-state]]</td><td>Check play mode, pause and compile state.</td></tr>
+    <tr><td>[[tool:screenshot-game-view]]</td><td>See the Game view.</td></tr>
+    <tr><td>[[tool:assets-refresh]]</td><td>Import changed files and compile scripts.</td></tr>
+    <tr><td>[[tool:unity-tool-list]], [[tool:tool-set-enabled-state]]</td><td>Find another tool and switch it on when the task needs it.</td></tr>
+  </tbody>
+</table></div>
+<p>Switch more on yourself in the <a href="skills-window.html">Skills window</a>, or browse them in the <a href="tools.html">tool catalog</a>.</p>
+
+<h2>Optional: faster play mode and Defender</h2>
+<p>Two more steps depend on your project or need admin rights, so Setup leaves them out: entering play mode without a domain reload, and a Windows Defender exclusion for the project folder. Both make play tests faster. Ask your AI client to run the <code>matrix-setup-checklist</code> skill; it checks your project first and explains each change.</p>
+
+<h2>Undo Setup</h2>
+<p>Run [[menu:Tools > Feeder > Matrix Bridge > Revert Setups...]]. After a confirm dialog it:</p>
+<ul>
+  <li>puts back the values Auto Refresh, Script Changes While Playing and Run In Background had before your first Setup;</li>
+  <li>removes the lines Setup added to <code>.gitignore</code>;</li>
+  <li>restores which tools were switched on;</li>
+  <li>turns Matrix off: stops the server, unlinks the Editor and turns Hyper Testing off;</li>
+  <li>closes every Matrix window.</li>
+</ul>
+<p>Client configs such as <code>.mcp.json</code> and the generated skill files stay. Nothing starts on the next load until you run Setup again.</p>
+
+<h2>Turn Matrix off for a while</h2>
+<p>To pause Matrix without undoing your settings, open the <a href="bridge-window.html">Bridge window</a> and click the state word while it reads <strong>ONLINE</strong>. The server stops, the menu items grey out, and nothing starts on the next load. Click it again while it reads <strong>OFFLINE</strong> to turn Matrix back on.</p>

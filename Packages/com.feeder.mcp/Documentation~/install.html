@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en" data-page="install">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install and update - Matrix Bridge docs</title>
+<meta name="description" content="Matrix Bridge is a normal Unity package installed from a git URL. Installing it changes nothing until you turn it on, so it is safe to add to a shared project.">
+<meta name="theme-color" content="#07090a">
+<link rel="icon" href="assets/img/logo_window_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script>document.documentElement.classList.add('js')</script>
+</head>
+<body class="docpage">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button class="icon-btn menu-btn" type="button" aria-label="Open the page list" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html" aria-label="Matrix Bridge docs home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#06140b" stroke="#1d5a34"/><path d="M9 10l6 6-6 6" fill="none" stroke="#00ff41" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="19" y="9" width="3.2" height="14" rx="1.2" fill="#00ff41"/></svg><span>Matrix Bridge</span><span class="ver">v1.1.0</span></a>
+  <nav class="topnav" aria-label="Main"><a href="install.html" aria-current="page">Guide</a><a href="tools.html">Tools</a><a href="changelog.html">What's new</a></nav>
+  <span class="spacer"></span>
+  <button class="search-btn" type="button" aria-label="Search the docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span class="lbl">Search docs and tools</span><kbd>Ctrl K</kbd></button>
+</header>
+<div class="progress" aria-hidden="true"></div>
+<div class="layout">
+<aside class="sidebar" aria-label="Pages"><h3>Get started</h3><ul><li><a href="index.html">Overview</a></li><li><a href="install.html" aria-current="page">Install and update</a></li><li><a href="setup.html">Turn Matrix on</a></li><li><a href="connect.html">Connect a client</a></li><li><a href="first-session.html">Your first session</a></li></ul><h3>Everyday use</h3><ul><li><a href="bridge-window.html">Bridge window</a></li><li><a href="skills-window.html">Skills window</a></li><li><a href="queries.html">Queries</a></li><li><a href="editor-lock.html">Editor lock</a></li><li><a href="team.html">Team projects</a></li></ul><h3>Going further</h3><ul><li><a href="runtime-tools.html">Runtime tools</a></li><li><a href="batch-ci.html">Batch mode and CI</a></li><li><a href="hyper-testing.html">Hyper Testing<span class="tag-x">exp</span></a></li><li><a href="health.html">Health and timeouts</a></li></ul><h3>Reference</h3><ul><li><a href="tools.html">Tool catalog</a></li><li><a href="reference.html">Menus, files, settings</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li><li><a href="changelog.html">What&#x27;s new</a></li></ul></aside>
+<main id="main" class="doc">
+  <p class="crumb">Get started</p>
+  <h1>Install and update</h1>
+  <p class="lead">Matrix Bridge is a normal Unity package installed from a git URL. Installing it changes nothing until you turn it on, so it is safe to add to a shared project.</p>
+  <div class="doc-body">
+<h2 id="before-you-start">Before you start<a class="anchor" href="#before-you-start" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><strong>Unity 2022.3 or newer.</strong></li>
+  <li><strong>Git installed</strong> and on the PATH, because Unity downloads the package with git. Check with <code>git --version</code> in a terminal.</li>
+  <li><strong>Windows x64, macOS (Intel or Apple silicon) or Linux x64.</strong> The package carries a ready-made server for each. You do not install .NET or anything else.</li>
+  <li><strong>An MCP client</strong>, for example Claude Code, Codex or Cursor. See <a href="connect.html">Connect your AI client</a> for the full list.</li>
+</ul>
+
+<h2 id="install">Install<a class="anchor" href="#install" aria-label="Link to this section">#</a></h2>
+<ol class="steps">
+  <li><strong>Open Package Manager</strong>In Unity, open <span class="menu" role="text" aria-label="Window &gt; Package Manager"><span class="sr">Window &gt; Package Manager</span><span aria-hidden="true" style="display:contents"><span class="m">Window</span><span class="sep" aria-hidden="true"></span><span class="m">Package Manager</span></span></span>.</li>
+  <li><strong>Add from git URL</strong>Click <strong>+</strong> in the top left corner, choose <strong>Add package from git URL</strong>, paste this URL and click <strong>Add</strong>:
+<div class="code-wrap" data-label="git URL"><pre><code>https://github.com/DigitalGhost2362/TheMatrix.git?path=/Packages/com.feeder.mcp</code></pre></div></li>
+  <li><strong>Wait for the import</strong>Unity downloads and compiles the package. A new menu appears: <span class="menu" role="text" aria-label="Tools &gt; Feeder &gt; Matrix Bridge"><span class="sr">Tools &gt; Feeder &gt; Matrix Bridge</span><span aria-hidden="true" style="display:contents"><span class="m">Tools</span><span class="sep" aria-hidden="true"></span><span class="m">Feeder</span><span class="sep" aria-hidden="true"></span><span class="m">Matrix Bridge</span></span></span>. Most of its items stay greyed out until you run Setup.</li>
+</ol>
+<p>Prefer editing files? Add the same URL to <code>Packages/manifest.json</code> and Unity installs it on the next focus:</p>
+<div class="code-wrap" data-label="Packages/manifest.json"><pre><code>{
+  "dependencies": {
+    "com.feeder.mcp": "https://github.com/DigitalGhost2362/TheMatrix.git?path=/Packages/com.feeder.mcp"
+  }
+}</code></pre></div>
+
+<div class="note"><span class="note-t">Nothing runs yet</span>Installing does not start a server, open a window or write a file. Teammates who never run Setup are not affected, even when the package is committed with the project. Next step: <a href="setup.html">turn Matrix on</a>.</div>
+
+<h2 id="update">Update<a class="anchor" href="#update" aria-label="Link to this section">#</a></h2>
+<p>Open <span class="menu" role="text" aria-label="Window &gt; Package Manager"><span class="sr">Window &gt; Package Manager</span><span aria-hidden="true" style="display:contents"><span class="m">Window</span><span class="sep" aria-hidden="true"></span><span class="m">Package Manager</span></span></span>, select <strong>Matrix Bridge</strong> and click <strong>Update</strong>. Unity fetches the newest version from the <code>main</code> branch. The Editor installs the matching server on its next load.</p>
+<p>Matrix checks once a day for a newer version and shows a popup when there is one. Turn that off under <span class="menu" role="text" aria-label="Tools &gt; Feeder &gt; Matrix Bridge &gt; Update Check"><span class="sr">Tools &gt; Feeder &gt; Matrix Bridge &gt; Update Check</span><span aria-hidden="true" style="display:contents"><span class="m">Tools</span><span class="sep" aria-hidden="true"></span><span class="m">Feeder</span><span class="sep" aria-hidden="true"></span><span class="m">Matrix Bridge</span><span class="sep" aria-hidden="true"></span><span class="m">Update Check</span></span></span>.</p>
+<p>After an update, start a new session in your AI client so it picks up the new tool list. Read <a href="changelog.html">What's new</a> to see what changed.</p>
+
+<div class="note warn"><span class="note-t">Coming from version 0.87 or earlier</span>The first load stops the old Matrix server, removes the files it left in <code>Library</code> and rewrites every wired client config. Restart your AI client session afterwards.</div>
+
+<h3 id="projects-that-used-the-matrix-registry">Projects that used the Matrix registry<a class="anchor" href="#projects-that-used-the-matrix-registry" aria-label="Link to this section">#</a></h3>
+<p>In <code>Packages/manifest.json</code>, replace the <code>com.feeder.mcp</code> version number with the git URL above, and remove the <code>Matrix</code> entry under <code>scopedRegistries</code>.</p>
+
+<h2 id="remove">Remove<a class="anchor" href="#remove" aria-label="Link to this section">#</a></h2>
+<ol class="steps">
+  <li><strong>Undo Setup</strong>Run <span class="menu" role="text" aria-label="Tools &gt; Feeder &gt; Matrix Bridge &gt; Revert Setups..."><span class="sr">Tools &gt; Feeder &gt; Matrix Bridge &gt; Revert Setups...</span><span aria-hidden="true" style="display:contents"><span class="m">Tools</span><span class="sep" aria-hidden="true"></span><span class="m">Feeder</span><span class="sep" aria-hidden="true"></span><span class="m">Matrix Bridge</span><span class="sep" aria-hidden="true"></span><span class="m">Revert Setups...</span></span></span>. It stops the server, puts back the Editor settings Setup changed and removes the lines Setup added to <code>.gitignore</code>. See <a href="setup.html#undo-setup">Undo Setup</a>.</li>
+  <li><strong>Remove the package</strong>In Package Manager, select <strong>Matrix Bridge</strong> and click <strong>Remove</strong>.</li>
+  <li><strong>Clean up what stays</strong>Delete the <code>Feeder-MCP</code> entry from <code>.mcp.json</code> (and from other clients you wired), the <code>matrix-*</code> folders under <code>.claude/skills</code>, and <code>Library/feeder-matrix</code>.</li>
+</ol>
+  </div>
+  <nav class="pager" aria-label="Previous and next page"><a class="prev" href="index.html"><small>Previous</small><span>Overview</span></a><a class="next" href="setup.html"><small>Next</small><span>Turn Matrix on</span></a></nav>
+</main>
+<nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#before-you-start">Before you start</a></li><li><a href="#install">Install</a></li><li><a href="#update">Update</a></li><li><a href="#remove">Remove</a></li></ul></nav>
+</div>
+<footer class="foot"><div class="in">
+  <span>Matrix Bridge 1.1.0 - MIT license. These pages ship inside the package in <code>Documentation~</code>.</span>
+  <span><a href="install.html">Install</a> - <a href="troubleshooting.html">Troubleshooting</a> - <a href="changelog.html">What's new</a></span>
+</div></footer>
+<div class="search" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="box">
+    <input type="search" placeholder="Search pages and tools, e.g. lock, setup, rql-query" aria-label="Search" role="combobox" aria-controls="search-results" aria-expanded="true" autocomplete="off">
+    <ul id="search-results" role="listbox"></ul>
+    <div class="hint"><span><kbd>Up</kbd> <kbd>Down</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
+<script src="assets/search-index.js" defer></script><script src="assets/vendor/lenis.min.js" defer></script><script src="assets/site.js" defer></script>
+</body>
+</html>

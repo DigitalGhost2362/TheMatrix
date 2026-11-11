@@ -1,0 +1,44 @@
+// Regenerates _build/data/tools.json from the open Editor's tool registry.
+// Run it through script-execute (className DumpTools, methodName Main), then run build.py.
+using System;
+using System.Linq;
+using System.Reflection;
+using System.Text;
+using System.IO;
+using UnityEngine;
+public class DumpTools {
+  static string Esc(string s) { if (s == null) return "null"; var sb = new StringBuilder("\""); foreach (var c in s) { if (c=='"') sb.Append("\\\""); else if (c=='\\') sb.Append("\\\\"); else if (c=='\n') sb.Append("\\n"); else if (c=='\r') {} else if (c=='\t') sb.Append("\\t"); else if (c<32) sb.Append(' '); else sb.Append(c);} return sb.Append('"').ToString(); }
+  public static string Main() {
+    var asm = AppDomain.CurrentDomain.GetAssemblies().First(a => a.GetName().Name == "Feeder.MCP.Editor");
+    var winT = asm.GetType("Feeder.MCP.Editor.UI.MatrixSkillsWindow");
+    var catT = asm.GetType("Feeder.MCP.Editor.UI.SkillCatalog");
+    var setupT = asm.GetType("Feeder.MCP.Editor.MatrixSetup");
+    var core = (string[])setupT.GetField("CoreTools", BindingFlags.NonPublic|BindingFlags.Static).GetValue(null);
+    var pluginT = AppDomain.CurrentDomain.GetAssemblies().SelectMany(a => { try { return a.GetTypes(); } catch { return new Type[0]; } }).First(t => t.Name == "MatrixPluginEditor");
+    var inst = pluginT.GetProperty("Instance", BindingFlags.Public|BindingFlags.Static|BindingFlags.NonPublic).GetValue(null);
+    var tools = inst.GetType().GetProperty("Tools").GetValue(inst);
+    var all = ((System.Collections.IEnumerable)tools.GetType().GetMethod("GetAllTools").Invoke(tools, null)).Cast<object>().ToList();
+    var facts = winT.GetMethod("Facts", BindingFlags.NonPublic|BindingFlags.Static);
+    var listT = typeof(System.Collections.Generic.List<>).MakeGenericType(facts.ReturnType);
+    var list = (System.Collections.IList)Activator.CreateInstance(listT);
+    foreach (var t in all) list.Add(facts.Invoke(null, new[]{t}));
+    var infos = ((System.Collections.IEnumerable)catT.GetMethod("Build").Invoke(null, new object[]{list, core})).Cast<object>().ToList();
+    var sb = new StringBuilder("[\n");
+    bool first = true;
+    foreach (var i in infos) {
+      Func<string, object> g = n => i.GetType().GetProperty(n).GetValue(i);
+      var grp = g("Group"); Func<string,string> gg = n => (string)grp.GetType().GetProperty(n).GetValue(grp);
+      var name = (string)g("Name");
+      var tool = all.First(t => (string)t.GetType().GetProperty("Name").GetValue(t) == name);
+      var enabled = (bool)tool.GetType().GetProperty("Enabled").GetValue(tool);
+      var comp = string.Join(",", ((System.Collections.Generic.IEnumerable<string>)g("Companions")).Select(Esc));
+      if (!first) sb.Append(",\n"); first = false;
+      sb.Append("{\"name\":"+Esc(name)+",\"title\":"+Esc((string)g("Title"))+",\"group\":"+Esc(gg("Name"))+",\"mono\":"+Esc(gg("Mono"))+",\"blurb\":"+Esc(gg("Blurb"))+",\"label\":"+Esc((string)g("Label"))+",\"summary\":"+Esc((string)g("Summary"))+",\"description\":"+Esc((string)g("Description"))+",\"risk\":"+Esc(g("Risk").ToString())+",\"tokens\":"+g("Tokens")+",\"core\":"+((bool)g("IsCore")?"true":"false")+",\"enabledHere\":"+(enabled?"true":"false")+",\"companions\":["+comp+"]}");
+    }
+    sb.Append("\n]\n");
+    var path = Path.GetFullPath("Packages/com.feeder.mcp/Documentation~/_build/data/tools.json");
+    Directory.CreateDirectory(Path.GetDirectoryName(path));
+    File.WriteAllText(path, sb.ToString(), new UTF8Encoding(false));
+    return infos.Count + " tools -> " + path;
+  }
+}

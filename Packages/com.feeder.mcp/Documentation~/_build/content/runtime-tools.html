@@ -1,0 +1,29 @@
+<!--
+title: Runtime tools
+nav: Runtime tools
+lead: Your running game, in Play mode or as a build, can link to the project's Matrix server next to the Editor. Static methods you mark as runtime tools then run inside the game, and your client calls them like any other tool.
+-->
+<h2>Write a runtime tool</h2>
+<p>Mark a static method with <code>[MatrixRuntimeTool]</code>. Add <code>[Preserve]</code> so code stripping keeps it in builds, and describe every parameter: the client reads the descriptions.</p>
+<pre data-label="C#"><code><span class="k">using</span> System.ComponentModel;
+<span class="k">using</span> Feeder.MCP.Player;
+<span class="k">using</span> UnityEngine.Scripting;
+
+[Preserve]
+[MatrixRuntimeTool(<span class="s">"runtime-hello"</span>, ReadOnly = <span class="k">true</span>, Description = <span class="s">"Greets from the running game."</span>)]
+<span class="k">static</span> <span class="k">string</span> Hello([Description(<span class="s">"Who to greet."</span>)] <span class="k">string</span> name = <span class="s">"world"</span>) =&gt; <span class="s">"hello "</span> + name;</code></pre>
+<p>Code in <code>Assembly-CSharp</code> sees the attribute as is. Code in its own assembly definition needs a reference to <code>Feeder.MCP.Player</code>.</p>
+<p>Set <code>ReadOnly = true</code> only when the method changes nothing. Two samples ship with the package: <code>runtime-ping</code> and <code>runtime-scene-info</code>.</p>
+
+<h2>Link Play mode</h2>
+<ol class="steps">
+  <li><strong>Switch it on</strong>Choose [[menu:Tools > Feeder > Matrix Bridge > Server > Link Play Mode As Player]].</li>
+  <li><strong>Press Play</strong>Each Play session links to the server as a player. The Editor link stays up.</li>
+  <li><strong>Ask</strong>Your client now lists your runtime tools and can call them while the game runs.</li>
+</ol>
+
+<h2>Link a build</h2>
+<p>Start the game with the server's port and token on the command line:</p>
+<pre data-label="command line"><code>MyGame.exe -matrixPort &lt;port&gt; -matrixToken &lt;token&gt; [-matrixHost &lt;host&gt;] [-matrixProject &lt;id&gt;]</code></pre>
+<p>Or connect from code with <code>Feeder.MCP.Player.MatrixPlayer.Connect(host, port, token)</code>. The port is the one in the project's <code>.mcp.json</code>; the token is the <code>token</code> value in <code>UserSettings/Feeder-MCP-Config.json</code>. The token can also come from the <code>MATRIX_PLAYER_TOKEN</code> environment variable.</p>
+<div class="note"><span class="note-t">Platforms</span>Desktop and mobile players. WebGL builds cannot link.</div>

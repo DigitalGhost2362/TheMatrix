@@ -1,0 +1,42 @@
+<!--
+title: The Bridge window
+nav: Bridge window
+lead: The Bridge window is the control panel of the link: whether Unity is reachable, who is connected, which tool is running, who holds the Editor, and which clients are wired.
+-->
+<p>Open it with [[menu:Tools > Feeder > Matrix Bridge > Bridge]]. Dock it anywhere; a short wide strip is enough.</p>
+[[shot:bridge-online.png|The Bridge window: the word ONLINE, the line localhost:25213 - 2 agents, the line editor free, and client names along the bottom|<b>Bridge window, linked and idle.</b> Two client sessions are connected and nobody holds the Editor.]]
+
+<h2>Reading it from top to bottom</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Part</th><th>What it tells you</th></tr></thead>
+  <tbody>
+    <tr><td>State word</td><td><strong>OFFLINE</strong>: not linked. <strong>LINKING</strong>: starting the server or reconnecting, for example after a script reload. <strong>ONLINE</strong>: ready. <strong>WORKING</strong>: a tool is running right now. <strong>PLAY TESTING</strong>: a session is playing the game. <strong>FAULT</strong>: the server failed to start; click the word to retry.</td></tr>
+    <tr><td><code>localhost:25213 - 2 agents</code></td><td>The server address and how many client sessions are connected.</td></tr>
+    <tr><td><code>&gt; script-execute</code></td><td>The tool that is running, shown while the state reads WORKING.</td></tr>
+    <tr><td><code>editor free</code> or a lock card</td><td>Who holds the Editor. A card shows the client's name, its task and for how long it has held it. See <a href="editor-lock.html">Several agents, one Editor</a>.</td></tr>
+    <tr><td>Client names</td><td>Click to wire or unwire a client. A mark under the name means it is wired; amber means its config is out of date. Right-click a name to copy its config JSON.</td></tr>
+  </tbody>
+</table></div>
+<p>The window's tab icon dims while the Editor is not linked, so you can tell from a docked tab.</p>
+
+<h2>Turn the link on and off</h2>
+<p>Click the state word. While it reads <strong>ONLINE</strong>, a click turns Matrix off for this project on this machine: the server stops and nothing starts on the next load. Click <strong>OFFLINE</strong> to turn it back on. The same two clicks restart the server, for example after you edit its settings file.</p>
+
+<h2>The ... menu</h2>
+<p>The <code>...</code> button in the top right corner opens these items:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Item</th><th>Use it to</th></tr></thead>
+  <tbody>
+    <tr><td>Copy endpoint</td><td>Paste the server URL into a client that Matrix does not list.</td></tr>
+    <tr><td>Change port</td><td>Pick another port when the default one is taken. Only while offline. A client whose config still has the old port shows an amber mark: click it to rewrite the config.</td></tr>
+    <tr><td>Logging</td><td>Set how much the server writes to its log. Raise it only while chasing a problem.</td></tr>
+    <tr><td>Skills</td><td>Open the <a href="skills-window.html">Skills window</a>.</td></tr>
+    <tr><td>Rain</td><td>Turn the falling-glyph background off on machines where it lags.</td></tr>
+    <tr><td>Open logs</td><td>Open the server log folder, <code>Temp/feeder-matrix</code>.</td></tr>
+    <tr><td>Open config file</td><td>Show <code>UserSettings/Feeder-MCP-Config.json</code>. See <a href="reference.html#settings-file">Settings file</a>.</td></tr>
+    <tr><td>Reinstall server</td><td>Extract the bundled server again. Use it when the server fails to start after an update.</td></tr>
+  </tbody>
+</table></div>
+
+<h2>Scene view toolbar</h2>
+<p>Once Matrix is on, the Scene view gets a small <strong>Matrix Bridge</strong> overlay in its toolbar. Click it to open the Bridge window from where you are working.</p>

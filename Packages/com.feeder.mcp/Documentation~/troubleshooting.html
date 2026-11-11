@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en" data-page="troubleshooting">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troubleshooting - Matrix Bridge docs</title>
+<meta name="description" content="Find your symptom, try the fix. Most problems come down to an old client session, a dialog open in Unity, or a file edited outside Unity.">
+<meta name="theme-color" content="#07090a">
+<link rel="icon" href="assets/img/logo_window_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script>document.documentElement.classList.add('js')</script>
+</head>
+<body class="docpage">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button class="icon-btn menu-btn" type="button" aria-label="Open the page list" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html" aria-label="Matrix Bridge docs home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#06140b" stroke="#1d5a34"/><path d="M9 10l6 6-6 6" fill="none" stroke="#00ff41" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="19" y="9" width="3.2" height="14" rx="1.2" fill="#00ff41"/></svg><span>Matrix Bridge</span><span class="ver">v1.1.0</span></a>
+  <nav class="topnav" aria-label="Main"><a href="install.html" aria-current="page">Guide</a><a href="tools.html">Tools</a><a href="changelog.html">What's new</a></nav>
+  <span class="spacer"></span>
+  <button class="search-btn" type="button" aria-label="Search the docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span class="lbl">Search docs and tools</span><kbd>Ctrl K</kbd></button>
+</header>
+<div class="progress" aria-hidden="true"></div>
+<div class="layout">
+<aside class="sidebar" aria-label="Pages"><h3>Get started</h3><ul><li><a href="index.html">Overview</a></li><li><a href="install.html">Install and update</a></li><li><a href="setup.html">Turn Matrix on</a></li><li><a href="connect.html">Connect a client</a></li><li><a href="first-session.html">Your first session</a></li></ul><h3>Everyday use</h3><ul><li><a href="bridge-window.html">Bridge window</a></li><li><a href="skills-window.html">Skills window</a></li><li><a href="queries.html">Queries</a></li><li><a href="editor-lock.html">Editor lock</a></li><li><a href="team.html">Team projects</a></li></ul><h3>Going further</h3><ul><li><a href="runtime-tools.html">Runtime tools</a></li><li><a href="batch-ci.html">Batch mode and CI</a></li><li><a href="hyper-testing.html">Hyper Testing<span class="tag-x">exp</span></a></li><li><a href="health.html">Health and timeouts</a></li></ul><h3>Reference</h3><ul><li><a href="tools.html">Tool catalog</a></li><li><a href="reference.html">Menus, files, settings</a></li><li><a href="troubleshooting.html" aria-current="page">Troubleshooting</a></li><li><a href="changelog.html">What&#x27;s new</a></li></ul></aside>
+<main id="main" class="doc">
+  <p class="crumb">Reference</p>
+  <h1>Troubleshooting</h1>
+  <p class="lead">Find your symptom, try the fix. Most problems come down to an old client session, a dialog open in Unity, or a file edited outside Unity.</p>
+  <div class="doc-body">
+<h2 id="the-matrix-bridge-menu-items-are-greyed-out">The Matrix Bridge menu items are greyed out<a class="anchor" href="#the-matrix-bridge-menu-items-are-greyed-out" aria-label="Link to this section">#</a></h2>
+<p>Matrix is not turned on for this project on this machine. Run <span class="menu" role="text" aria-label="Tools &gt; Feeder &gt; Matrix Bridge &gt; Setup..."><span class="sr">Tools &gt; Feeder &gt; Matrix Bridge &gt; Setup...</span><span aria-hidden="true" style="display:contents"><span class="m">Tools</span><span class="sep" aria-hidden="true"></span><span class="m">Feeder</span><span class="sep" aria-hidden="true"></span><span class="m">Matrix Bridge</span><span class="sep" aria-hidden="true"></span><span class="m">Setup...</span></span></span>. If you turned it off from the Bridge window, click <strong>OFFLINE</strong> there instead.</p>
+
+<h2 id="my-client-has-no-unity-tools">My client has no Unity tools<a class="anchor" href="#my-client-has-no-unity-tools" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><strong>Start a new session.</strong> A client session opened before Setup, or before the config was written, does not see the server.</li>
+  <li><strong>Start it in the right folder.</strong> Claude Code reads <code>.mcp.json</code> from the folder you start it in: the one that holds <code>Assets</code>.</li>
+  <li><strong>Approve the server.</strong> In Claude Code, <code>/mcp</code> shows <code>Feeder-MCP</code>. If it is disabled or waiting for approval, approve it.</li>
+  <li><strong>Check the config exists.</strong> For other clients, open the <a href="bridge-window.html">Bridge window</a> and make sure the client's name has a mark under it. Click it if not, then restart the client.</li>
+</ul>
+
+<h2 id="the-client-says-the-editor-is-not-linked">The client says the editor is not linked<a class="anchor" href="#the-client-says-the-editor-is-not-linked" aria-label="Link to this section">#</a></h2>
+<ol class="steps">
+  <li><strong>Look at the Bridge window</strong>It should read ONLINE. LINKING for more than a minute, or FAULT, points at the server: click the word to retry.</li>
+  <li><strong>Ask for editor-health</strong><a class="tool-ref" href="tools.html#editor-health"><code>editor-health</code></a> names what holds Unity: a modal dialog, a compile, a script reload. Close the dialog or wait for the reload.</li>
+  <li><strong>Reinstall the server</strong>From the Bridge window's <code>...</code> menu, choose <strong>Reinstall server</strong>. Do this after a package update that left the server failing to start.</li>
+  <li><strong>Read the logs</strong><span class="menu" role="text" aria-label="Tools &gt; Feeder &gt; Matrix Bridge &gt; Server &gt; Open Logs"><span class="sr">Tools &gt; Feeder &gt; Matrix Bridge &gt; Server &gt; Open Logs</span><span aria-hidden="true" style="display:contents"><span class="m">Tools</span><span class="sep" aria-hidden="true"></span><span class="m">Feeder</span><span class="sep" aria-hidden="true"></span><span class="m">Matrix Bridge</span><span class="sep" aria-hidden="true"></span><span class="m">Server</span><span class="sep" aria-hidden="true"></span><span class="m">Open Logs</span></span></span>.</li>
+</ol>
+
+<h2 id="calls-time-out-while-unity-compiles-or-imports">Calls time out while Unity compiles or imports<a class="anchor" href="#calls-time-out-while-unity-compiles-or-imports" aria-label="Link to this section">#</a></h2>
+<p>Normal for long imports: calls wait up to <code>reconnectGraceMs</code> (180 s) for a reload. For longer work, raise the deadlines in <code>UserSettings/Feeder-MCP-Config.json</code> (see <a href="health.html#deadlines">Deadlines</a>), or ask the client to run long C# with <code>timeoutSeconds</code>.</p>
+
+<h2 id="my-script-changes-do-not-show-up">My script changes do not show up<a class="anchor" href="#my-script-changes-do-not-show-up" aria-label="Link to this section">#</a></h2>
+<p>Setup turned Auto Refresh off. Press <kbd>Ctrl</kbd> + <kbd>R</kbd> in Unity after you edit files outside Unity. Changes your client makes are refreshed through <a class="tool-ref" href="tools.html#assets-refresh"><code>assets-refresh</code></a>.</p>
+<p>If a script changes while you play, Unity now compiles it after you stop playing.</p>
+
+<h2 id="a-new-tool-is-not-found">A new tool is "not found"<a class="anchor" href="#a-new-tool-is-not-found" aria-label="Link to this section">#</a></h2>
+<p>The tool is off, or the client has not reloaded its tool list. Switch it on in the <a href="skills-window.html">Skills window</a>. Claude Code sees it at once; other clients need a reconnect, or can call it through <a class="tool-ref" href="tools.html#tool-call"><code>tool-call</code></a> meanwhile.</p>
+
+<h2 id="a-tool-waits-or-says-the-editor-is-held">A tool waits, or says the editor is held<a class="anchor" href="#a-tool-waits-or-says-the-editor-is-held" aria-label="Link to this section">#</a></h2>
+<p>Another session holds the editor lock. The Bridge window names the holder and its task. Wait, or free a stuck claim from the lock line menu. See <a href="editor-lock.html">Several agents, one Editor</a>.</p>
+
+<h2 id="play-mode-stops-when-i-switch-to-my-terminal">Play mode stops when I switch to my terminal<a class="anchor" href="#play-mode-stops-when-i-switch-to-my-terminal" aria-label="Link to this section">#</a></h2>
+<p>Run In Background is off. Setup turns it on; if you reverted Setup, turn it on in Player Settings.</p>
+
+<h2 id="the-port-is-taken">The port is taken<a class="anchor" href="#the-port-is-taken" aria-label="Link to this section">#</a></h2>
+<p>Another program uses this project's port. In the Bridge window, click the state word to go offline, then choose <strong>Change port</strong> from the <code>...</code> menu. Clients with an amber mark have the old port: click them to rewrite their config.</p>
+
+<h2 id="the-bridge-window-lags">The Bridge window lags<a class="anchor" href="#the-bridge-window-lags" aria-label="Link to this section">#</a></h2>
+<p>Turn the rain background off: <code>...</code> menu, <strong>Rain</strong>.</p>
+
+<h2 id="teammates-see-mcp-json-changes-in-their-diff">Teammates see .mcp.json changes in their diff<a class="anchor" href="#teammates-see-mcp-json-changes-in-their-diff" aria-label="Link to this section">#</a></h2>
+<p>The file was committed before Setup ignored it. See <a href="team.html#what-to-commit-and-what-to-ignore">Team projects</a> for the command to run.</p>
+
+<h2 id="still-stuck">Still stuck<a class="anchor" href="#still-stuck" aria-label="Link to this section">#</a></h2>
+<p>Collect three things and send them with your report: the result of <a class="tool-ref" href="tools.html#editor-health"><code>editor-health</code></a>, the server log from <span class="menu" role="text" aria-label="Tools &gt; Feeder &gt; Matrix Bridge &gt; Server &gt; Open Logs"><span class="sr">Tools &gt; Feeder &gt; Matrix Bridge &gt; Server &gt; Open Logs</span><span aria-hidden="true" style="display:contents"><span class="m">Tools</span><span class="sep" aria-hidden="true"></span><span class="m">Feeder</span><span class="sep" aria-hidden="true"></span><span class="m">Matrix Bridge</span><span class="sep" aria-hidden="true"></span><span class="m">Server</span><span class="sep" aria-hidden="true"></span><span class="m">Open Logs</span></span></span>, and the version in Package Manager.</p>
+  </div>
+  <nav class="pager" aria-label="Previous and next page"><a class="prev" href="reference.html"><small>Previous</small><span>Menus, files, settings</span></a><a class="next" href="changelog.html"><small>Next</small><span>What&#x27;s new</span></a></nav>
+</main>
+<nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#the-matrix-bridge-menu-items-are-greyed-out">The Matrix Bridge menu items are greyed out</a></li><li><a href="#my-client-has-no-unity-tools">My client has no Unity tools</a></li><li><a href="#the-client-says-the-editor-is-not-linked">The client says the editor is not linked</a></li><li><a href="#calls-time-out-while-unity-compiles-or-imports">Calls time out while Unity compiles or imports</a></li><li><a href="#my-script-changes-do-not-show-up">My script changes do not show up</a></li><li><a href="#a-new-tool-is-not-found">A new tool is &quot;not found&quot;</a></li><li><a href="#a-tool-waits-or-says-the-editor-is-held">A tool waits, or says the editor is held</a></li><li><a href="#play-mode-stops-when-i-switch-to-my-terminal">Play mode stops when I switch to my terminal</a></li><li><a href="#the-port-is-taken">The port is taken</a></li><li><a href="#the-bridge-window-lags">The Bridge window lags</a></li><li><a href="#teammates-see-mcp-json-changes-in-their-diff">Teammates see .mcp.json changes in their diff</a></li><li><a href="#still-stuck">Still stuck</a></li></ul></nav>
+</div>
+<footer class="foot"><div class="in">
+  <span>Matrix Bridge 1.1.0 - MIT license. These pages ship inside the package in <code>Documentation~</code>.</span>
+  <span><a href="install.html">Install</a> - <a href="troubleshooting.html">Troubleshooting</a> - <a href="changelog.html">What's new</a></span>
+</div></footer>
+<div class="search" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="box">
+    <input type="search" placeholder="Search pages and tools, e.g. lock, setup, rql-query" aria-label="Search" role="combobox" aria-controls="search-results" aria-expanded="true" autocomplete="off">
+    <ul id="search-results" role="listbox"></ul>
+    <div class="hint"><span><kbd>Up</kbd> <kbd>Down</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
+<script src="assets/search-index.js" defer></script><script src="assets/vendor/lenis.min.js" defer></script><script src="assets/site.js" defer></script>
+</body>
+</html>

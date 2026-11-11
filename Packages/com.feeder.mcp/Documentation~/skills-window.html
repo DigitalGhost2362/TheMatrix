@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en" data-page="skills-window">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Choose which tools are on - Matrix Bridge docs</title>
+<meta name="description" content="Matrix has more than a hundred tools. Every tool that is switched on is described to your client in every request, which costs tokens. The Skills window lets you keep the set small and pick what a task needs.">
+<meta name="theme-color" content="#07090a">
+<link rel="icon" href="assets/img/logo_window_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script>document.documentElement.classList.add('js')</script>
+</head>
+<body class="docpage">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button class="icon-btn menu-btn" type="button" aria-label="Open the page list" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html" aria-label="Matrix Bridge docs home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#06140b" stroke="#1d5a34"/><path d="M9 10l6 6-6 6" fill="none" stroke="#00ff41" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="19" y="9" width="3.2" height="14" rx="1.2" fill="#00ff41"/></svg><span>Matrix Bridge</span><span class="ver">v1.1.0</span></a>
+  <nav class="topnav" aria-label="Main"><a href="install.html" aria-current="page">Guide</a><a href="tools.html">Tools</a><a href="changelog.html">What's new</a></nav>
+  <span class="spacer"></span>
+  <button class="search-btn" type="button" aria-label="Search the docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span class="lbl">Search docs and tools</span><kbd>Ctrl K</kbd></button>
+</header>
+<div class="progress" aria-hidden="true"></div>
+<div class="layout">
+<aside class="sidebar" aria-label="Pages"><h3>Get started</h3><ul><li><a href="index.html">Overview</a></li><li><a href="install.html">Install and update</a></li><li><a href="setup.html">Turn Matrix on</a></li><li><a href="connect.html">Connect a client</a></li><li><a href="first-session.html">Your first session</a></li></ul><h3>Everyday use</h3><ul><li><a href="bridge-window.html">Bridge window</a></li><li><a href="skills-window.html" aria-current="page">Skills window</a></li><li><a href="queries.html">Queries</a></li><li><a href="editor-lock.html">Editor lock</a></li><li><a href="team.html">Team projects</a></li></ul><h3>Going further</h3><ul><li><a href="runtime-tools.html">Runtime tools</a></li><li><a href="batch-ci.html">Batch mode and CI</a></li><li><a href="hyper-testing.html">Hyper Testing<span class="tag-x">exp</span></a></li><li><a href="health.html">Health and timeouts</a></li></ul><h3>Reference</h3><ul><li><a href="tools.html">Tool catalog</a></li><li><a href="reference.html">Menus, files, settings</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li><li><a href="changelog.html">What&#x27;s new</a></li></ul></aside>
+<main id="main" class="doc">
+  <p class="crumb">Everyday use</p>
+  <h1>Choose which tools are on</h1>
+  <p class="lead">Matrix has more than a hundred tools. Every tool that is switched on is described to your client in every request, which costs tokens. The Skills window lets you keep the set small and pick what a task needs.</p>
+  <div class="doc-body">
+<p>Open it with <span class="menu" role="text" aria-label="Tools &gt; Feeder &gt; Matrix Bridge &gt; Skills"><span class="sr">Tools &gt; Feeder &gt; Matrix Bridge &gt; Skills</span><span aria-hidden="true" style="display:contents"><span class="m">Tools</span><span class="sep" aria-hidden="true"></span><span class="m">Feeder</span><span class="sep" aria-hidden="true"></span><span class="m">Matrix Bridge</span><span class="sep" aria-hidden="true"></span><span class="m">Skills</span></span></span>, or from the <code>...</code> menu of the Bridge window.</p>
+<figure class="shot rv"><a class="shot-frame" href="assets/img/skills-window.png"><img src="assets/img/skills-window.png" alt="The Skills window: groups on the left with on and total counts, tool rows with a name, tag, summary, token cost and a switch, and a token total at the bottom" width="1241" height="655" loading="lazy" decoding="async"></a><figcaption><b>Skills window.</b> Groups on the left, one switch per tool, the running token total at the bottom.</figcaption></figure>
+
+<h2 id="find-a-tool">Find a tool<a class="anchor" href="#find-a-tool" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li>Pick a group on the left (Query, Scenes, GameObjects, Assets and so on), or type in the search box.</li>
+  <li><strong>All</strong>, <strong>On</strong> and <strong>Off</strong> filter by state.</li>
+  <li>Each row shows the tool's name and id, one sentence of what it does, and the tokens it adds to every request while it is on.</li>
+</ul>
+
+<h2 id="read-the-tags">Read the tags<a class="anchor" href="#read-the-tags" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><div class="table-wrap"><table>
+  <thead><tr><th>Tag</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tag core">core</span></td><td>Part of the set Setup keeps on.</td></tr>
+    <tr><td><span class="tag wr">writes</span></td><td>Changes the scene, assets, settings or Editor state. Usually undoable.</td></tr>
+    <tr><td><span class="tag de">destructive</span></td><td>Can delete or overwrite: scripts, assets, packages, the Console. Switch these on when you mean it.</td></tr>
+    <tr><td>no tag</td><td>Read-only. Changes nothing.</td></tr>
+  </tbody>
+</table></div></div>
+<p>When a tool works together with one that is off, its row says <strong>Works with</strong> and names the other. Click the name to switch that one on too.</p>
+
+<h2 id="watch-the-token-total">Watch the token total<a class="anchor" href="#watch-the-token-total" aria-label="Link to this section">#</a></h2>
+<p>The bar at the bottom adds up every tool that is on and rates the total: <strong>LEAN</strong> under 12k tokens, <strong>HEAVY</strong> from 30k. The core set is about 4.5k.</p>
+<ul>
+  <li><strong>Core only</strong> goes back to the set Setup chose.</li>
+  <li><strong>Enable all</strong> asks first: everything on costs about 50k tokens per request.</li>
+</ul>
+
+<h2 id="when-a-change-reaches-your-client">When a change reaches your client<a class="anchor" href="#when-a-change-reaches-your-client" aria-label="Link to this section">#</a></h2>
+<p>A change rewrites the skill files after about a second. Claude Code, and any client that follows the MCP <code>tools/list_changed</code> notice, sees the new list at once. Other clients need a reconnect; until then they can call a new tool through <a class="tool-ref" href="tools.html#tool-call"><code>tool-call</code></a>.</p>
+<p>Your client can switch tools itself with <a class="tool-ref" href="tools.html#tool-set-enabled-state"><code>tool-set-enabled-state</code></a>. The Skills window shows those changes too.</p>
+
+<div class="note"><span class="note-t">The choice is per machine</span>Which tools are on is saved in <code>UserSettings/Feeder-MCP-Config.json</code>, which Unity does not commit. Each teammate keeps their own set.</div>
+
+<p>The <a href="tools.html">tool catalog</a> lists every tool with its full description, so you can decide before switching anything on.</p>
+  </div>
+  <nav class="pager" aria-label="Previous and next page"><a class="prev" href="bridge-window.html"><small>Previous</small><span>Bridge window</span></a><a class="next" href="queries.html"><small>Next</small><span>Queries</span></a></nav>
+</main>
+<nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#find-a-tool">Find a tool</a></li><li><a href="#read-the-tags">Read the tags</a></li><li><a href="#watch-the-token-total">Watch the token total</a></li><li><a href="#when-a-change-reaches-your-client">When a change reaches your client</a></li></ul></nav>
+</div>
+<footer class="foot"><div class="in">
+  <span>Matrix Bridge 1.1.0 - MIT license. These pages ship inside the package in <code>Documentation~</code>.</span>
+  <span><a href="install.html">Install</a> - <a href="troubleshooting.html">Troubleshooting</a> - <a href="changelog.html">What's new</a></span>
+</div></footer>
+<div class="search" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="box">
+    <input type="search" placeholder="Search pages and tools, e.g. lock, setup, rql-query" aria-label="Search" role="combobox" aria-controls="search-results" aria-expanded="true" autocomplete="off">
+    <ul id="search-results" role="listbox"></ul>
+    <div class="hint"><span><kbd>Up</kbd> <kbd>Down</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
+<script src="assets/search-index.js" defer></script><script src="assets/vendor/lenis.min.js" defer></script><script src="assets/site.js" defer></script>
+</body>
+</html>

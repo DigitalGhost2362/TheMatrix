@@ -1,0 +1,66 @@
+<!--
+title: Read and change many objects with one query
+nav: Queries
+lead: Instead of a tool per object, Matrix gives your client a small pipeline language. One query can find, filter, read and change hundreds of objects, as a single undo step.
+-->
+<p>You do not need to learn it: your client writes the queries. This page helps you read what it is doing, and write one yourself when you want to.</p>
+
+<h2>Three tools</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Tool</th><th>Does</th><th>On after Setup</th></tr></thead>
+  <tbody>
+    <tr><td>[[tool:rql-query]]</td><td>Reads the open scenes (or the open prefab), assets, the Console and the selection. Answers with a compact table or JSON. Refuses anything that changes the project.</td><td>Yes</td></tr>
+    <tr><td>[[tool:rql-schema]]</td><td>Prints the syntax, the functions and the component types in the open scenes. With <code>typeName</code>, the members of one type and which can be written.</td><td>Yes</td></tr>
+    <tr><td>[[tool:rql-mutate]]</td><td>Changes things: <code>set</code>, <code>call</code>, <code>add</code>, <code>destroy</code>, or creates objects with <code>new(...)</code>.</td><td>No: switch it on in the <a href="skills-window.html">Skills window</a></td></tr>
+  </tbody>
+</table></div>
+
+<h2>The shape of a query</h2>
+<p>A source, then stages separated by <code>|</code>. Each stage takes the rows of the previous one.</p>
+<pre data-label="query"><code><span class="k">objects</span> | <span class="k">where</span> Light.intensity &gt; 1 | <span class="k">select</span> name, Light.intensity, $path | <span class="k">sort</span> Light.intensity desc</code></pre>
+<div class="table-wrap"><table>
+  <thead><tr><th>Part</th><th>Choices</th></tr></thead>
+  <tbody>
+    <tr><td>Sources</td><td><code>objects</code> (every GameObject in the open scenes or prefab), <code>roots</code>, <code>selection</code>, <code>scenes</code>, <code>logs</code>, <code>components("Type")</code>, <code>prefab</code>, <code>assets("t:Material", "Assets/Folder")</code>, <code>asset("Assets/x.mat")</code>, <code>find("Path/Or/Name")</code></td></tr>
+    <tr><td>Stages</td><td><code>where</code>, <code>select</code>, <code>sort</code>, <code>take</code>, <code>skip</code>, <code>first</code>, <code>last</code>, <code>count</code>, <code>distinct</code>, <code>group</code>, <code>sum</code> / <code>avg</code> / <code>min</code> / <code>max</code>, <code>get</code>, <code>components</code>, <code>children</code>, <code>descendants</code>, <code>parent</code></td></tr>
+    <tr><td>Members</td><td><code>name</code>, <code>transform.position.x</code>, a component by its type such as <code>Light.intensity</code>, <code>material["_BaseColor"]</code>, and <code>$path</code>, <code>$type</code>, <code>$id</code>, <code>$index</code></td></tr>
+    <tr><td>Operators</td><td><code>== != &lt; &lt;= &gt; &gt;=</code>, <code>and or not</code>, <code>contains startswith endswith</code> (ignore case), <code>matches</code> (regex), <code>in [..]</code>, <code>is Type</code>, <code>is null</code></td></tr>
+    <tr><td>Change stages</td><td><code>set PATH = VALUE</code>, <code>call Method(args)</code>, <code>add Type</code>, <code>destroy</code>: [[tool:rql-mutate]] only</td></tr>
+  </tbody>
+</table></div>
+
+<h2>Examples to read</h2>
+<pre data-label="read"><code><span class="c"># how many objects of each tag are in the scene</span>
+objects | group tag
+
+<span class="c"># renderers that still use the default material</span>
+components(<span class="s">"MeshRenderer"</span>) | where sharedMaterial.name == <span class="s">"Default-Material"</span> | select gameobject.name, $path
+
+<span class="c"># the last ten errors in the console</span>
+logs | where type == <span class="s">"Error"</span> | take 10
+
+<span class="c"># which shader each material under Assets/Materials uses</span>
+assets(<span class="s">"t:Material"</span>, <span class="s">"Assets/Materials"</span>) | select name, shader.name</code></pre>
+
+<h2>Examples that change things</h2>
+<pre data-label="change"><code><span class="c"># move and rename one object</span>
+find(<span class="s">"Player"</span>) | set position = [0, 1, 0], name = <span class="s">"Hero"</span>
+
+<span class="c"># heavier enemies</span>
+objects | where name startswith <span class="s">"Enemy"</span> | set Rigidbody.mass = 2
+
+<span class="c"># give every pickup a collider</span>
+objects | where tag == <span class="s">"Pickup"</span> and not has(<span class="s">"SphereCollider"</span>) | add SphereCollider</code></pre>
+
+<h2>Safety rails on changes</h2>
+<ul>
+  <li><strong>All or nothing.</strong> Every target is checked before anything changes. One bad target, no change at all.</li>
+  <li><strong>One undo step</strong> named <code>Matrix query</code>. <kbd>Ctrl</kbd> + <kbd>Z</kbd> reverts the whole query.</li>
+  <li><strong><code>dryRun=true</code></strong> lists every change and then reverts it. Ask your client for a dry run on anything large.</li>
+  <li><strong><code>maxTargets</code></strong> (default 100) refuses a change wider than that.</li>
+  <li><strong>Nothing is saved for you.</strong> Scenes and assets are marked dirty; <code>save=true</code> saves what the query touched.</li>
+</ul>
+
+<h2>What queries do not do</h2>
+<p>Actions a query cannot express keep their own tools: opening, saving and unloading scenes, prefab mode, copying, moving and deleting assets, play mode, the Console, scripts, tests, packages, screenshots, the profiler and builds. Find them in the <a href="tools.html">tool catalog</a>.</p>
+<p>From your own Editor code, <code>Feeder.MCP.Editor.Query.MatrixQuery.Run</code> and <code>MatrixQuery.Mutate</code> take the same queries.</p>

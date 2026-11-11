@@ -1,0 +1,39 @@
+<!--
+title: Matrix in a team project
+nav: Team projects
+lead: Commit the package with the project; keep the per-machine files out. Teammates who never run Setup see no change at all.
+-->
+<h2>Who is affected</h2>
+<ul>
+  <li><strong>Teammates who never run Setup:</strong> nothing starts, opens or is written for them, even when the package is in <code>Packages/manifest.json</code>. A saved window layout that includes Matrix windows does not open them either.</li>
+  <li><strong>Teammates who run Setup:</strong> Matrix turns on for that machine and that project folder only. The choice lives outside the project and is never committed.</li>
+</ul>
+
+<h2>What to commit and what to ignore</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Path</th><th>Commit?</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><code>Packages/manifest.json</code> with the git URL</td><td>Yes</td><td>Everyone gets the same package version.</td></tr>
+    <tr><td><code>.mcp.json</code>, <code>.codex/config.toml</code></td><td>No</td><td>They hold this machine's port. Setup adds both to <code>.gitignore</code>.</td></tr>
+    <tr><td><code>.cursor/mcp.json</code>, <code>.vscode/mcp.json</code>, <code>.gemini/settings.json</code> and other client files</td><td>No</td><td>Same reason. Setup does not ignore these: add the ones you wire to <code>.gitignore</code> yourself.</td></tr>
+    <tr><td><code>.claude/skills/matrix-*/</code></td><td>Your choice</td><td>Matrix adds and deletes one folder per tool as tools are switched on and off. Ignore <code>&lt;skills folder&gt;/matrix-*/</code>, or accept the changes in your diffs.</td></tr>
+    <tr><td><code>UserSettings/Feeder-MCP-Config.json</code></td><td>No</td><td>Port, token and tool switches for this machine. Unity's standard ignore rules already skip <code>UserSettings</code>.</td></tr>
+    <tr><td><code>ProjectSettings/ProjectSettings.asset</code></td><td>Yes</td><td>Setup turns Run In Background on here. It is a normal project setting.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="note warn"><span class="note-t">.mcp.json was already committed</span>Setup prints the command to run. When the file holds only the Matrix entry, it is <code>git rm --cached .mcp.json</code>. When it also holds other servers your team shares, keep it tracked and run <code>git update-index --skip-worktree .mcp.json</code> on your machine instead, so a pull never deletes the file for teammates.</div>
+
+<h2>Names Matrix uses</h2>
+<p>Matrix only creates, edits and deletes things under its own names, so it never touches your other tools:</p>
+<ul>
+  <li>the server in <code>Library/feeder-matrix</code> and its log in <code>Temp/feeder-matrix</code>;</li>
+  <li>the <code>Feeder-MCP</code> entry in <code>.mcp.json</code> and the other client configs;</li>
+  <li>environment variables that start with <code>FEEDER_MATRIX_</code>;</li>
+  <li>skill folders named <code>matrix-*</code>;</li>
+  <li>data types in the <code>Feeder.MCP.Data</code> namespace.</li>
+</ul>
+<p>It never edits or deletes a server entry, skill or config that it did not write.</p>
+
+<h2>Two copies of one project</h2>
+<p>Each folder gets its own port, so two clones of the same project can run Matrix side by side. Start each client in the folder of the copy it should work on.</p>

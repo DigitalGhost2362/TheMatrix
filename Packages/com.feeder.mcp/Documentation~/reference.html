@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en" data-page="reference">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menus, files and settings - Matrix Bridge docs</title>
+<meta name="description" content="Where every Matrix menu item, file and setting lives. Look things up here; the guide pages explain when you need them.">
+<meta name="theme-color" content="#07090a">
+<link rel="icon" href="assets/img/logo_window_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script>document.documentElement.classList.add('js')</script>
+</head>
+<body class="docpage">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button class="icon-btn menu-btn" type="button" aria-label="Open the page list" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html" aria-label="Matrix Bridge docs home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#06140b" stroke="#1d5a34"/><path d="M9 10l6 6-6 6" fill="none" stroke="#00ff41" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="19" y="9" width="3.2" height="14" rx="1.2" fill="#00ff41"/></svg><span>Matrix Bridge</span><span class="ver">v1.1.0</span></a>
+  <nav class="topnav" aria-label="Main"><a href="install.html" aria-current="page">Guide</a><a href="tools.html">Tools</a><a href="changelog.html">What's new</a></nav>
+  <span class="spacer"></span>
+  <button class="search-btn" type="button" aria-label="Search the docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span class="lbl">Search docs and tools</span><kbd>Ctrl K</kbd></button>
+</header>
+<div class="progress" aria-hidden="true"></div>
+<div class="layout">
+<aside class="sidebar" aria-label="Pages"><h3>Get started</h3><ul><li><a href="index.html">Overview</a></li><li><a href="install.html">Install and update</a></li><li><a href="setup.html">Turn Matrix on</a></li><li><a href="connect.html">Connect a client</a></li><li><a href="first-session.html">Your first session</a></li></ul><h3>Everyday use</h3><ul><li><a href="bridge-window.html">Bridge window</a></li><li><a href="skills-window.html">Skills window</a></li><li><a href="queries.html">Queries</a></li><li><a href="editor-lock.html">Editor lock</a></li><li><a href="team.html">Team projects</a></li></ul><h3>Going further</h3><ul><li><a href="runtime-tools.html">Runtime tools</a></li><li><a href="batch-ci.html">Batch mode and CI</a></li><li><a href="hyper-testing.html">Hyper Testing<span class="tag-x">exp</span></a></li><li><a href="health.html">Health and timeouts</a></li></ul><h3>Reference</h3><ul><li><a href="tools.html">Tool catalog</a></li><li><a href="reference.html" aria-current="page">Menus, files, settings</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li><li><a href="changelog.html">What&#x27;s new</a></li></ul></aside>
+<main id="main" class="doc">
+  <p class="crumb">Reference</p>
+  <h1>Menus, files and settings</h1>
+  <p class="lead">Where every Matrix menu item, file and setting lives. Look things up here; the guide pages explain when you need them.</p>
+  <div class="doc-body">
+<h2 id="menu-items">Menu items<a class="anchor" href="#menu-items" aria-label="Link to this section">#</a></h2>
+<p>Everything sits under <span class="menu" role="text" aria-label="Tools &gt; Feeder &gt; Matrix Bridge"><span class="sr">Tools &gt; Feeder &gt; Matrix Bridge</span><span aria-hidden="true" style="display:contents"><span class="m">Tools</span><span class="sep" aria-hidden="true"></span><span class="m">Feeder</span><span class="sep" aria-hidden="true"></span><span class="m">Matrix Bridge</span></span></span>. Until you run Setup, only Setup is enabled.</p>
+<div class="table-wrap"><div class="table-wrap"><table>
+  <thead><tr><th>Item</th><th>Does</th></tr></thead>
+  <tbody>
+    <tr><td>Setup...</td><td>Turns Matrix on for this machine and project. See <a href="setup.html">Turn Matrix on</a>.</td></tr>
+    <tr><td>Revert Setups...</td><td>Puts back what Setup changed and turns Matrix off.</td></tr>
+    <tr><td>Skills</td><td>Switch tools on and off. See <a href="skills-window.html">Choose tools</a>.</td></tr>
+    <tr><td>Bridge</td><td>Link state, clients and the editor lock. See <a href="bridge-window.html">Bridge window</a>.</td></tr>
+    <tr><td>Hyper Testing (Experimental)</td><td>Clone Editors for parallel play tests. See <a href="hyper-testing.html">Hyper Testing</a>.</td></tr>
+    <tr><td>VFX Studio (Experimental)</td><td>Browse VFX prefabs, edit an effect with a live preview and generate particle textures.</td></tr>
+    <tr><td>Capture &gt; Capture Focused Window</td><td>Saves the focused Editor window as a PNG in <code>Docs/Captures/&lt;title&gt;.png</code>.</td></tr>
+    <tr><td>Capture &gt; Capture Window...</td><td>Pick any open Editor window to save the same way.</td></tr>
+    <tr><td>Server &gt; Reinstall Binaries</td><td>Extracts the bundled server again.</td></tr>
+    <tr><td>Server &gt; Delete Binaries</td><td>Removes the extracted server from <code>Library/feeder-matrix</code>.</td></tr>
+    <tr><td>Server &gt; Open Logs</td><td>Opens the server log folder.</td></tr>
+    <tr><td>Server &gt; Launch MCP Inspector</td><td>Opens a generic MCP inspector against the server, to see the raw tool list and try calls.</td></tr>
+    <tr><td>Server &gt; Reset Config</td><td>Resets <code>UserSettings/Feeder-MCP-Config.json</code> to defaults and reloads scripts.</td></tr>
+    <tr><td>Server &gt; Link Play Mode As Player</td><td>Links each Play session for <a href="runtime-tools.html">runtime tools</a>.</td></tr>
+    <tr><td>Update Check &gt; Check Now</td><td>Looks for a newer version tag of the package now.</td></tr>
+    <tr><td>Update Check &gt; Enabled For Me / For This Project</td><td>Matrix checks once a day for a new version and shows one popup per release. Untick <strong>For Me</strong> to stop it on your machine, or <strong>For This Project</strong> to stop it for everyone (it writes a file under <code>ProjectSettings</code>).</td></tr>
+  </tbody>
+</table></div></div>
+
+<h2 id="files-matrix-writes">Files Matrix writes<a class="anchor" href="#files-matrix-writes" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><div class="table-wrap"><table>
+  <thead><tr><th>Path</th><th>What</th><th>Commit</th></tr></thead>
+  <tbody>
+    <tr><td><code>Library/feeder-matrix/&lt;platform&gt;/</code></td><td>The extracted server</td><td>No (Library)</td></tr>
+    <tr><td><code>Temp/feeder-matrix/</code></td><td>Server logs</td><td>No (Temp)</td></tr>
+    <tr><td><code>UserSettings/Feeder-MCP-Config.json</code></td><td>Port, token, tool switches, timeouts</td><td>No</td></tr>
+    <tr><td><code>.mcp.json</code>, <code>.codex/config.toml</code> and other client files</td><td>Client configs with this machine's port</td><td>No</td></tr>
+    <tr><td><code>.claude/skills/matrix-*/</code></td><td>One guide per switched-on tool</td><td>Your choice</td></tr>
+    <tr><td><code>Temp/agent-editor-lock/lock.json</code></td><td>Copy of the editor lock</td><td>No (Temp)</td></tr>
+    <tr><td><code>Temp/matrix-batch.ready.json</code></td><td>Written by <a href="batch-ci.html">batch mode</a> when ready</td><td>No (Temp)</td></tr>
+    <tr><td><code>Docs/Captures/</code></td><td>Window captures from the Capture menu</td><td>Your choice</td></tr>
+    <tr><td><code>TestCases/</code></td><td>Play tests written down for later, see <a href="editor-lock.html#when-the-editor-is-busy-for-long">editor lock</a></td><td>Your choice</td></tr>
+    <tr><td><code>MatrixWatch/</code></td><td>Recordings from the <code>watch</code> tool</td><td>No, ignored by Git</td></tr>
+    <tr><td><code>&lt;project&gt;.HyperClones/</code>, <code>HyperTesting/</code></td><td><a href="hyper-testing.html">Hyper Testing</a> clones, runs and journal</td><td>No</td></tr>
+  </tbody>
+</table></div></div>
+
+<h2 id="settings-file">Settings file<a class="anchor" href="#settings-file" aria-label="Link to this section">#</a></h2>
+<p><code>UserSettings/Feeder-MCP-Config.json</code> holds this machine's settings. Most are changed from the windows; these are the ones you may edit by hand. The server reads them when it starts.</p>
+<div class="table-wrap"><div class="table-wrap"><table>
+  <thead><tr><th>Key</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>host</code></td><td>derived from the folder path</td><td>Server address and port.</td></tr>
+    <tr><td><code>token</code></td><td>generated</td><td>Secret that players and the Editor use to link. Keep it private.</td></tr>
+    <tr><td><code>logLevel</code></td><td><code>Warning</code></td><td>Server log detail.</td></tr>
+    <tr><td><code>timeoutMs</code></td><td><code>60000</code></td><td>Deadline of one tool call.</td></tr>
+    <tr><td><code>reconnectGraceMs</code></td><td><code>180000</code></td><td>How long a call waits for an Editor that is reloading.</td></tr>
+    <tr><td><code>deferredToolTimeoutMs</code></td><td><code>900000</code></td><td>Deadline of tools that finish after a compile or reload.</td></tr>
+    <tr><td><code>enableToolCallProxy</code></td><td><code>true</code></td><td>Turns <a class="tool-ref" href="tools.html#tool-call"><code>tool-call</code></a> on or off.</td></tr>
+    <tr><td><code>agentAutoConfigure</code></td><td><code>claude-code</code> on</td><td>Which client configs Matrix rewrites on each load.</td></tr>
+    <tr><td><code>skillsPath</code></td><td><code>.claude/skills</code></td><td>Where skill files are written.</td></tr>
+    <tr><td><code>tools</code></td><td>core set on</td><td>Which tools are on. Use the Skills window instead.</td></tr>
+  </tbody>
+</table></div></div>
+
+<h2 id="environment">Environment<a class="anchor" href="#environment" aria-label="Link to this section">#</a></h2>
+<p><code>FEEDER_MATRIX_SERVER_PATH</code>, read from the environment or from a <code>.env</code> file at the project root, runs a server build from that path instead of the bundled one. Use it only when you build the server yourself.</p>
+  </div>
+  <nav class="pager" aria-label="Previous and next page"><a class="prev" href="tools.html"><small>Previous</small><span>Tool catalog</span></a><a class="next" href="troubleshooting.html"><small>Next</small><span>Troubleshooting</span></a></nav>
+</main>
+<nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#menu-items">Menu items</a></li><li><a href="#files-matrix-writes">Files Matrix writes</a></li><li><a href="#settings-file">Settings file</a></li><li><a href="#environment">Environment</a></li></ul></nav>
+</div>
+<footer class="foot"><div class="in">
+  <span>Matrix Bridge 1.1.0 - MIT license. These pages ship inside the package in <code>Documentation~</code>.</span>
+  <span><a href="install.html">Install</a> - <a href="troubleshooting.html">Troubleshooting</a> - <a href="changelog.html">What's new</a></span>
+</div></footer>
+<div class="search" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="box">
+    <input type="search" placeholder="Search pages and tools, e.g. lock, setup, rql-query" aria-label="Search" role="combobox" aria-controls="search-results" aria-expanded="true" autocomplete="off">
+    <ul id="search-results" role="listbox"></ul>
+    <div class="hint"><span><kbd>Up</kbd> <kbd>Down</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
+<script src="assets/search-index.js" defer></script><script src="assets/vendor/lenis.min.js" defer></script><script src="assets/site.js" defer></script>
+</body>
+</html>

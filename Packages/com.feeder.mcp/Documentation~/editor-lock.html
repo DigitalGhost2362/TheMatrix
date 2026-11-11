@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en" data-page="editor-lock">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Several agents, one Editor - Matrix Bridge docs</title>
+<meta name="description" content="You can run several client sessions against one Unity Editor. They take turns through the editor lock, which the Matrix server keeps, so one session&#x27;s compile never lands in the middle of another&#x27;s play test.">
+<meta name="theme-color" content="#07090a">
+<link rel="icon" href="assets/img/logo_window_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script>document.documentElement.classList.add('js')</script>
+</head>
+<body class="docpage">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button class="icon-btn menu-btn" type="button" aria-label="Open the page list" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html" aria-label="Matrix Bridge docs home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#06140b" stroke="#1d5a34"/><path d="M9 10l6 6-6 6" fill="none" stroke="#00ff41" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="19" y="9" width="3.2" height="14" rx="1.2" fill="#00ff41"/></svg><span>Matrix Bridge</span><span class="ver">v1.1.0</span></a>
+  <nav class="topnav" aria-label="Main"><a href="install.html" aria-current="page">Guide</a><a href="tools.html">Tools</a><a href="changelog.html">What's new</a></nav>
+  <span class="spacer"></span>
+  <button class="search-btn" type="button" aria-label="Search the docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span class="lbl">Search docs and tools</span><kbd>Ctrl K</kbd></button>
+</header>
+<div class="progress" aria-hidden="true"></div>
+<div class="layout">
+<aside class="sidebar" aria-label="Pages"><h3>Get started</h3><ul><li><a href="index.html">Overview</a></li><li><a href="install.html">Install and update</a></li><li><a href="setup.html">Turn Matrix on</a></li><li><a href="connect.html">Connect a client</a></li><li><a href="first-session.html">Your first session</a></li></ul><h3>Everyday use</h3><ul><li><a href="bridge-window.html">Bridge window</a></li><li><a href="skills-window.html">Skills window</a></li><li><a href="queries.html">Queries</a></li><li><a href="editor-lock.html" aria-current="page">Editor lock</a></li><li><a href="team.html">Team projects</a></li></ul><h3>Going further</h3><ul><li><a href="runtime-tools.html">Runtime tools</a></li><li><a href="batch-ci.html">Batch mode and CI</a></li><li><a href="hyper-testing.html">Hyper Testing<span class="tag-x">exp</span></a></li><li><a href="health.html">Health and timeouts</a></li></ul><h3>Reference</h3><ul><li><a href="tools.html">Tool catalog</a></li><li><a href="reference.html">Menus, files, settings</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li><li><a href="changelog.html">What&#x27;s new</a></li></ul></aside>
+<main id="main" class="doc">
+  <p class="crumb">Everyday use</p>
+  <h1>Several agents, one Editor</h1>
+  <p class="lead">You can run several client sessions against one Unity Editor. They take turns through the editor lock, which the Matrix server keeps, so one session's compile never lands in the middle of another's play test.</p>
+  <div class="doc-body">
+<h2 id="how-turns-work">How turns work<a class="anchor" href="#how-turns-work" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><strong>Read-only tools always run</strong>, for every session, at any time: queries, screenshots, the Console, status tools.</li>
+  <li><strong>Tools that change the Editor wait their turn.</strong> A session claims the Editor with <a class="tool-ref" href="tools.html#editor-lock-acquire"><code>editor-lock-acquire</code></a> for one burst of work (a compile, one play session, a batch of edits) and gives it back with <a class="tool-ref" href="tools.html#editor-lock-release"><code>editor-lock-release</code></a>.</li>
+  <li><strong>Others queue.</strong> While one session holds the Editor, another session's changing tools wait in a first-come line, and the answer says who holds it and for what.</li>
+  <li><strong>No claim needed for a quick change.</strong> A changing tool called without a claim takes one for itself, freed after 30 idle seconds.</li>
+</ul>
+<p>Your client handles all of this. The <code>matrix-shared-editor</code> skill teaches it when to claim and release.</p>
+
+<h2 id="subagents-take-turns-too">Subagents take turns too<a class="anchor" href="#subagents-take-turns-too" aria-label="Link to this section">#</a></h2>
+<p>With Claude Code, every subagent is an agent of its own: it claims the Editor and waits in line for itself, and the Bridge window shows it as its own car, marked <code>&gt;</code>. Two subagents of one session can no longer change the Editor at the same time.</p>
+<ul>
+  <li><strong>It needs a hook.</strong> The Editor adds it to <code>.claude/settings.local.json</code> once it is linked to a server that supports it. Start a new Claude Code session afterwards; a session that was already running keeps the old behavior.</li>
+  <li><strong>Without the hook, and with other clients,</strong> a session and all its subagents count as one agent, as before. The holder's tooltip in the Bridge window says so.</li>
+  <li><strong>A subagent that ends</strong> frees its claim and leaves the line at once.</li>
+  <li><strong>A main agent that holds the Editor and waits for a subagent it started</strong> passes its claim to that subagent when it asks, so the two never wait for each other.</li>
+</ul>
+
+<h2 id="work-that-must-follow-other-work">Work that must follow other work<a class="anchor" href="#work-that-must-follow-other-work" aria-label="Link to this section">#</a></h2>
+<p>A play test should start only after the agent that edits and compiles has finished. Tell the agents the order instead of timing it yourself: give the first one a name, and let the second one wait for that name.</p>
+<ol class="steps">
+  <li><strong>Name the agent others wait for</strong>It claims with <code>owner: "coder"</code>, or says its name before its first claim with <a class="tool-ref" href="tools.html#editor-lock-status"><code>editor-lock-status</code></a> and <code>owner</code>.</li>
+  <li><strong>Queue the follower with <code>after</code></strong>It calls <a class="tool-ref" href="tools.html#editor-lock-acquire"><code>editor-lock-acquire</code></a> with <code>after: ["coder"]</code>. It joins the line at once and its car reads <code>after coder</code>.</li>
+  <li><strong>It gets the Editor when the first one has finished</strong>That is when the subagent ends, its session closes, or it calls <a class="tool-ref" href="tools.html#editor-lock-release"><code>editor-lock-release</code></a> with <code>done: true</code>. Until then it holds nobody back.</li>
+</ol>
+<p>To let a waiting agent go ahead yourself, click its car and choose <strong>Let ... go now</strong>. A name that nobody uses within 2 minutes fails the claim with the list of names known at that moment.</p>
+
+<h2 id="seeing-who-holds-the-editor">Seeing who holds the Editor<a class="anchor" href="#seeing-who-holds-the-editor" aria-label="Link to this section">#</a></h2>
+<p>While a session holds the lock, every Scene view gets a green frame, tagged at the bottom with the holder's name:</p>
+<figure class="shot rv"><a class="shot-frame" href="assets/img/scene-view-locked.png"><img src="assets/img/scene-view-locked.png" alt="A Scene view with a thin green border and a tag at the bottom that reads MATRIX - LOCKED BY CLAUDE-MATRIX-DOCS" width="1241" height="655" loading="lazy" decoding="async"></a><figcaption><b>Scene view while a session holds the Editor.</b> The green frame and the tag at the bottom name the holder.</figcaption></figure>
+<p>The Bridge window shows the same holder as a card under the status: the client's name, its task and how long it has held the Editor. The tooltip adds the client, the session and when an idle claim will be freed. With no claim the line reads <code>editor free</code>.</p>
+<figure class="shot rv"><a class="shot-frame" href="assets/img/bridge-locked.png"><img src="assets/img/bridge-locked.png" alt="The Bridge window reading WORKING with an amber LOCK card naming claude-matrix-docs and its task" width="433" height="226" loading="lazy" decoding="async"></a><figcaption><b>Bridge window with a holder.</b> The amber card names the session and its task.</figcaption></figure>
+
+<h2 id="when-you-want-the-editor-yourself">When you want the Editor yourself<a class="anchor" href="#when-you-want-the-editor-yourself" aria-label="Link to this section">#</a></h2>
+<p>The lock orders sessions among themselves; it does not stop you from clicking. To work in Unity without surprises:</p>
+<ol class="steps">
+  <li><strong>Check the line under the status</strong>If it reads <code>editor free</code>, the Editor is yours.</li>
+  <li><strong>Pause the queue</strong>In the Bridge window, click the holder's line and choose <strong>Pause the queue</strong>, or use the pause button of the waiting list. Waiting sessions keep their place; the current holder finishes its burst.</li>
+  <li><strong>Resume when you are done</strong>Choose <strong>Resume the queue</strong> the same way.</li>
+</ol>
+<p>When you press Play yourself while nobody holds the lock, the queue pauses on its own until you stop. While sessions wait, the Bridge window lists them in order with their task and waiting time.</p>
+<p>The lock line menu also has <strong>Free the claim of ...</strong> to release a session that is stuck, and <strong>Copy details</strong> for a bug report.</p>
+
+<h2 id="when-a-claim-ends">When a claim ends<a class="anchor" href="#when-a-claim-ends" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><div class="table-wrap"><table>
+  <thead><tr><th>Event</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td>The session calls <a class="tool-ref" href="tools.html#editor-lock-release"><code>editor-lock-release</code></a></td><td>Freed at once; the next in line gets it.</td></tr>
+    <tr><td>The session closes, or the subagent that holds it ends</td><td>Freed at once.</td></tr>
+    <tr><td>10 minutes without a call from the holder</td><td>Freed. Only 2 minutes while others wait, except inside a play session the holder started.</td></tr>
+    <tr><td>A claim older than 15 minutes</td><td>Every result the holder gets ends with an <code>Editor lock:</code> line asking it to release and claim again.</td></tr>
+    <tr><td>You click <strong>Free the claim of ...</strong></td><td>Freed at once.</td></tr>
+  </tbody>
+</table></div></div>
+<p>Reading an idle Editor does not keep a claim alive. Reads keep it alive only while the Editor compiles, reloads, imports, builds, runs tests or plays a session the holder started.</p>
+
+<h2 id="when-the-editor-is-busy-for-long">When the Editor is busy for long<a class="anchor" href="#when-the-editor-is-busy-for-long" aria-label="Link to this section">#</a></h2>
+<p>If a session needs the Editor but it is taken for a long time, it can write its play test as a test case under <code>TestCases/</code> and stop. A later session runs the pending cases when the Editor is free. Ask your client to "run the pending test cases".</p>
+
+<div class="note"><span class="note-t">Older lock file</span>The lock is also written to <code>Temp/agent-editor-lock/lock.json</code>. A tool that still claims through that file blocks other claims while its file is live.</div>
+  </div>
+  <nav class="pager" aria-label="Previous and next page"><a class="prev" href="queries.html"><small>Previous</small><span>Queries</span></a><a class="next" href="team.html"><small>Next</small><span>Team projects</span></a></nav>
+</main>
+<nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#how-turns-work">How turns work</a></li><li><a href="#subagents-take-turns-too">Subagents take turns too</a></li><li><a href="#work-that-must-follow-other-work">Work that must follow other work</a></li><li><a href="#seeing-who-holds-the-editor">Seeing who holds the Editor</a></li><li><a href="#when-you-want-the-editor-yourself">When you want the Editor yourself</a></li><li><a href="#when-a-claim-ends">When a claim ends</a></li><li><a href="#when-the-editor-is-busy-for-long">When the Editor is busy for long</a></li></ul></nav>
+</div>
+<footer class="foot"><div class="in">
+  <span>Matrix Bridge 1.1.0 - MIT license. These pages ship inside the package in <code>Documentation~</code>.</span>
+  <span><a href="install.html">Install</a> - <a href="troubleshooting.html">Troubleshooting</a> - <a href="changelog.html">What's new</a></span>
+</div></footer>
+<div class="search" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="box">
+    <input type="search" placeholder="Search pages and tools, e.g. lock, setup, rql-query" aria-label="Search" role="combobox" aria-controls="search-results" aria-expanded="true" autocomplete="off">
+    <ul id="search-results" role="listbox"></ul>
+    <div class="hint"><span><kbd>Up</kbd> <kbd>Down</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
+<script src="assets/search-index.js" defer></script><script src="assets/vendor/lenis.min.js" defer></script><script src="assets/site.js" defer></script>
+</body>
+</html>

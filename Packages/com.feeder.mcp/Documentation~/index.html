@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en" data-page="index">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Matrix Bridge docs</title>
+<meta name="description" content="Matrix Bridge connects Claude Code, Codex, Cursor and other MCP clients to the Unity Editor on your machine, so they can read your scenes, change objects, run C#, play test and take screenshots while you watch.">
+<meta name="theme-color" content="#07090a">
+<link rel="icon" href="assets/img/logo_window_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script>document.documentElement.classList.add('js')</script>
+</head>
+<body class="home">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  
+  <a class="brand" href="index.html" aria-label="Matrix Bridge docs home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#06140b" stroke="#1d5a34"/><path d="M9 10l6 6-6 6" fill="none" stroke="#00ff41" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="19" y="9" width="3.2" height="14" rx="1.2" fill="#00ff41"/></svg><span>Matrix Bridge</span><span class="ver">v1.1.0</span></a>
+  <nav class="topnav" aria-label="Main"><a href="install.html">Guide</a><a href="tools.html">Tools</a><a href="changelog.html">What's new</a></nav>
+  <span class="spacer"></span>
+  <button class="search-btn" type="button" aria-label="Search the docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span class="lbl">Search docs and tools</span><kbd>Ctrl K</kbd></button>
+</header>
+<div class="progress" aria-hidden="true"></div>
+<main id="main"><section class="hero" aria-labelledby="hero-title">
+  <canvas class="hero-canvas" aria-hidden="true"></canvas>
+  <svg class="hero-poster" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs>
+      <radialGradient id="pg" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#00ff41" stop-opacity=".35"/><stop offset="1" stop-color="#00ff41" stop-opacity="0"/></radialGradient>
+      <radialGradient id="pc" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#00e5ff" stop-opacity=".3"/><stop offset="1" stop-color="#00e5ff" stop-opacity="0"/></radialGradient>
+      <pattern id="rain" width="44" height="900" patternUnits="userSpaceOnUse">
+        <text x="14" y="10" fill="#00ff41" opacity=".2" font-family="monospace" font-size="17" style="writing-mode:vertical-rl;text-orientation:upright">7ｱ3ﾃｻ0ﾈｶ9ｼﾘ1ﾂﾑ5ﾏｸ2ﾆｴ8ﾎﾀ4ﾙｺ6ﾐﾅ0ｹﾗ3ｱﾃ7ｻﾈ0ｶ9ｼﾘ1ﾂﾑ5ﾏｸ2ﾆｴ8ﾎﾀ4ﾙｺ6ﾐﾅ0ｹ</text>
+      </pattern>
+    </defs>
+    <rect width="1440" height="900" fill="#020604"/>
+    <rect width="1440" height="900" fill="url(#rain)"/>
+    <path d="M880 330 Q 990 250 1100 450 Q 1210 560 1330 610" fill="none" stroke="#00ff41" stroke-opacity=".6" stroke-width="2" stroke-dasharray="6 6"/>
+    <circle cx="880" cy="330" r="110" fill="url(#pc)"/><polygon points="880,285 920,310 920,350 880,375 840,350 840,310" fill="none" stroke="#00e5ff" stroke-width="2"/>
+    <circle cx="1100" cy="450" r="150" fill="url(#pg)"/><ellipse cx="1100" cy="450" rx="64" ry="22" fill="none" stroke="#00ff41" stroke-width="3"/><polygon points="1100,415 1130,450 1100,485 1070,450" fill="none" stroke="#00ff41" stroke-width="2"/>
+    <rect x="1295" y="575" width="70" height="70" fill="none" stroke="#e8efe9" stroke-width="2"/>
+  </svg>
+  <div class="node-label" aria-hidden="true">YOUR AI CLIENT<small>Claude Code, Codex, Cursor...</small></div>
+  <div class="node-label" aria-hidden="true">MATRIX SERVER<small>local, 127.0.0.1</small></div>
+  <div class="node-label" aria-hidden="true">UNITY EDITOR<small>your open project</small></div>
+  <div class="hero-inner">
+    <div class="hero-copy">
+      <p class="state" data-s="online" aria-live="polite"><i></i><b>ONLINE</b></p>
+      <h1 id="hero-title"><span class="ln">Let your AI</span><span class="ln g">work inside Unity.</span></h1>
+      <p class="lead">Matrix Bridge connects Claude Code, Codex, Cursor and other MCP clients to the Unity Editor on your machine. They read your scenes, change objects, run C#, play test and take screenshots while you watch.</p>
+      <div class="cta">
+        <a class="btn primary" href="install.html">Install in two minutes <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        <a class="btn" href="#what">How it works</a>
+      </div>
+      <div class="facts"><span>Unity 2022.3 or newer</span><span>Windows, macOS, Linux</span><span>Runs on 127.0.0.1 only</span><span>v1.1.0</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="what" aria-labelledby="what-h">
+  <div class="band-head rv">
+    <h2 id="what-h">Three pieces, all on your machine</h2>
+    <p>Your AI client speaks MCP. Unity does not. Matrix sits between them: a small server the package starts for you, and an Editor plugin that runs each request inside Unity.</p>
+  </div>
+  <div class="flow rv">
+    <div class="node n-client">
+      <span class="ico"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg></span>
+      <h3>Your AI client</h3>
+      <p>Claude Code, Codex, Cursor, Gemini, Copilot and more. You say what you want in plain words.</p>
+      <span class="where">talks MCP over http://localhost</span>
+    </div>
+    <div class="wire" aria-hidden="true"><svg viewBox="0 0 100 20" preserveAspectRatio="none"><line class="ln" x1="0" y1="10" x2="100" y2="10"/><circle class="pk c" cx="0" cy="7" r="2.6"/><circle class="pk" cx="100" cy="13" r="2.6"/><circle class="pk c" cx="0" cy="7" r="2.6"/></svg></div>
+    <div class="node n-server">
+      <span class="ico"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7l4 5-4 5-4-5z"/></svg></span>
+      <h3>Matrix server</h3>
+      <p>Ships inside the package and starts with the Editor. Keeps answering through script reloads and tells your client when Unity is busy.</p>
+      <span class="where">Library/feeder-matrix</span>
+    </div>
+    <div class="wire" aria-hidden="true"><svg viewBox="0 0 100 20" preserveAspectRatio="none"><line class="ln" x1="0" y1="10" x2="100" y2="10"/><circle class="pk c" cx="0" cy="7" r="2.6"/><circle class="pk" cx="100" cy="13" r="2.6"/></svg></div>
+    <div class="node n-editor">
+      <span class="ico"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></span>
+      <h3>Unity Editor</h3>
+      <p>The package runs each tool: queries, scene edits, C#, tests, play mode, screenshots. Scene changes are undoable.</p>
+      <span class="where">Packages/com.feeder.mcp</span>
+    </div>
+  </div>
+</section>
+
+<section class="band" aria-labelledby="ask-h">
+  <div class="band-head rv">
+    <h2 id="ask-h">What a session looks like</h2>
+    <p>You never call tools yourself. You describe the result; your client picks the tools, Unity runs them, and you see every step. Pick a request:</p>
+  </div>
+  <div class="demo rv" data-demo>
+    <div class="demo-tabs" role="tablist" aria-label="Example requests">
+      <button role="tab" type="button" aria-selected="true" data-t="0"><b>Count the scene</b><span>How many objects of each tag are in the scene?</span></button>
+      <button role="tab" type="button" aria-selected="false" data-t="1"><b>Change many objects</b><span>Make every enemy twice as heavy. Show me the list first.</span></button>
+      <button role="tab" type="button" aria-selected="false" data-t="2"><b>Play test</b><span>Play for ten seconds and tell me what the console says.</span></button>
+      <button role="tab" type="button" aria-selected="false" data-t="3"><b>Look at it</b><span>Show me the scene and tell me what looks off.</span></button>
+      <button role="tab" type="button" aria-selected="false" data-t="4"><b>Run the tests</b><span>Run the EditMode tests and fix whatever fails.</span></button>
+    </div>
+    <div class="demo-win">
+      <div class="demo-bar"><span class="dot"></span>claude <i>~/MyGame</i><span class="demo-state">Feeder-MCP connected</span></div>
+      <div class="demo-body" aria-live="polite">
+        <div class="tr" data-t="0">
+          <p class="u">How many objects of each tag are in the scene?</p>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - rql-query</b> (MCP)(query: "objects | group tag")</p>
+<pre class="tc-r">2 rows
+tag        | count
+Untagged   | 1410
+MainCamera | 1</pre></div>
+          <p class="a">1,411 objects. Everything except the camera is Untagged, so tags do not group anything here. Want a count by layer or by root object instead?</p>
+        </div>
+        <div class="tr" data-t="1" hidden>
+          <p class="u">Make every enemy twice as heavy. Show me the list first.</p>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - rql-mutate</b> (MCP)(query: "objects | where name startswith \"Enemy\" | set Rigidbody.mass = Rigidbody.mass * 2", dryRun: true)</p>
+<pre class="tc-r">dry run: 12 targets, reverted
+Enemy_Grunt_01  Rigidbody.mass  1 -&gt; 2
+Enemy_Grunt_02  Rigidbody.mass  1 -&gt; 2
+Enemy_Brute     Rigidbody.mass  4 -&gt; 8
+... +9 more</pre></div>
+          <p class="a">12 enemies would change, listed above. Say go and I apply it as one undo step.</p>
+          <p class="u">go</p>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - rql-mutate</b> (MCP)(query: same, dryRun: false)</p>
+<pre class="tc-r">12 targets changed, undo group "Matrix query"</pre></div>
+          <p class="a">Done. Ctrl+Z in Unity reverts all 12. The scene is marked unsaved; save it when you like the result.</p>
+        </div>
+        <div class="tr" data-t="2" hidden>
+          <p class="u">Play for ten seconds and tell me what the console says.</p>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - editor-lock-acquire</b> (MCP)(task: "play test")</p>
+<pre class="tc-r">acquired</pre></div>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - editor-application-set-state</b> (MCP)(isPlaying: true)</p>
+<pre class="tc-r">playmode: playing</pre></div>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - console-get-logs</b> (MCP)(logTypeFilter: "Error")</p>
+<pre class="tc-r">Error x3  NullReferenceException: Object reference not set to an instance of an object
+          ShopPanel.Refresh () (at Assets/Scripts/UI/ShopPanel.cs:48)</pre></div>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - editor-application-set-state</b> (MCP)(isPlaying: false)</p></div>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - editor-lock-release</b> (MCP)</p></div>
+          <p class="a">One error, three times: ShopPanel.Refresh reads its item list before Initialize fills it. Want me to fix it?</p>
+        </div>
+        <div class="tr" data-t="3" hidden>
+          <p class="u">Show me the scene and tell me what looks off.</p>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - screenshot-scene-view</b> (MCP)(width: 1280, height: 720)</p>
+<div class="tc-r"><img src="assets/img/demo-view.jpg" alt="A screenshot of a showroom scene with mannequins on shelves and arched windows" width="900" height="434" loading="lazy"></div></div>
+          <p class="a">The left wall is lit but the right side is close to black: no light and no reflection probe reach it. Want me to add a fill light there?</p>
+        </div>
+        <div class="tr" data-t="4" hidden>
+          <p class="u">Run the EditMode tests and fix whatever fails.</p>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - tests-run</b> (MCP)(testMode: "EditMode")</p>
+<pre class="tc-r">42 passed, 1 failed
+SaveDataTests.Load_OldVersion_Migrates
+  Expected: 3  But was: 2</pre></div>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - script-read</b> (MCP)(path: "Assets/Scripts/Save/SaveMigrator.cs")</p></div>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - script-update-or-create</b> (MCP)(path: "Assets/Scripts/Save/SaveMigrator.cs", ...)</p>
+<pre class="tc-r">updated, compiled with 0 errors</pre></div>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - tests-run</b> (MCP)(testMode: "EditMode")</p>
+<pre class="tc-r">43 passed</pre></div>
+          <p class="a">Fixed: the migrator stopped at version 2 and never ran the step to 3. All 43 tests pass.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="demo-note">Examples of what a session prints. Tool names are the real ones; see the <a href="tools.html">tool catalog</a>.</p>
+</section>
+
+<section class="band" aria-labelledby="start-h">
+  <div class="band-head rv">
+    <h2 id="start-h">From zero to your first answer</h2>
+    <p>Four steps, about five minutes. Follow along on the right: it shows what you click and what you get back.</p>
+  </div>
+  <div class="walk">
+    <ol class="walk-steps">
+      <li class="wstep" data-w="1">
+        <span class="wn">1</span>
+        <h3>Install the package</h3>
+        <p>In Unity, open <strong>Window &gt; Package Manager</strong>, click <strong>+</strong>, choose <strong>Add package from git URL</strong> and paste the URL. A new <strong>Tools &gt; Feeder &gt; Matrix Bridge</strong> menu appears. Nothing runs yet.</p>
+        <a class="wlink" href="install.html">Install and update</a>
+      </li>
+      <li class="wstep" data-w="2">
+        <span class="wn">2</span>
+        <h3>Turn it on with Setup</h3>
+        <p>Run <strong>Tools &gt; Feeder &gt; Matrix Bridge &gt; Setup...</strong> once on this machine. It starts the local server, links the Editor and lists every setting it changes before it changes it.</p>
+        <a class="wlink" href="setup.html">Turn Matrix on</a>
+      </li>
+      <li class="wstep" data-w="3">
+        <span class="wn">3</span>
+        <h3>Open your client in the project</h3>
+        <p>Claude Code is wired for you: start it in the project folder and approve <code>Feeder-MCP</code>. Any other client takes one click in the Bridge window.</p>
+        <a class="wlink" href="connect.html">Connect your AI client</a>
+      </li>
+      <li class="wstep" data-w="4">
+        <span class="wn">4</span>
+        <h3>Ask</h3>
+        <p>Describe what you want. The Bridge window shows each tool as it runs, and every Scene view gets a green frame while your client holds the Editor.</p>
+        <a class="wlink" href="first-session.html">Your first session</a>
+      </li>
+    </ol>
+    <div class="walk-con" aria-hidden="true">
+      <div class="demo-bar"><span class="dot"></span>what you see<span class="walk-state" data-s="off">NOT INSTALLED</span></div>
+      <div class="walk-body">
+        <p data-w="1" class="c"># Window &gt; Package Manager &gt; + &gt; Add package from git URL</p>
+        <p data-w="1">https://github.com/DigitalGhost2362/TheMatrix.git?path=/Packages/com.feeder.mcp</p>
+        <p data-w="1" class="ok">Matrix Bridge 1.1.0 added</p>
+        <p data-w="1" class="c">  Tools &gt; Feeder &gt; Matrix Bridge &gt; Setup...   (the rest stays grey)</p>
+        <p data-w="2" class="c"># Tools &gt; Feeder &gt; Matrix Bridge &gt; Setup...   Run</p>
+        <p data-w="2">Editor settings: Auto Refresh off, Run In Background on</p>
+        <p data-w="2">Git: added 2 line(s) to .gitignore</p>
+        <p data-w="2">Tools: 8 core tools on, about 4.5k tokens a request</p>
+        <p data-w="2" class="ok">Bridge  ONLINE  localhost:25213</p>
+        <p data-w="3" class="c">$ cd MyGame &amp;&amp; claude</p>
+        <p data-w="3">&gt; /mcp</p>
+        <p data-w="3" class="ok">Feeder-MCP  http://localhost:25213/mcp  connected</p>
+        <p data-w="4">&gt; Which lights in this scene cast shadows?</p>
+        <p data-w="4" class="t">rql-query  objects | where has("Light") | select name, Light.shadows</p>
+        <p data-w="4" class="ok">Directional Light   Soft</p>
+        <p data-w="4">Only the directional light casts shadows. Want the lamps to cast too?</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band" aria-labelledby="map-h" style="padding-bottom:90px">
+  <div class="band-head rv">
+    <h2 id="map-h">Everything in these docs</h2>
+    <p>Press <kbd>Ctrl K</kbd> or <kbd>/</kbd> on any page to search pages and all tools.</p>
+  </div>
+  <div class="map rv">
+    <div><h3>Get started</h3><ul>
+      <li><a href="install.html"><b>Install and update</b><small>Requirements, git URL, updates, removing it.</small></a></li>
+      <li><a href="setup.html"><b>Turn Matrix on</b><small>What Setup changes and how to undo it.</small></a></li>
+      <li><a href="connect.html"><b>Connect your AI client</b><small>Claude Code, Codex, Cursor and the rest.</small></a></li>
+      <li><a href="first-session.html"><b>Your first session</b><small>Check the link, first prompts, good habits.</small></a></li>
+    </ul></div>
+    <div><h3>Everyday use</h3><ul>
+      <li><a href="bridge-window.html"><b>The Bridge window</b><small>Link state, clients, port, logs.</small></a></li>
+      <li><a href="skills-window.html"><b>Choose tools</b><small>Switch tools on and off, token cost.</small></a></li>
+      <li><a href="queries.html"><b>Queries</b><small>Read and change many objects at once.</small></a></li>
+      <li><a href="editor-lock.html"><b>Several agents, one Editor</b><small>The editor lock and the green frame.</small></a></li>
+      <li><a href="team.html"><b>Team projects</b><small>Version control, what to ignore.</small></a></li>
+    </ul></div>
+    <div><h3>Going further</h3><ul>
+      <li><a href="runtime-tools.html"><b>Runtime tools</b><small>Tools that run inside your game.</small></a></li>
+      <li><a href="batch-ci.html"><b>Batch mode and CI</b><small>Matrix with no window.</small></a></li>
+      <li><a href="hyper-testing.html"><b>Hyper Testing</b><small>Parallel play tests in clone Editors.</small></a></li>
+      <li><a href="health.html"><b>Health and timeouts</b><small>When Unity is busy or hung.</small></a></li>
+    </ul></div>
+    <div><h3>Reference</h3><ul>
+      <li><a href="tools.html"><b>Tool catalog</b><small>Every tool, what it does, its cost.</small></a></li>
+      <li><a href="reference.html"><b>Menus, files and settings</b><small>Where everything lives.</small></a></li>
+      <li><a href="troubleshooting.html"><b>Troubleshooting</b><small>Symptoms and fixes.</small></a></li>
+      <li><a href="changelog.html"><b>What's new</b><small>Release notes.</small></a></li>
+    </ul></div>
+  </div>
+</section></main>
+<footer class="foot"><div class="in">
+  <span>Matrix Bridge 1.1.0 - MIT license. These pages ship inside the package in <code>Documentation~</code>.</span>
+  <span><a href="install.html">Install</a> - <a href="troubleshooting.html">Troubleshooting</a> - <a href="changelog.html">What's new</a></span>
+</div></footer>
+<div class="search" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="box">
+    <input type="search" placeholder="Search pages and tools, e.g. lock, setup, rql-query" aria-label="Search" role="combobox" aria-controls="search-results" aria-expanded="true" autocomplete="off">
+    <ul id="search-results" role="listbox"></ul>
+    <div class="hint"><span><kbd>Up</kbd> <kbd>Down</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
+<script src="assets/search-index.js" defer></script><script src="assets/vendor/lenis.min.js" defer></script><script src="assets/site.js" defer></script><script src="assets/vendor/three.min.js" data-three defer></script><script src="assets/hero.js" defer></script>
+</body>
+</html>

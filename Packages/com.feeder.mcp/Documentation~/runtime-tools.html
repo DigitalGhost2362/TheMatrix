@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en" data-page="runtime-tools">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Runtime tools - Matrix Bridge docs</title>
+<meta name="description" content="Your running game, in Play mode or as a build, can link to the project&#x27;s Matrix server next to the Editor. Static methods you mark as runtime tools then run inside the game, and your client calls them like any other tool.">
+<meta name="theme-color" content="#07090a">
+<link rel="icon" href="assets/img/logo_window_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script>document.documentElement.classList.add('js')</script>
+</head>
+<body class="docpage">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button class="icon-btn menu-btn" type="button" aria-label="Open the page list" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html" aria-label="Matrix Bridge docs home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#06140b" stroke="#1d5a34"/><path d="M9 10l6 6-6 6" fill="none" stroke="#00ff41" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="19" y="9" width="3.2" height="14" rx="1.2" fill="#00ff41"/></svg><span>Matrix Bridge</span><span class="ver">v1.1.0</span></a>
+  <nav class="topnav" aria-label="Main"><a href="install.html" aria-current="page">Guide</a><a href="tools.html">Tools</a><a href="changelog.html">What's new</a></nav>
+  <span class="spacer"></span>
+  <button class="search-btn" type="button" aria-label="Search the docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span class="lbl">Search docs and tools</span><kbd>Ctrl K</kbd></button>
+</header>
+<div class="progress" aria-hidden="true"></div>
+<div class="layout">
+<aside class="sidebar" aria-label="Pages"><h3>Get started</h3><ul><li><a href="index.html">Overview</a></li><li><a href="install.html">Install and update</a></li><li><a href="setup.html">Turn Matrix on</a></li><li><a href="connect.html">Connect a client</a></li><li><a href="first-session.html">Your first session</a></li></ul><h3>Everyday use</h3><ul><li><a href="bridge-window.html">Bridge window</a></li><li><a href="skills-window.html">Skills window</a></li><li><a href="queries.html">Queries</a></li><li><a href="editor-lock.html">Editor lock</a></li><li><a href="team.html">Team projects</a></li></ul><h3>Going further</h3><ul><li><a href="runtime-tools.html" aria-current="page">Runtime tools</a></li><li><a href="batch-ci.html">Batch mode and CI</a></li><li><a href="hyper-testing.html">Hyper Testing<span class="tag-x">exp</span></a></li><li><a href="health.html">Health and timeouts</a></li></ul><h3>Reference</h3><ul><li><a href="tools.html">Tool catalog</a></li><li><a href="reference.html">Menus, files, settings</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li><li><a href="changelog.html">What&#x27;s new</a></li></ul></aside>
+<main id="main" class="doc">
+  <p class="crumb">Going further</p>
+  <h1>Runtime tools</h1>
+  <p class="lead">Your running game, in Play mode or as a build, can link to the project's Matrix server next to the Editor. Static methods you mark as runtime tools then run inside the game, and your client calls them like any other tool.</p>
+  <div class="doc-body">
+<h2 id="write-a-runtime-tool">Write a runtime tool<a class="anchor" href="#write-a-runtime-tool" aria-label="Link to this section">#</a></h2>
+<p>Mark a static method with <code>[MatrixRuntimeTool]</code>. Add <code>[Preserve]</code> so code stripping keeps it in builds, and describe every parameter: the client reads the descriptions.</p>
+<div class="code-wrap" data-label="C#"><pre><code><span class="k">using</span> System.ComponentModel;
+<span class="k">using</span> Feeder.MCP.Player;
+<span class="k">using</span> UnityEngine.Scripting;
+
+[Preserve]
+[MatrixRuntimeTool(<span class="s">"runtime-hello"</span>, ReadOnly = <span class="k">true</span>, Description = <span class="s">"Greets from the running game."</span>)]
+<span class="k">static</span> <span class="k">string</span> Hello([Description(<span class="s">"Who to greet."</span>)] <span class="k">string</span> name = <span class="s">"world"</span>) =&gt; <span class="s">"hello "</span> + name;</code></pre></div>
+<p>Code in <code>Assembly-CSharp</code> sees the attribute as is. Code in its own assembly definition needs a reference to <code>Feeder.MCP.Player</code>.</p>
+<p>Set <code>ReadOnly = true</code> only when the method changes nothing. Two samples ship with the package: <code>runtime-ping</code> and <code>runtime-scene-info</code>.</p>
+
+<h2 id="link-play-mode">Link Play mode<a class="anchor" href="#link-play-mode" aria-label="Link to this section">#</a></h2>
+<ol class="steps">
+  <li><strong>Switch it on</strong>Choose <span class="menu" role="text" aria-label="Tools &gt; Feeder &gt; Matrix Bridge &gt; Server &gt; Link Play Mode As Player"><span class="sr">Tools &gt; Feeder &gt; Matrix Bridge &gt; Server &gt; Link Play Mode As Player</span><span aria-hidden="true" style="display:contents"><span class="m">Tools</span><span class="sep" aria-hidden="true"></span><span class="m">Feeder</span><span class="sep" aria-hidden="true"></span><span class="m">Matrix Bridge</span><span class="sep" aria-hidden="true"></span><span class="m">Server</span><span class="sep" aria-hidden="true"></span><span class="m">Link Play Mode As Player</span></span></span>.</li>
+  <li><strong>Press Play</strong>Each Play session links to the server as a player. The Editor link stays up.</li>
+  <li><strong>Ask</strong>Your client now lists your runtime tools and can call them while the game runs.</li>
+</ol>
+
+<h2 id="link-a-build">Link a build<a class="anchor" href="#link-a-build" aria-label="Link to this section">#</a></h2>
+<p>Start the game with the server's port and token on the command line:</p>
+<div class="code-wrap" data-label="command line"><pre><code>MyGame.exe -matrixPort &lt;port&gt; -matrixToken &lt;token&gt; [-matrixHost &lt;host&gt;] [-matrixProject &lt;id&gt;]</code></pre></div>
+<p>Or connect from code with <code>Feeder.MCP.Player.MatrixPlayer.Connect(host, port, token)</code>. The port is the one in the project's <code>.mcp.json</code>; the token is the <code>token</code> value in <code>UserSettings/Feeder-MCP-Config.json</code>. The token can also come from the <code>MATRIX_PLAYER_TOKEN</code> environment variable.</p>
+<div class="note"><span class="note-t">Platforms</span>Desktop and mobile players. WebGL builds cannot link.</div>
+  </div>
+  <nav class="pager" aria-label="Previous and next page"><a class="prev" href="team.html"><small>Previous</small><span>Team projects</span></a><a class="next" href="batch-ci.html"><small>Next</small><span>Batch mode and CI</span></a></nav>
+</main>
+<nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#write-a-runtime-tool">Write a runtime tool</a></li><li><a href="#link-play-mode">Link Play mode</a></li><li><a href="#link-a-build">Link a build</a></li></ul></nav>
+</div>
+<footer class="foot"><div class="in">
+  <span>Matrix Bridge 1.1.0 - MIT license. These pages ship inside the package in <code>Documentation~</code>.</span>
+  <span><a href="install.html">Install</a> - <a href="troubleshooting.html">Troubleshooting</a> - <a href="changelog.html">What's new</a></span>
+</div></footer>
+<div class="search" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="box">
+    <input type="search" placeholder="Search pages and tools, e.g. lock, setup, rql-query" aria-label="Search" role="combobox" aria-controls="search-results" aria-expanded="true" autocomplete="off">
+    <ul id="search-results" role="listbox"></ul>
+    <div class="hint"><span><kbd>Up</kbd> <kbd>Down</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
+<script src="assets/search-index.js" defer></script><script src="assets/vendor/lenis.min.js" defer></script><script src="assets/site.js" defer></script>
+</body>
+</html>

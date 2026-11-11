@@ -1,0 +1,67 @@
+<!--
+title: Menus, files and settings
+nav: Menus, files, settings
+lead: Where every Matrix menu item, file and setting lives. Look things up here; the guide pages explain when you need them.
+-->
+<h2>Menu items</h2>
+<p>Everything sits under [[menu:Tools > Feeder > Matrix Bridge]]. Until you run Setup, only Setup is enabled.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Item</th><th>Does</th></tr></thead>
+  <tbody>
+    <tr><td>Setup...</td><td>Turns Matrix on for this machine and project. See <a href="setup.html">Turn Matrix on</a>.</td></tr>
+    <tr><td>Revert Setups...</td><td>Puts back what Setup changed and turns Matrix off.</td></tr>
+    <tr><td>Skills</td><td>Switch tools on and off. See <a href="skills-window.html">Choose tools</a>.</td></tr>
+    <tr><td>Bridge</td><td>Link state, clients and the editor lock. See <a href="bridge-window.html">Bridge window</a>.</td></tr>
+    <tr><td>Hyper Testing (Experimental)</td><td>Clone Editors for parallel play tests. See <a href="hyper-testing.html">Hyper Testing</a>.</td></tr>
+    <tr><td>VFX Studio (Experimental)</td><td>Browse VFX prefabs, edit an effect with a live preview and generate particle textures.</td></tr>
+    <tr><td>Capture &gt; Capture Focused Window</td><td>Saves the focused Editor window as a PNG in <code>Docs/Captures/&lt;title&gt;.png</code>.</td></tr>
+    <tr><td>Capture &gt; Capture Window...</td><td>Pick any open Editor window to save the same way.</td></tr>
+    <tr><td>Server &gt; Reinstall Binaries</td><td>Extracts the bundled server again.</td></tr>
+    <tr><td>Server &gt; Delete Binaries</td><td>Removes the extracted server from <code>Library/feeder-matrix</code>.</td></tr>
+    <tr><td>Server &gt; Open Logs</td><td>Opens the server log folder.</td></tr>
+    <tr><td>Server &gt; Launch MCP Inspector</td><td>Opens a generic MCP inspector against the server, to see the raw tool list and try calls.</td></tr>
+    <tr><td>Server &gt; Reset Config</td><td>Resets <code>UserSettings/Feeder-MCP-Config.json</code> to defaults and reloads scripts.</td></tr>
+    <tr><td>Server &gt; Link Play Mode As Player</td><td>Links each Play session for <a href="runtime-tools.html">runtime tools</a>.</td></tr>
+    <tr><td>Update Check &gt; Check Now</td><td>Looks for a newer version tag of the package now.</td></tr>
+    <tr><td>Update Check &gt; Enabled For Me / For This Project</td><td>Matrix checks once a day for a new version and shows one popup per release. Untick <strong>For Me</strong> to stop it on your machine, or <strong>For This Project</strong> to stop it for everyone (it writes a file under <code>ProjectSettings</code>).</td></tr>
+  </tbody>
+</table></div>
+
+<h2>Files Matrix writes</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Path</th><th>What</th><th>Commit</th></tr></thead>
+  <tbody>
+    <tr><td><code>Library/feeder-matrix/&lt;platform&gt;/</code></td><td>The extracted server</td><td>No (Library)</td></tr>
+    <tr><td><code>Temp/feeder-matrix/</code></td><td>Server logs</td><td>No (Temp)</td></tr>
+    <tr><td><code>UserSettings/Feeder-MCP-Config.json</code></td><td>Port, token, tool switches, timeouts</td><td>No</td></tr>
+    <tr><td><code>.mcp.json</code>, <code>.codex/config.toml</code> and other client files</td><td>Client configs with this machine's port</td><td>No</td></tr>
+    <tr><td><code>.claude/skills/matrix-*/</code></td><td>One guide per switched-on tool</td><td>Your choice</td></tr>
+    <tr><td><code>Temp/agent-editor-lock/lock.json</code></td><td>Copy of the editor lock</td><td>No (Temp)</td></tr>
+    <tr><td><code>Temp/matrix-batch.ready.json</code></td><td>Written by <a href="batch-ci.html">batch mode</a> when ready</td><td>No (Temp)</td></tr>
+    <tr><td><code>Docs/Captures/</code></td><td>Window captures from the Capture menu</td><td>Your choice</td></tr>
+    <tr><td><code>TestCases/</code></td><td>Play tests written down for later, see <a href="editor-lock.html#when-the-editor-is-busy-for-long">editor lock</a></td><td>Your choice</td></tr>
+    <tr><td><code>MatrixWatch/</code></td><td>Recordings from the <code>watch</code> tool</td><td>No, ignored by Git</td></tr>
+    <tr><td><code>&lt;project&gt;.HyperClones/</code>, <code>HyperTesting/</code></td><td><a href="hyper-testing.html">Hyper Testing</a> clones, runs and journal</td><td>No</td></tr>
+  </tbody>
+</table></div>
+
+<h2>Settings file</h2>
+<p><code>UserSettings/Feeder-MCP-Config.json</code> holds this machine's settings. Most are changed from the windows; these are the ones you may edit by hand. The server reads them when it starts.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Key</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>host</code></td><td>derived from the folder path</td><td>Server address and port.</td></tr>
+    <tr><td><code>token</code></td><td>generated</td><td>Secret that players and the Editor use to link. Keep it private.</td></tr>
+    <tr><td><code>logLevel</code></td><td><code>Warning</code></td><td>Server log detail.</td></tr>
+    <tr><td><code>timeoutMs</code></td><td><code>60000</code></td><td>Deadline of one tool call.</td></tr>
+    <tr><td><code>reconnectGraceMs</code></td><td><code>180000</code></td><td>How long a call waits for an Editor that is reloading.</td></tr>
+    <tr><td><code>deferredToolTimeoutMs</code></td><td><code>900000</code></td><td>Deadline of tools that finish after a compile or reload.</td></tr>
+    <tr><td><code>enableToolCallProxy</code></td><td><code>true</code></td><td>Turns [[tool:tool-call]] on or off.</td></tr>
+    <tr><td><code>agentAutoConfigure</code></td><td><code>claude-code</code> on</td><td>Which client configs Matrix rewrites on each load.</td></tr>
+    <tr><td><code>skillsPath</code></td><td><code>.claude/skills</code></td><td>Where skill files are written.</td></tr>
+    <tr><td><code>tools</code></td><td>core set on</td><td>Which tools are on. Use the Skills window instead.</td></tr>
+  </tbody>
+</table></div>
+
+<h2>Environment</h2>
+<p><code>FEEDER_MATRIX_SERVER_PATH</code>, read from the environment or from a <code>.env</code> file at the project root, runs a server build from that path instead of the bundled one. Use it only when you build the server yourself.</p>

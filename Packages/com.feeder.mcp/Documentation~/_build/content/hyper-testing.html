@@ -1,0 +1,32 @@
+<!--
+title: Hyper Testing (experimental)
+nav: Hyper Testing
+lead: Several clone Editors play test one project in parallel, each driven by its own play tester session. Use it when you have many test cases and a machine with memory to spare.
+-->
+<div class="note warn"><span class="note-t">Experimental, Windows only</span>Off by default. Only a person can turn it on, from [[menu:Tools > Feeder > Matrix Bridge > Hyper Testing (Experimental)]]. The switch is per machine and per project, and turns off again on every package update.</div>
+
+<h2>Turn it on</h2>
+<ol class="steps">
+  <li><strong>Open the window</strong>Choose [[menu:Tools > Feeder > Matrix Bridge > Hyper Testing (Experimental)]] and switch it on.</li>
+  <li><strong>Restart Claude Code once</strong>So it picks up the play tester definitions in <code>.claude/agents/</code>.</li>
+  <li><strong>Ask for a run</strong>For example: "Run the test cases in TestCases/ on three clones." Your client follows the <code>matrix-hyper-testing-guide</code> skill: it creates the clones, splits the cases and starts the play testers.</li>
+</ol>
+
+<h2>What a clone is</h2>
+<ul>
+  <li>Clones live in <code>&lt;project&gt;.HyperClones/hc&lt;N&gt;</code>. Their <code>Assets</code> and embedded packages are links to your project; each clone has its own <code>Library</code> and its own server port.</li>
+  <li>Clones start one after another and open no scene on start.</li>
+  <li>After a code change, <code>refresh</code> recompiles the clones one at a time.</li>
+</ul>
+
+<h2>Know before you start</h2>
+<ul>
+  <li><strong>Memory.</strong> Windows runs out of commit memory before free RAM. <code>up</code> refuses a clone that would not fit, keeping <code>ramReserveMb</code> free, and a GPU with 4096 MB or less starts one clone. Samples go to <code>HyperTesting/Journal/ram-samples.csv</code>.</li>
+  <li><strong>Clones write into your project.</strong> An asset a clone creates is created in your project. Each one is reported as CRITICAL, and <code>down</code> and <code>status</code> warn about new untracked files. Packages that write under <code>Assets/</code> when play starts do not work with clones.</li>
+  <li><strong>Results</strong> go to <code>HyperTesting/Runs/</code>, the journal to <code>HyperTesting/Journal/</code>. Settings are in <code>HyperTesting/config.json</code>.</li>
+</ul>
+
+<div class="note danger"><span class="note-t">Remove clones with the button</span>Use <strong>Delete clones</strong> in the Hyper Testing window. Never delete a clone folder by hand with a recursive delete: its <code>Assets</code> is a link to your project, and the delete can follow it.</div>
+
+<h2>Driving a clone by hand</h2>
+<p><code>HyperTesting/tools/</code> holds <code>hc.py</code>, <code>hx.sh</code>, <code>hxf.sh</code> and <code>shot.py</code>, which call a clone over HTTP when a play tester has no MCP tools for it.</p>

@@ -1,0 +1,65 @@
+<!--
+title: Several agents, one Editor
+nav: Editor lock
+lead: You can run several client sessions against one Unity Editor. They take turns through the editor lock, which the Matrix server keeps, so one session's compile never lands in the middle of another's play test.
+-->
+<h2>How turns work</h2>
+<ul>
+  <li><strong>Read-only tools always run</strong>, for every session, at any time: queries, screenshots, the Console, status tools.</li>
+  <li><strong>Tools that change the Editor wait their turn.</strong> A session claims the Editor with [[tool:editor-lock-acquire]] for one burst of work (a compile, one play session, a batch of edits) and gives it back with [[tool:editor-lock-release]].</li>
+  <li><strong>Others queue.</strong> While one session holds the Editor, another session's changing tools wait in a first-come line, and the answer says who holds it and for what.</li>
+  <li><strong>No claim needed for a quick change.</strong> A changing tool called without a claim takes one for itself, freed after 30 idle seconds.</li>
+</ul>
+<p>Your client handles all of this. The <code>matrix-shared-editor</code> skill teaches it when to claim and release.</p>
+
+<h2>Subagents take turns too</h2>
+<p>With Claude Code, every subagent is an agent of its own: it claims the Editor and waits in line for itself, and the Bridge window shows it as its own car, marked <code>&gt;</code>. Two subagents of one session can no longer change the Editor at the same time.</p>
+<ul>
+  <li><strong>It needs a hook.</strong> The Editor adds it to <code>.claude/settings.local.json</code> once it is linked to a server that supports it. Start a new Claude Code session afterwards; a session that was already running keeps the old behavior.</li>
+  <li><strong>Without the hook, and with other clients,</strong> a session and all its subagents count as one agent, as before. The holder's tooltip in the Bridge window says so.</li>
+  <li><strong>A subagent that ends</strong> frees its claim and leaves the line at once.</li>
+  <li><strong>A main agent that holds the Editor and waits for a subagent it started</strong> passes its claim to that subagent when it asks, so the two never wait for each other.</li>
+</ul>
+
+<h2>Work that must follow other work</h2>
+<p>A play test should start only after the agent that edits and compiles has finished. Tell the agents the order instead of timing it yourself: give the first one a name, and let the second one wait for that name.</p>
+<ol class="steps">
+  <li><strong>Name the agent others wait for</strong>It claims with <code>owner: "coder"</code>, or says its name before its first claim with [[tool:editor-lock-status]] and <code>owner</code>.</li>
+  <li><strong>Queue the follower with <code>after</code></strong>It calls [[tool:editor-lock-acquire]] with <code>after: ["coder"]</code>. It joins the line at once and its car reads <code>after coder</code>.</li>
+  <li><strong>It gets the Editor when the first one has finished</strong>That is when the subagent ends, its session closes, or it calls [[tool:editor-lock-release]] with <code>done: true</code>. Until then it holds nobody back.</li>
+</ol>
+<p>To let a waiting agent go ahead yourself, click its car and choose <strong>Let ... go now</strong>. A name that nobody uses within 2 minutes fails the claim with the list of names known at that moment.</p>
+
+<h2>Seeing who holds the Editor</h2>
+<p>While a session holds the lock, every Scene view gets a green frame, tagged at the bottom with the holder's name:</p>
+[[shot:scene-view-locked.png|A Scene view with a thin green border and a tag at the bottom that reads MATRIX - LOCKED BY CLAUDE-MATRIX-DOCS|<b>Scene view while a session holds the Editor.</b> The green frame and the tag at the bottom name the holder.]]
+<p>The Bridge window shows the same holder as a card under the status: the client's name, its task and how long it has held the Editor. The tooltip adds the client, the session and when an idle claim will be freed. With no claim the line reads <code>editor free</code>.</p>
+[[shot:bridge-locked.png|The Bridge window reading WORKING with an amber LOCK card naming claude-matrix-docs and its task|<b>Bridge window with a holder.</b> The amber card names the session and its task.]]
+
+<h2>When you want the Editor yourself</h2>
+<p>The lock orders sessions among themselves; it does not stop you from clicking. To work in Unity without surprises:</p>
+<ol class="steps">
+  <li><strong>Check the line under the status</strong>If it reads <code>editor free</code>, the Editor is yours.</li>
+  <li><strong>Pause the queue</strong>In the Bridge window, click the holder's line and choose <strong>Pause the queue</strong>, or use the pause button of the waiting list. Waiting sessions keep their place; the current holder finishes its burst.</li>
+  <li><strong>Resume when you are done</strong>Choose <strong>Resume the queue</strong> the same way.</li>
+</ol>
+<p>When you press Play yourself while nobody holds the lock, the queue pauses on its own until you stop. While sessions wait, the Bridge window lists them in order with their task and waiting time.</p>
+<p>The lock line menu also has <strong>Free the claim of ...</strong> to release a session that is stuck, and <strong>Copy details</strong> for a bug report.</p>
+
+<h2>When a claim ends</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Event</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td>The session calls [[tool:editor-lock-release]]</td><td>Freed at once; the next in line gets it.</td></tr>
+    <tr><td>The session closes, or the subagent that holds it ends</td><td>Freed at once.</td></tr>
+    <tr><td>10 minutes without a call from the holder</td><td>Freed. Only 2 minutes while others wait, except inside a play session the holder started.</td></tr>
+    <tr><td>A claim older than 15 minutes</td><td>Every result the holder gets ends with an <code>Editor lock:</code> line asking it to release and claim again.</td></tr>
+    <tr><td>You click <strong>Free the claim of ...</strong></td><td>Freed at once.</td></tr>
+  </tbody>
+</table></div>
+<p>Reading an idle Editor does not keep a claim alive. Reads keep it alive only while the Editor compiles, reloads, imports, builds, runs tests or plays a session the holder started.</p>
+
+<h2>When the Editor is busy for long</h2>
+<p>If a session needs the Editor but it is taken for a long time, it can write its play test as a test case under <code>TestCases/</code> and stop. A later session runs the pending cases when the Editor is free. Ask your client to "run the pending test cases".</p>
+
+<div class="note"><span class="note-t">Older lock file</span>The lock is also written to <code>Temp/agent-editor-lock/lock.json</code>. A tool that still claims through that file blocks other claims while its file is live.</div>

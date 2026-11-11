@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en" data-page="first-session">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your first session - Matrix Bridge docs</title>
+<meta name="description" content="Check that the link works, give your client a first task, and learn the few habits that keep a shared Editor calm.">
+<meta name="theme-color" content="#07090a">
+<link rel="icon" href="assets/img/logo_window_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script>document.documentElement.classList.add('js')</script>
+</head>
+<body class="docpage">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button class="icon-btn menu-btn" type="button" aria-label="Open the page list" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html" aria-label="Matrix Bridge docs home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#06140b" stroke="#1d5a34"/><path d="M9 10l6 6-6 6" fill="none" stroke="#00ff41" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="19" y="9" width="3.2" height="14" rx="1.2" fill="#00ff41"/></svg><span>Matrix Bridge</span><span class="ver">v1.1.0</span></a>
+  <nav class="topnav" aria-label="Main"><a href="install.html" aria-current="page">Guide</a><a href="tools.html">Tools</a><a href="changelog.html">What's new</a></nav>
+  <span class="spacer"></span>
+  <button class="search-btn" type="button" aria-label="Search the docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span class="lbl">Search docs and tools</span><kbd>Ctrl K</kbd></button>
+</header>
+<div class="progress" aria-hidden="true"></div>
+<div class="layout">
+<aside class="sidebar" aria-label="Pages"><h3>Get started</h3><ul><li><a href="index.html">Overview</a></li><li><a href="install.html">Install and update</a></li><li><a href="setup.html">Turn Matrix on</a></li><li><a href="connect.html">Connect a client</a></li><li><a href="first-session.html" aria-current="page">Your first session</a></li></ul><h3>Everyday use</h3><ul><li><a href="bridge-window.html">Bridge window</a></li><li><a href="skills-window.html">Skills window</a></li><li><a href="queries.html">Queries</a></li><li><a href="editor-lock.html">Editor lock</a></li><li><a href="team.html">Team projects</a></li></ul><h3>Going further</h3><ul><li><a href="runtime-tools.html">Runtime tools</a></li><li><a href="batch-ci.html">Batch mode and CI</a></li><li><a href="hyper-testing.html">Hyper Testing<span class="tag-x">exp</span></a></li><li><a href="health.html">Health and timeouts</a></li></ul><h3>Reference</h3><ul><li><a href="tools.html">Tool catalog</a></li><li><a href="reference.html">Menus, files, settings</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li><li><a href="changelog.html">What&#x27;s new</a></li></ul></aside>
+<main id="main" class="doc">
+  <p class="crumb">Get started</p>
+  <h1>Your first session</h1>
+  <p class="lead">Check that the link works, give your client a first task, and learn the few habits that keep a shared Editor calm.</p>
+  <div class="doc-body">
+<h2 id="check-the-link">Check the link<a class="anchor" href="#check-the-link" aria-label="Link to this section">#</a></h2>
+<p>Keep Unity open with your project, start your client in the project folder and ask:</p>
+<div class="code-wrap" data-label="prompt"><pre><code>Check that the Unity editor is linked, then list the open scenes and how many objects each has.</code></pre></div>
+<p>The client calls <a class="tool-ref" href="tools.html#editor-health"><code>editor-health</code></a> and <a class="tool-ref" href="tools.html#rql-query"><code>rql-query</code></a> and answers with your scenes. In Unity, the <a href="bridge-window.html">Bridge window</a> flashes <strong>WORKING</strong> and shows the tool being called.</p>
+<p>If the client says it has no Unity tools, or the editor is not linked, see <a href="troubleshooting.html">Troubleshooting</a>.</p>
+
+<h2 id="good-first-tasks">Good first tasks<a class="anchor" href="#good-first-tasks" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><div class="table-wrap"><table>
+  <thead><tr><th>Ask</th><th>What happens in Unity</th></tr></thead>
+  <tbody>
+    <tr><td>"Find every object with a missing script in the open scene."</td><td>One read-only query. Nothing changes.</td></tr>
+    <tr><td>"Show me the Game view and describe what the player sees."</td><td>A screenshot of the Game view goes back to the client.</td></tr>
+    <tr><td>"What errors are in the console? Explain the first one and fix it."</td><td>Reads the Console, edits the script, refreshes, reads the Console again.</td></tr>
+    <tr><td>"Rename all objects under Props to Prop_01, Prop_02 and so on. Dry run first."</td><td>Lists the changes, then applies them as one undo step.</td></tr>
+    <tr><td>"Enter play mode, wait five seconds, take a screenshot, exit play mode."</td><td>Play mode runs while you watch, then stops.</td></tr>
+  </tbody>
+</table></div></div>
+
+<h2 id="how-the-client-finds-more-tools">How the client finds more tools<a class="anchor" href="#how-the-client-finds-more-tools" aria-label="Link to this section">#</a></h2>
+<p>Only the <a href="setup.html#the-core-tools">core tools</a> are on at first. When a task needs another one, the client looks it up with <a class="tool-ref" href="tools.html#unity-tool-list"><code>unity-tool-list</code></a> and switches it on with <a class="tool-ref" href="tools.html#tool-set-enabled-state"><code>tool-set-enabled-state</code></a>. Claude Code sees a newly switched-on tool at once; other clients may need a reconnect, and until then they can call it through <a class="tool-ref" href="tools.html#tool-call"><code>tool-call</code></a>.</p>
+<p>You can also switch tools on yourself in the <a href="skills-window.html">Skills window</a>, for example <a class="tool-ref" href="tools.html#rql-mutate"><code>rql-mutate</code></a> when you want the client to change many objects at once.</p>
+
+<h2 id="habits-that-help">Habits that help<a class="anchor" href="#habits-that-help" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><strong>Save before a big change.</strong> Scene edits are recorded as undo steps (<kbd>Ctrl</kbd> + <kbd>Z</kbd> works), but they are not saved for you. Save when you like the result.</li>
+  <li><strong>Ask for a dry run.</strong> Queries that change things can list every change first and revert it. Say "dry run first".</li>
+  <li><strong>Press <kbd>Ctrl</kbd> + <kbd>R</kbd> after your own file edits.</strong> Setup turned Auto Refresh off; the client refreshes for its own edits.</li>
+  <li><strong>Let it finish before you click play.</strong> While a client holds the Editor, every Scene view has a green frame. See <a href="editor-lock.html">Several agents, one Editor</a>.</li>
+  <li><strong>Switch on only what you use.</strong> Every tool that is on costs tokens in every request. The <a href="skills-window.html">Skills window</a> shows the total.</li>
+</ul>
+
+<div class="note"><span class="note-t">Skills come with the tools</span>Matrix writes a short guide per tool into <code>.claude/skills/matrix-*</code>, plus a few guides of its own: <code>matrix-shared-editor</code> (how to share the Editor), <code>matrix-setup-checklist</code> and an optional <code>/matrix</code> persona that makes the client speak as the System of the simulated world.</div>
+  </div>
+  <nav class="pager" aria-label="Previous and next page"><a class="prev" href="connect.html"><small>Previous</small><span>Connect a client</span></a><a class="next" href="bridge-window.html"><small>Next</small><span>Bridge window</span></a></nav>
+</main>
+<nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#check-the-link">Check the link</a></li><li><a href="#good-first-tasks">Good first tasks</a></li><li><a href="#how-the-client-finds-more-tools">How the client finds more tools</a></li><li><a href="#habits-that-help">Habits that help</a></li></ul></nav>
+</div>
+<footer class="foot"><div class="in">
+  <span>Matrix Bridge 1.1.0 - MIT license. These pages ship inside the package in <code>Documentation~</code>.</span>
+  <span><a href="install.html">Install</a> - <a href="troubleshooting.html">Troubleshooting</a> - <a href="changelog.html">What's new</a></span>
+</div></footer>
+<div class="search" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="box">
+    <input type="search" placeholder="Search pages and tools, e.g. lock, setup, rql-query" aria-label="Search" role="combobox" aria-controls="search-results" aria-expanded="true" autocomplete="off">
+    <ul id="search-results" role="listbox"></ul>
+    <div class="hint"><span><kbd>Up</kbd> <kbd>Down</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
+<script src="assets/search-index.js" defer></script><script src="assets/vendor/lenis.min.js" defer></script><script src="assets/site.js" defer></script>
+</body>
+</html>

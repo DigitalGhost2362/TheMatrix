@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" data-page="setup">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Turn Matrix on - Matrix Bridge docs</title>
+<meta name="description" content="Run Setup once on each machine. It starts the local server, links the Editor, and changes a few Editor settings so an AI client can work in Unity without fighting you for it.">
+<meta name="theme-color" content="#07090a">
+<link rel="icon" href="assets/img/logo_window_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script>document.documentElement.classList.add('js')</script>
+</head>
+<body class="docpage">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button class="icon-btn menu-btn" type="button" aria-label="Open the page list" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html" aria-label="Matrix Bridge docs home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#06140b" stroke="#1d5a34"/><path d="M9 10l6 6-6 6" fill="none" stroke="#00ff41" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="19" y="9" width="3.2" height="14" rx="1.2" fill="#00ff41"/></svg><span>Matrix Bridge</span><span class="ver">v1.1.0</span></a>
+  <nav class="topnav" aria-label="Main"><a href="install.html" aria-current="page">Guide</a><a href="tools.html">Tools</a><a href="changelog.html">What's new</a></nav>
+  <span class="spacer"></span>
+  <button class="search-btn" type="button" aria-label="Search the docs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span class="lbl">Search docs and tools</span><kbd>Ctrl K</kbd></button>
+</header>
+<div class="progress" aria-hidden="true"></div>
+<div class="layout">
+<aside class="sidebar" aria-label="Pages"><h3>Get started</h3><ul><li><a href="index.html">Overview</a></li><li><a href="install.html">Install and update</a></li><li><a href="setup.html" aria-current="page">Turn Matrix on</a></li><li><a href="connect.html">Connect a client</a></li><li><a href="first-session.html">Your first session</a></li></ul><h3>Everyday use</h3><ul><li><a href="bridge-window.html">Bridge window</a></li><li><a href="skills-window.html">Skills window</a></li><li><a href="queries.html">Queries</a></li><li><a href="editor-lock.html">Editor lock</a></li><li><a href="team.html">Team projects</a></li></ul><h3>Going further</h3><ul><li><a href="runtime-tools.html">Runtime tools</a></li><li><a href="batch-ci.html">Batch mode and CI</a></li><li><a href="hyper-testing.html">Hyper Testing<span class="tag-x">exp</span></a></li><li><a href="health.html">Health and timeouts</a></li></ul><h3>Reference</h3><ul><li><a href="tools.html">Tool catalog</a></li><li><a href="reference.html">Menus, files, settings</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li><li><a href="changelog.html">What&#x27;s new</a></li></ul></aside>
+<main id="main" class="doc">
+  <p class="crumb">Get started</p>
+  <h1>Turn Matrix on</h1>
+  <p class="lead">Run Setup once on each machine. It starts the local server, links the Editor, and changes a few Editor settings so an AI client can work in Unity without fighting you for it.</p>
+  <div class="doc-body">
+<h2 id="run-setup">Run Setup<a class="anchor" href="#run-setup" aria-label="Link to this section">#</a></h2>
+<ol class="steps">
+  <li><strong>Open Setup</strong>Choose <span class="menu" role="text" aria-label="Tools &gt; Feeder &gt; Matrix Bridge &gt; Setup..."><span class="sr">Tools &gt; Feeder &gt; Matrix Bridge &gt; Setup...</span><span aria-hidden="true" style="display:contents"><span class="m">Tools</span><span class="sep" aria-hidden="true"></span><span class="m">Feeder</span><span class="sep" aria-hidden="true"></span><span class="m">Matrix Bridge</span><span class="sep" aria-hidden="true"></span><span class="m">Setup...</span></span></span>.</li>
+  <li><strong>Read the list and click Run</strong>The dialog lists every change before it makes any. The same list is below.</li>
+  <li><strong>Read the result</strong>A <strong>Setup finished</strong> window reports each step. The other Matrix Bridge menu items are now enabled, and the <a href="bridge-window.html">Bridge window</a> reads <strong>ONLINE</strong>.</li>
+</ol>
+<p>The on/off choice is stored for this machine and this project folder, outside the project. It is never committed, so each teammate decides for themselves.</p>
+
+<h2 id="what-setup-changes">What Setup changes<a class="anchor" href="#what-setup-changes" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><div class="table-wrap"><table>
+  <thead><tr><th>Change</th><th>Why</th><th>Where it is stored</th></tr></thead>
+  <tbody>
+    <tr><td>Starts the local server and links the Editor</td><td>Matrix does nothing until this runs. From now on it starts on every Editor load.</td><td>This machine and project folder</td></tr>
+    <tr><td>Adds <code>.mcp.json</code> and <code>.codex/config.toml</code> to <code>.gitignore</code></td><td>Both hold the server port, and the port differs on every machine. If a file is already committed, Setup prints the git command to run.</td><td><code>.gitignore</code></td></tr>
+    <tr><td>Keeps only the core tools switched on</td><td>Every switched-on tool costs tokens in every request. The core set is enough to start; your client switches on more when it needs them.</td><td><code>UserSettings/Feeder-MCP-Config.json</code></td></tr>
+    <tr><td>Regenerates the skill files</td><td>Clients that read skills learn how to use each tool.</td><td><code>.claude/skills/matrix-*</code></td></tr>
+    <tr><td>Auto Refresh: <strong>Disabled</strong></td><td>A file the AI writes no longer compiles the moment you click into Unity, in the middle of another session's play test. The AI refreshes with <a class="tool-ref" href="tools.html#assets-refresh"><code>assets-refresh</code></a>.</td><td>Preferences, every project on this machine</td></tr>
+    <tr><td>Script Changes While Playing: <strong>Recompile After Finished Playing</strong></td><td>A script edit does not break a running play test.</td><td>Preferences, every project on this machine</td></tr>
+    <tr><td>Run In Background: <strong>On</strong></td><td>Play mode keeps running while your terminal or client has focus.</td><td><code>ProjectSettings/ProjectSettings.asset</code></td></tr>
+  </tbody>
+</table></div></div>
+
+<div class="note warn"><span class="note-t">Auto Refresh is off now</span>After you edit a file outside Unity yourself, press <kbd>Ctrl</kbd> + <kbd>R</kbd> in Unity to import it. Changes made through the AI client are refreshed for you.</div>
+
+<h2 id="the-core-tools">The core tools<a class="anchor" href="#the-core-tools" aria-label="Link to this section">#</a></h2>
+<p>Setup leaves these switched on. Together they cost about 4.5k tokens per request.</p>
+<div class="table-wrap"><div class="table-wrap"><table>
+  <thead><tr><th>Tool</th><th>What your client uses it for</th></tr></thead>
+  <tbody>
+    <tr><td><a class="tool-ref" href="tools.html#rql-query"><code>rql-query</code></a>, <a class="tool-ref" href="tools.html#rql-schema"><code>rql-schema</code></a></td><td>Read anything in the open scenes, assets and console with one query.</td></tr>
+    <tr><td><a class="tool-ref" href="tools.html#console-get-logs"><code>console-get-logs</code></a></td><td>Read the Console.</td></tr>
+    <tr><td><a class="tool-ref" href="tools.html#editor-application-get-state"><code>editor-application-get-state</code></a></td><td>Check play mode, pause and compile state.</td></tr>
+    <tr><td><a class="tool-ref" href="tools.html#screenshot-game-view"><code>screenshot-game-view</code></a></td><td>See the Game view.</td></tr>
+    <tr><td><a class="tool-ref" href="tools.html#assets-refresh"><code>assets-refresh</code></a></td><td>Import changed files and compile scripts.</td></tr>
+    <tr><td><a class="tool-ref" href="tools.html#unity-tool-list"><code>unity-tool-list</code></a>, <a class="tool-ref" href="tools.html#tool-set-enabled-state"><code>tool-set-enabled-state</code></a></td><td>Find another tool and switch it on when the task needs it.</td></tr>
+  </tbody>
+</table></div></div>
+<p>Switch more on yourself in the <a href="skills-window.html">Skills window</a>, or browse them in the <a href="tools.html">tool catalog</a>.</p>
+
+<h2 id="optional-faster-play-mode-and-defender">Optional: faster play mode and Defender<a class="anchor" href="#optional-faster-play-mode-and-defender" aria-label="Link to this section">#</a></h2>
+<p>Two more steps depend on your project or need admin rights, so Setup leaves them out: entering play mode without a domain reload, and a Windows Defender exclusion for the project folder. Both make play tests faster. Ask your AI client to run the <code>matrix-setup-checklist</code> skill; it checks your project first and explains each change.</p>
+
+<h2 id="undo-setup">Undo Setup<a class="anchor" href="#undo-setup" aria-label="Link to this section">#</a></h2>
+<p>Run <span class="menu" role="text" aria-label="Tools &gt; Feeder &gt; Matrix Bridge &gt; Revert Setups..."><span class="sr">Tools &gt; Feeder &gt; Matrix Bridge &gt; Revert Setups...</span><span aria-hidden="true" style="display:contents"><span class="m">Tools</span><span class="sep" aria-hidden="true"></span><span class="m">Feeder</span><span class="sep" aria-hidden="true"></span><span class="m">Matrix Bridge</span><span class="sep" aria-hidden="true"></span><span class="m">Revert Setups...</span></span></span>. After a confirm dialog it:</p>
+<ul>
+  <li>puts back the values Auto Refresh, Script Changes While Playing and Run In Background had before your first Setup;</li>
+  <li>removes the lines Setup added to <code>.gitignore</code>;</li>
+  <li>restores which tools were switched on;</li>
+  <li>turns Matrix off: stops the server, unlinks the Editor and turns Hyper Testing off;</li>
+  <li>closes every Matrix window.</li>
+</ul>
+<p>Client configs such as <code>.mcp.json</code> and the generated skill files stay. Nothing starts on the next load until you run Setup again.</p>
+
+<h2 id="turn-matrix-off-for-a-while">Turn Matrix off for a while<a class="anchor" href="#turn-matrix-off-for-a-while" aria-label="Link to this section">#</a></h2>
+<p>To pause Matrix without undoing your settings, open the <a href="bridge-window.html">Bridge window</a> and click the state word while it reads <strong>ONLINE</strong>. The server stops, the menu items grey out, and nothing starts on the next load. Click it again while it reads <strong>OFFLINE</strong> to turn Matrix back on.</p>
+  </div>
+  <nav class="pager" aria-label="Previous and next page"><a class="prev" href="install.html"><small>Previous</small><span>Install and update</span></a><a class="next" href="connect.html"><small>Next</small><span>Connect a client</span></a></nav>
+</main>
+<nav class="toc" aria-label="On this page"><h3>On this page</h3><ul><li><a href="#run-setup">Run Setup</a></li><li><a href="#what-setup-changes">What Setup changes</a></li><li><a href="#the-core-tools">The core tools</a></li><li><a href="#optional-faster-play-mode-and-defender">Optional: faster play mode and Defender</a></li><li><a href="#undo-setup">Undo Setup</a></li><li><a href="#turn-matrix-off-for-a-while">Turn Matrix off for a while</a></li></ul></nav>
+</div>
+<footer class="foot"><div class="in">
+  <span>Matrix Bridge 1.1.0 - MIT license. These pages ship inside the package in <code>Documentation~</code>.</span>
+  <span><a href="install.html">Install</a> - <a href="troubleshooting.html">Troubleshooting</a> - <a href="changelog.html">What's new</a></span>
+</div></footer>
+<div class="search" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="box">
+    <input type="search" placeholder="Search pages and tools, e.g. lock, setup, rql-query" aria-label="Search" role="combobox" aria-controls="search-results" aria-expanded="true" autocomplete="off">
+    <ul id="search-results" role="listbox"></ul>
+    <div class="hint"><span><kbd>Up</kbd> <kbd>Down</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
+<script src="assets/search-index.js" defer></script><script src="assets/vendor/lenis.min.js" defer></script><script src="assets/site.js" defer></script>
+</body>
+</html>

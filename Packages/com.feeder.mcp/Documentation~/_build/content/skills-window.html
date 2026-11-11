@@ -1,0 +1,41 @@
+<!--
+title: Choose which tools are on
+nav: Skills window
+lead: Matrix has more than a hundred tools. Every tool that is switched on is described to your client in every request, which costs tokens. The Skills window lets you keep the set small and pick what a task needs.
+-->
+<p>Open it with [[menu:Tools > Feeder > Matrix Bridge > Skills]], or from the <code>...</code> menu of the Bridge window.</p>
+[[shot:skills-window.png|The Skills window: groups on the left with on and total counts, tool rows with a name, tag, summary, token cost and a switch, and a token total at the bottom|<b>Skills window.</b> Groups on the left, one switch per tool, the running token total at the bottom.]]
+
+<h2>Find a tool</h2>
+<ul>
+  <li>Pick a group on the left (Query, Scenes, GameObjects, Assets and so on), or type in the search box.</li>
+  <li><strong>All</strong>, <strong>On</strong> and <strong>Off</strong> filter by state.</li>
+  <li>Each row shows the tool's name and id, one sentence of what it does, and the tokens it adds to every request while it is on.</li>
+</ul>
+
+<h2>Read the tags</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Tag</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tag core">core</span></td><td>Part of the set Setup keeps on.</td></tr>
+    <tr><td><span class="tag wr">writes</span></td><td>Changes the scene, assets, settings or Editor state. Usually undoable.</td></tr>
+    <tr><td><span class="tag de">destructive</span></td><td>Can delete or overwrite: scripts, assets, packages, the Console. Switch these on when you mean it.</td></tr>
+    <tr><td>no tag</td><td>Read-only. Changes nothing.</td></tr>
+  </tbody>
+</table></div>
+<p>When a tool works together with one that is off, its row says <strong>Works with</strong> and names the other. Click the name to switch that one on too.</p>
+
+<h2>Watch the token total</h2>
+<p>The bar at the bottom adds up every tool that is on and rates the total: <strong>LEAN</strong> under 12k tokens, <strong>HEAVY</strong> from 30k. The core set is about 4.5k.</p>
+<ul>
+  <li><strong>Core only</strong> goes back to the set Setup chose.</li>
+  <li><strong>Enable all</strong> asks first: everything on costs about 50k tokens per request.</li>
+</ul>
+
+<h2>When a change reaches your client</h2>
+<p>A change rewrites the skill files after about a second. Claude Code, and any client that follows the MCP <code>tools/list_changed</code> notice, sees the new list at once. Other clients need a reconnect; until then they can call a new tool through [[tool:tool-call]].</p>
+<p>Your client can switch tools itself with [[tool:tool-set-enabled-state]]. The Skills window shows those changes too.</p>
+
+<div class="note"><span class="note-t">The choice is per machine</span>Which tools are on is saved in <code>UserSettings/Feeder-MCP-Config.json</code>, which Unity does not commit. Each teammate keeps their own set.</div>
+
+<p>The <a href="tools.html">tool catalog</a> lists every tool with its full description, so you can decide before switching anything on.</p>

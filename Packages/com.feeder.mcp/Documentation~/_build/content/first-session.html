@@ -1,0 +1,37 @@
+<!--
+title: Your first session
+nav: Your first session
+lead: Check that the link works, give your client a first task, and learn the few habits that keep a shared Editor calm.
+-->
+<h2>Check the link</h2>
+<p>Keep Unity open with your project, start your client in the project folder and ask:</p>
+<pre data-label="prompt"><code>Check that the Unity editor is linked, then list the open scenes and how many objects each has.</code></pre>
+<p>The client calls [[tool:editor-health]] and [[tool:rql-query]] and answers with your scenes. In Unity, the <a href="bridge-window.html">Bridge window</a> flashes <strong>WORKING</strong> and shows the tool being called.</p>
+<p>If the client says it has no Unity tools, or the editor is not linked, see <a href="troubleshooting.html">Troubleshooting</a>.</p>
+
+<h2>Good first tasks</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Ask</th><th>What happens in Unity</th></tr></thead>
+  <tbody>
+    <tr><td>"Find every object with a missing script in the open scene."</td><td>One read-only query. Nothing changes.</td></tr>
+    <tr><td>"Show me the Game view and describe what the player sees."</td><td>A screenshot of the Game view goes back to the client.</td></tr>
+    <tr><td>"What errors are in the console? Explain the first one and fix it."</td><td>Reads the Console, edits the script, refreshes, reads the Console again.</td></tr>
+    <tr><td>"Rename all objects under Props to Prop_01, Prop_02 and so on. Dry run first."</td><td>Lists the changes, then applies them as one undo step.</td></tr>
+    <tr><td>"Enter play mode, wait five seconds, take a screenshot, exit play mode."</td><td>Play mode runs while you watch, then stops.</td></tr>
+  </tbody>
+</table></div>
+
+<h2>How the client finds more tools</h2>
+<p>Only the <a href="setup.html#the-core-tools">core tools</a> are on at first. When a task needs another one, the client looks it up with [[tool:unity-tool-list]] and switches it on with [[tool:tool-set-enabled-state]]. Claude Code sees a newly switched-on tool at once; other clients may need a reconnect, and until then they can call it through [[tool:tool-call]].</p>
+<p>You can also switch tools on yourself in the <a href="skills-window.html">Skills window</a>, for example [[tool:rql-mutate]] when you want the client to change many objects at once.</p>
+
+<h2>Habits that help</h2>
+<ul>
+  <li><strong>Save before a big change.</strong> Scene edits are recorded as undo steps (<kbd>Ctrl</kbd> + <kbd>Z</kbd> works), but they are not saved for you. Save when you like the result.</li>
+  <li><strong>Ask for a dry run.</strong> Queries that change things can list every change first and revert it. Say "dry run first".</li>
+  <li><strong>Press <kbd>Ctrl</kbd> + <kbd>R</kbd> after your own file edits.</strong> Setup turned Auto Refresh off; the client refreshes for its own edits.</li>
+  <li><strong>Let it finish before you click play.</strong> While a client holds the Editor, every Scene view has a green frame. See <a href="editor-lock.html">Several agents, one Editor</a>.</li>
+  <li><strong>Switch on only what you use.</strong> Every tool that is on costs tokens in every request. The <a href="skills-window.html">Skills window</a> shows the total.</li>
+</ul>
+
+<div class="note"><span class="note-t">Skills come with the tools</span>Matrix writes a short guide per tool into <code>.claude/skills/matrix-*</code>, plus a few guides of its own: <code>matrix-shared-editor</code> (how to share the Editor), <code>matrix-setup-checklist</code> and an optional <code>/matrix</code> persona that makes the client speak as the System of the simulated world.</div>
