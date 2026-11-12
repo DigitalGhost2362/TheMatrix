@@ -54,7 +54,7 @@ namespace Feeder.MCP.Editor.HyperTesting
             }
             if (!MatrixActivation.IsEnabled)
             {
-                error = "Turn Matrix on first (Tools > Feeder > Matrix Bridge > Setup...).";
+                error = "Turn Matrix on first (Tools > Feeder > Matrix Bridge > Getting Started).";
                 return false;
             }
 

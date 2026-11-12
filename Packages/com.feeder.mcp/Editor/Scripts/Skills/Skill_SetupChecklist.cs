@@ -13,7 +13,7 @@ namespace Feeder.MCP.Editor.API
         public static string Markdown => @"
 # Matrix Setup Checklist
 
-`Tools > Feeder > Matrix Bridge > Setup...` already turned Matrix on and set Auto Refresh off,
+`Tools > Feeder > Matrix Bridge > Getting Started` already turned Matrix on and set Auto Refresh off,
 Script Changes While Playing to Recompile After Finished Playing and
 Run In Background on (`Revert Setups...` undoes them). The steps below are left to you and the
 user because they depend on the project or need admin rights. Ask before each one; never do them silently.

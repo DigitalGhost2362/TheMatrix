@@ -6,6 +6,9 @@ All notable changes to this package are documented here.
 
 ### Added
 
+- `Tools > Feeder > Matrix Bridge > Getting Started` replaces `Setup...`. One window lists every Setup change before
+  it runs, shows each step's result in place, and links every page of the Matrix Bridge manual, which opens offline
+  in your browser.
 - `Tools > Feeder > Matrix Bridge > Revert Setups...` puts back the settings the first Setup changed, removes the
   `.gitignore` lines it added, restores which tools were enabled, turns Matrix and Hyper Testing Mode off and closes
   the Matrix windows. Its confirm dialog lists every change first.

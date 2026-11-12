@@ -21,18 +21,6 @@ namespace Feeder.MCP.Editor
         const string LogPrefix = "[Matrix Setup]";
         const string IgnoreHeader = "# Matrix MCP: per-machine files (the port derives from the project path)";
 
-        static string ConfirmMessage =>
-            "Turn Matrix MCP on for this project and prepare this machine:\n\n" +
-            "- Start the local server and connect the editor (Matrix does nothing until this runs)\n" +
-            "- Ignore .mcp.json and .codex/config.toml in .gitignore (their port differs per machine)\n" +
-            "- Keep only the core MCP tools enabled to save tokens; tool-set-enabled-state turns more on when needed\n" +
-            "- Add a Claude Code hook to .claude/settings.local.json (while the server supports it), so each subagent queues for the editor on its own\n" +
-            "- Regenerate the agent skills\n\n" +
-            "Change these editor settings so agents can share the editor:\n- " +
-            string.Join("\n- ", MatrixEditorSettings.Prefs.Select(pref => pref.label).Append(MatrixEditorSettings.RunInBackgroundLabel)) + "\n\n" +
-            "The Preferences apply to every Unity project on this machine. With Auto Refresh off, press Ctrl+R after editing files outside Unity.\n\n" +
-            "The values from before the first Setup are kept: Tools > Feeder > Matrix Bridge > Revert Setups... puts them back.";
-
         static string RevertMessage =>
             "Undo Matrix Setup on this machine and project:\n\n" +
             "- Put back the values these settings had before the first Setup:\n  " +
@@ -58,33 +46,38 @@ namespace Feeder.MCP.Editor
             "assets-refresh",
         };
 
-        public static void Run()
+        internal static readonly (string name, string plan)[] Steps =
         {
-            if (!EditorUtility.DisplayDialog(Title, ConfirmMessage, "Run", "Cancel"))
-                return;
+            ("Editor settings", "Shared-editor settings. Preferences apply to every Unity project on this machine; with Auto Refresh off, press Ctrl+R after editing files outside Unity."),
+            ("Git", "Ignore .mcp.json and .codex/config.toml in .gitignore: their port differs per machine."),
+            ("Agents", "Add a Claude Code hook to .claude/settings.local.json (while the server supports it), so each subagent queues for the editor on its own."),
+            ("Tools", $"Keep only the {CoreTools.Length} core MCP tools on to save tokens; tool-set-enabled-state turns more on when needed."),
+            ("Skills", "Regenerate the agent skills for every configured client."),
+        };
 
+        internal static IEnumerable<string> EditorSettingLabels
+            => MatrixEditorSettings.Prefs.Select(pref => pref.label).Append(MatrixEditorSettings.RunInBackgroundLabel);
+
+        internal static string NextStep => $"/{API.Skill_SetupChecklist.SkillId}";
+
+        public static void Run() => GettingStartedWindow.ShowWindow();
+
+        internal static string[] Execute()
+        {
             MatrixActivation.Enable();
             MatrixEditorSettings.CaptureIfMissing();
 
-            var message = string.Join("\n\n", new[]
+            var results = new[]
             {
                 Step("Editor settings", MatrixEditorSettings.Apply),
                 Step("Git", IgnoreMachineSpecificFiles),
                 Step("Agents", () => MatrixAgentHook.Sync(MatrixPluginEditor.Instance.ServerTellsAgentsApart)),
                 Step("Tools", () => ApplyToolSet(all: false)),
                 Step("Skills", () => $"Skills: regenerated for {BridgeAgents.RegenerateSkills()} client(s)"),
-                $"Next: ask your agent to run /{API.Skill_SetupChecklist.SkillId} (faster play mode, Windows Defender exclusion).",
-            });
+            };
 
-            Debug.Log($"{LogPrefix}\n{message}");
-            NotificationPopupWindow.Show(
-                windowTitle: Title,
-                title: "Setup finished",
-                message: message,
-                width: 480,
-                minWidth: 480,
-                height: 460,
-                minHeight: 460);
+            Debug.Log($"{LogPrefix}\n{string.Join("\n\n", results)}");
+            return results;
         }
 
         public static void Revert()
@@ -252,5 +245,6 @@ namespace Feeder.MCP.Editor
         }
 
         static int EnabledTokens(IToolManager manager, IEnumerable<IRunTool> tools)
-            => tools.Where(tool => manager.IsToolEnabled(tool.Name!)).Sum(tool => tool.TokenCount);    }
+            => tools.Where(tool => manager.IsToolEnabled(tool.Name!)).Sum(tool => tool.TokenCount);
+    }
 }

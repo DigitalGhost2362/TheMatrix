@@ -67,7 +67,7 @@ namespace Feeder.MCP.Editor.HyperTesting
             EditorGUILayout.HelpBox(RiskText, MessageType.Warning);
             if (!MatrixActivation.IsEnabled)
             {
-                EditorGUILayout.HelpBox("Turn Matrix on first: Tools > Feeder > Matrix Bridge > Setup...", MessageType.Error);
+                EditorGUILayout.HelpBox("Turn Matrix on first: Tools > Feeder > Matrix Bridge > Getting Started", MessageType.Error);
                 return;
             }
 

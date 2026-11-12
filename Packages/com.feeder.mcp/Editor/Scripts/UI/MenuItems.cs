@@ -13,7 +13,7 @@ namespace Feeder.MCP.Editor.UI
     {
         public const string Root = "Tools/Feeder/Matrix Bridge/";
 
-        [MenuItem(Root + "Setup...", priority = -20)]
+        [MenuItem(Root + "Getting Started", priority = -21)]
         public static void RunMatrixSetup() => MatrixSetup.Run();
 
         [MenuItem(Root + "Revert Setups...", priority = -20)]

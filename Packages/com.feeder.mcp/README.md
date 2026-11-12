@@ -29,7 +29,7 @@ Installing the package changes nothing on a machine: no window opens, no server 
 is written until the person using the project turns Matrix on. Teammates who do not use MCP are
 never affected, even when the project is shared through version control.
 
-To turn it on, run **Tools > Feeder > Matrix Bridge > Setup...** once (see [Matrix Setup](#matrix-setup)). Until
+To turn it on, run **Tools > Feeder > Matrix Bridge > Getting Started** once (see [Matrix Setup](#matrix-setup)). Until
 then the other items of the **Tools > Feeder > Matrix Bridge** menu are greyed out. The choice is stored per
 machine and per project folder, outside the project, so it is never committed. A saved window
 layout that includes Matrix windows or the Scene view toolbar (for example one checked in with the
@@ -49,7 +49,7 @@ starts, opens or is written on the next load.
 
 Note: the server port is derived from the project's directory path, so `.mcp.json` differs
 between machines that clone the project to different paths. The file is rewritten with the local
-port on editor load. Do not commit it: run **Tools > Feeder > Matrix Bridge > Setup...** once per machine to
+port on editor load. Do not commit it: run **Tools > Feeder > Matrix Bridge > Getting Started** once per machine to
 gitignore it.
 
 ## Matrix Bridge window
@@ -81,7 +81,7 @@ Open **Tools > Feeder > Matrix Bridge > Skills**. It lists every MCP tool with i
 
 ## Matrix Setup
 
-Run **Tools > Feeder > Matrix Bridge > Setup...** once on each machine. It:
+Run **Tools > Feeder > Matrix Bridge > Getting Started** once on each machine. It:
 
 - turns Matrix on for the project on this machine: it starts the local server and links the editor;
 - adds `.mcp.json` and `.codex/config.toml` to the project's `.gitignore`; if a file is already committed, it prints
