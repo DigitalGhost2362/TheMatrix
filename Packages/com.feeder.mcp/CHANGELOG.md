@@ -8,8 +8,8 @@ All notable changes to this package are documented here.
 
 - `Tools > Feeder > Matrix Bridge > Getting Started` replaces `Setup...`. One window lists every Setup change before
   it runs, shows each step's result in place, and links every page of the Matrix Bridge manual, which opens offline
-  in your browser.
-- `Tools > Feeder > Matrix Bridge > Revert Setups...` puts back the settings the first Setup changed, removes the
+  in your browser. Revert lives in the same window; the `Revert Setups...` menu item is gone.
+- **Revert** in `Tools > Feeder > Matrix Bridge > Getting Started` puts back the settings the first Setup changed, removes the
   `.gitignore` lines it added, restores which tools were enabled, turns Matrix and Hyper Testing Mode off and closes
   the Matrix windows. Its confirm dialog lists every change first.
 - `matrix-setup-checklist` skill: turning off domain reload on entering play mode after checking the project's
@@ -22,7 +22,7 @@ All notable changes to this package are documented here.
 - Editor lock per agent: with Claude Code, every subagent now claims the editor for itself. It no longer shares the
   claim of its session, it waits in the queue on its own and the Matrix Bridge window shows it as its own car. The
   editor adds a hook to `.claude/settings.local.json` for this while the linked server supports it and the project has
-  Claude Code wired in `.mcp.json`, and takes it out again for a server that does not (Revert Setups removes it too).
+  Claude Code wired in `.mcp.json`, and takes it out again for a server that does not (Revert removes it too).
   Sessions started before the hook was added, and other clients, stay one agent per session as before.
 - `editor-lock-acquire` takes `after`: join the queue now and get the editor only when the named agents have
   finished, for example a play test after the agent that edits and compiles. `editor-lock-status` takes `owner` to

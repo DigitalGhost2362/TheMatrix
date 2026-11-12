@@ -16,12 +16,6 @@ namespace Feeder.MCP.Editor.UI
         [MenuItem(Root + "Getting Started", priority = -21)]
         public static void RunMatrixSetup() => MatrixSetup.Run();
 
-        [MenuItem(Root + "Revert Setups...", priority = -20)]
-        public static void RevertMatrixSetup() => MatrixSetup.Revert();
-
-        [MenuItem(Root + "Revert Setups...", true)]
-        private static bool CanRevert() => MatrixActivation.IsEnabled || MatrixEditorSettings.HasSnapshot;
-
         [MenuItem(Root + "Skills", priority = -19)]
         public static void ShowSkills() => MatrixSkillsWindow.ShowWindow();
 

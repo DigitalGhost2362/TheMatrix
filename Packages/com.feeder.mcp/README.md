@@ -99,7 +99,7 @@ Run **Tools > Feeder > Matrix Bridge > Getting Started** once on each machine. I
 
 The two Preferences apply to every Unity project on this machine; Run In Background is saved in
 `ProjectSettings/ProjectSettings.asset`. The first Setup records the values from before, and
-**Tools > Feeder > Matrix Bridge > Revert Setups...** puts them back, removes the `.gitignore` lines Setup added,
+**Revert** in **Tools > Feeder > Matrix Bridge > Getting Started** puts them back, removes the `.gitignore` lines Setup added,
 restores which tools were enabled, turns Matrix and Hyper Testing Mode off and closes the Matrix windows. Client
 configs and generated skill files stay.
 

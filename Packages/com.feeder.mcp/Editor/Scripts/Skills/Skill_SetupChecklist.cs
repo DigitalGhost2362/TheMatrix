@@ -15,7 +15,7 @@ namespace Feeder.MCP.Editor.API
 
 `Tools > Feeder > Matrix Bridge > Getting Started` already turned Matrix on and set Auto Refresh off,
 Script Changes While Playing to Recompile After Finished Playing and
-Run In Background on (`Revert Setups...` undoes them). The steps below are left to you and the
+Run In Background on (Revert in Getting Started undoes them). The steps below are left to you and the
 user because they depend on the project or need admin rights. Ask before each one; never do them silently.
 
 ## 1. Enter play mode without a domain reload
@@ -82,7 +82,7 @@ Add-MpPreference -ExclusionPath ""<project root>""
 
 `Library` is where most of the reads happen; exclude only `<project root>\Library` if the user wants a
 narrower rule. To undo: `Remove-MpPreference -ExclusionPath ""<same path>""`. Neither step is undone
-by `Revert Setups...`.
+by Revert in Getting Started.
 ";
     }
 }
