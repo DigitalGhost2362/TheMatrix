@@ -16,7 +16,6 @@ namespace Feeder.MCP.Editor.API
     public partial class Tool_Screenshot
     {
         public const string ScreenshotEditorWindowToolId = "screenshot-editor-window";
-        internal const string CaptureLog = "[Matrix Capture]";
 
         const BindingFlags InstanceFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         static readonly FieldInfo? ParentField = typeof(EditorWindow).GetField("m_Parent", InstanceFlags);
@@ -41,8 +40,7 @@ namespace Feeder.MCP.Editor.API
             "Focuses the window (a docked tab is brought to front), repaints it and reads its own back buffer " +
             "(`GUIView.GrabPixels`), so other apps or monitors covering it do not matter. The image is the window content " +
             "without the tab strip, `position.size * EditorGUIUtility.pixelsPerPoint` pixels. " +
-            "The error lists the open windows when none matches.\n\n" +
-            "People can also use `Tools > Feeder > Matrix Bridge > Capture`; it saves to `<project>/Docs/Captures/<title>.png`.")]
+            "The error lists the open windows when none matches.")]
         [Description("Captures an open Editor window as the Editor draws it and returns it as an image.")]
         public ResponseCallTool ScreenshotEditorWindow
         (
@@ -222,92 +220,6 @@ namespace Feeder.MCP.Editor.API
             }
             var slug = builder.ToString().Trim('-');
             return slug.Length > 0 ? slug : "window";
-        }
-    }
-
-    static class EditorWindowCaptureMenu
-    {
-        const string CaptureMenu = UI.MenuItems.Root + "Capture/";
-        const string DefaultFolder = "Docs/Captures";
-
-        [MenuItem(CaptureMenu + "Capture Focused Window", priority = 100)]
-        static void CaptureFocused()
-        {
-            var window = EditorWindow.focusedWindow;
-            if (window == null)
-            {
-                Debug.LogWarning($"{Tool_Screenshot.CaptureLog} No Editor window has focus.");
-                return;
-            }
-            CaptureLater(window);
-        }
-
-        [MenuItem(CaptureMenu + "Capture Window...", priority = 101)]
-        static void PickWindow() => EditorWindowCapturePicker.Open();
-
-        internal static void CaptureLater(EditorWindow window)
-        {
-            window.Focus();
-            window.Repaint();
-            EditorApplication.delayCall += () => EditorApplication.delayCall += () => Capture(window);
-        }
-
-        static void Capture(EditorWindow window)
-        {
-            if (window == null)
-                return;
-
-            var texture = Tool_Screenshot.CaptureEditorWindow(window, out var error);
-            if (texture == null)
-            {
-                Debug.LogWarning($"{Tool_Screenshot.CaptureLog} {error}");
-                return;
-            }
-
-            try
-            {
-                var path = Tool_Screenshot.SaveCapture(texture, Tool_Screenshot.ResolveCapturePath(DefaultFolder, window));
-                Debug.Log($"{Tool_Screenshot.CaptureLog} Saved '{window.titleContent.text}' ({texture.width}x{texture.height}) to {path}");
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning($"{Tool_Screenshot.CaptureLog} Saving the capture failed: {e.Message}");
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(texture);
-            }
-        }
-    }
-
-    class EditorWindowCapturePicker : EditorWindow
-    {
-        Vector2 _scroll;
-
-        internal static void Open()
-        {
-            var picker = CreateInstance<EditorWindowCapturePicker>();
-            picker.titleContent = new GUIContent("Capture Window");
-            picker.minSize = new Vector2(320, 240);
-            picker.ShowUtility();
-        }
-
-        void OnGUI()
-        {
-            EditorGUILayout.LabelField("Pick a window to capture to Docs/Captures.", EditorStyles.wordWrappedLabel);
-            _scroll = EditorGUILayout.BeginScrollView(_scroll);
-            foreach (var window in Tool_Screenshot.OpenEditorWindows())
-            {
-                if (window == this)
-                    continue;
-                if (GUILayout.Button($"{window.titleContent.text}  ({window.GetType().Name})", EditorStyles.miniButton))
-                {
-                    Close();
-                    EditorWindowCaptureMenu.CaptureLater(window);
-                    GUIUtility.ExitGUI();
-                }
-            }
-            EditorGUILayout.EndScrollView();
         }
     }
 }

@@ -9,6 +9,8 @@ All notable changes to this package are documented here.
 - `Tools > Feeder > Matrix Bridge > Getting Started` replaces `Setup...`. One window lists every Setup change before
   it runs, shows each step's result in place, and links every page of the Matrix Bridge manual, which opens offline
   in your browser. Revert lives in the same window; the `Revert Setups...` menu item is gone.
+- The `Tools > Feeder > Matrix Bridge > Capture` menu is gone; few people used it next to a screen snipping tool.
+  Agents still capture Editor windows with `screenshot-editor-window`.
 - **Revert** in `Tools > Feeder > Matrix Bridge > Getting Started` puts back the settings the first Setup changed, removes the
   `.gitignore` lines it added, restores which tools were enabled, turns Matrix and Hyper Testing Mode off and closes
   the Matrix windows. Its confirm dialog lists every change first.
