@@ -353,6 +353,7 @@ namespace Feeder.MCP.Editor.UI
                     current = info.Group;
                     var header = new Label(current.Name.ToUpperInvariant());
                     header.AddToClassList("sk-list__header");
+                    header.AddToClassList("sk-mono");
                     _headers[current] = header;
                     _list.Add(header);
                 }

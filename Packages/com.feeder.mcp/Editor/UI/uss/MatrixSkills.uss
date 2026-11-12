@@ -1,15 +1,15 @@
 .sk-root {
-    --sk-bg: rgb(13, 17, 15);
-    --sk-bg2: rgb(17, 22, 19);
-    --sk-bg3: rgb(23, 29, 25);
-    --sk-bg4: rgb(30, 38, 33);
-    --sk-line: rgba(160, 230, 180, 0.08);
-    --sk-line2: rgba(160, 230, 180, 0.16);
-    --sk-text: rgb(220, 232, 224);
-    --sk-dim: rgb(138, 155, 145);
-    --sk-faint: rgb(89, 104, 95);
-    --sk-ac: rgb(53, 224, 122);
-    --sk-acbg: rgba(53, 224, 122, 0.11);
+    --sk-bg: rgb(3, 8, 5);
+    --sk-bg2: rgb(6, 13, 9);
+    --sk-bg3: rgb(10, 21, 14);
+    --sk-bg4: rgb(14, 28, 19);
+    --sk-line: rgba(0, 255, 65, 0.11);
+    --sk-line2: rgba(0, 255, 65, 0.24);
+    --sk-text: rgb(228, 252, 233);
+    --sk-dim: rgb(166, 216, 180);
+    --sk-faint: rgb(104, 164, 122);
+    --sk-ac: rgb(0, 255, 65);
+    --sk-acbg: rgba(0, 255, 65, 0.10);
     --sk-warn: rgb(255, 209, 102);
     --sk-bad: rgb(255, 125, 99);
     flex-grow: 1;
@@ -17,11 +17,11 @@
     overflow: hidden;
     background-color: var(--sk-bg);
     color: var(--sk-text);
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .sk-side {
-    width: 192px;
+    width: 212px;
     flex-shrink: 0;
     background-color: var(--sk-bg2);
     border-right-width: 1px;
@@ -36,16 +36,18 @@
 .sk-side__title {
     margin: 0;
     padding: 0;
-    font-size: 13px;
+    font-size: 14px;
     -unity-font-style: bold;
     -unity-text-align: middle-left;
+    color: var(--sk-ac);
+    letter-spacing: 3px;
 }
 
 .sk-side__count {
     margin: 2px 0 0 0;
     padding: 0;
-    font-size: 11px;
-    color: var(--sk-dim);
+    font-size: 12px;
+    color: var(--sk-faint);
     -unity-text-align: middle-left;
 }
 
@@ -71,8 +73,8 @@
 .sk-side__sync {
     margin: 0 0 0 6px;
     padding: 0;
-    font-size: 11px;
-    color: var(--sk-faint);
+    font-size: 12px;
+    color: var(--sk-dim);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -95,7 +97,7 @@
 .sk-group {
     flex-direction: row;
     align-items: center;
-    height: 29px;
+    height: 32px;
     margin: 0;
     padding: 0 8px 0 8px;
     border-width: 0;
@@ -109,7 +111,7 @@
 .sk-group:hover,
 .sk-group:active,
 .sk-group:focus {
-    background-color: rgba(255, 255, 255, 0.035);
+    background-color: rgba(0, 255, 65, 0.05);
     border-width: 0;
 }
 
@@ -125,7 +127,7 @@
     left: 0;
     top: 6px;
     bottom: 6px;
-    width: 2px;
+    width: 3px;
     border-radius: 1px;
     background-color: var(--sk-ac);
     scale: 1 0;
@@ -139,22 +141,23 @@
 }
 
 .sk-group__mono {
-    width: 21px;
-    height: 18px;
+    width: 25px;
+    height: 20px;
     flex-shrink: 0;
     margin: 0 9px 0 0;
     padding: 0;
     border-width: 1px;
     border-color: var(--sk-line2);
     border-radius: 4px;
-    font-size: 9px;
-    color: var(--sk-dim);
+    font-size: 10px;
+    color: var(--sk-faint);
     -unity-text-align: middle-center;
 }
 
 .sk-group--on .sk-group__mono {
-    color: var(--sk-ac);
-    border-color: rgba(53, 224, 122, 0.4);
+    color: rgb(3, 8, 5);
+    border-color: var(--sk-ac);
+    background-color: var(--sk-ac);
 }
 
 .sk-group__name {
@@ -162,7 +165,7 @@
     flex-shrink: 1;
     margin: 0;
     padding: 0;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--sk-dim);
     white-space: nowrap;
     overflow: hidden;
@@ -178,12 +181,12 @@
 .sk-group__count {
     margin: 0 0 0 6px;
     padding: 0;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--sk-faint);
 }
 
 .sk-group--on .sk-group__count {
-    color: var(--sk-dim);
+    color: var(--sk-ac);
 }
 
 .sk-main {
@@ -200,15 +203,16 @@
 .sk-head__title {
     margin: 0;
     padding: 0;
-    font-size: 15px;
+    font-size: 18px;
     -unity-font-style: bold;
     -unity-text-align: middle-left;
+    color: var(--sk-text);
 }
 
 .sk-head__sub {
     margin: 2px 0 0 0;
     padding: 0;
-    font-size: 11px;
+    font-size: 13px;
     color: var(--sk-dim);
     white-space: nowrap;
     overflow: hidden;
@@ -222,7 +226,7 @@
     align-items: center;
     padding: 0 18px 8px 18px;
     border-bottom-width: 1px;
-    border-bottom-color: var(--sk-line);
+    border-bottom-color: var(--sk-line2);
 }
 
 .sk-root .sk-search {
@@ -230,20 +234,20 @@
     flex-shrink: 1;
     flex-basis: 0;
     min-width: 80px;
-    height: 26px;
-    min-height: 26px;
+    height: 28px;
+    min-height: 28px;
     margin: 0 10px 0 0;
     padding: 0 4px 0 2px;
-    border-color: var(--sk-line);
+    border-color: var(--sk-line2);
     border-radius: 5px;
-    background-color: var(--sk-bg4);
+    background-color: var(--sk-bg);
 }
 
 .sk-root .sk-search .unity-search-field-base__search-button {
     width: 12px;
     height: 12px;
     margin: 0 4px 0 6px;
-    -unity-background-image-tint-color: var(--sk-dim);
+    -unity-background-image-tint-color: var(--sk-ac);
 }
 
 .sk-root .sk-search .unity-search-field-base__text-field {
@@ -257,11 +261,11 @@
     border-width: 0;
     background-color: rgba(0, 0, 0, 0);
     color: var(--sk-text);
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .sk-root .sk-search .unity-search-field-base__text-field__input:focus {
-    background-color: rgba(53, 224, 122, 0.05);
+    background-color: rgba(0, 255, 65, 0.06);
 }
 
 #sk-filter-slot {
@@ -273,18 +277,18 @@
 }
 
 .sk-root .segmented-control__track {
-    background-color: var(--sk-bg4);
+    background-color: var(--sk-bg);
     border-width: 1px;
-    border-color: var(--sk-line);
+    border-color: var(--sk-line2);
 }
 
 .sk-root .segmented-control__highlight {
-    background-color: rgb(42, 52, 46);
+    background-color: rgba(0, 255, 65, 0.18);
 }
 
 .sk-root .segmented-control__segment {
     min-width: 0;
-    padding: 3px 11px 3px 11px;
+    padding: 3px 12px 3px 11px;
     font-size: 11px;
     color: var(--sk-dim);
 }
@@ -292,7 +296,7 @@
 .sk-root .segmented-control__segment:hover,
 .sk-root .segmented-control__segment--selected,
 .sk-root .segmented-control__segment--selected:hover {
-    color: var(--sk-text);
+    color: var(--sk-ac);
 }
 
 .sk-list {
@@ -330,20 +334,20 @@
     margin-left: 2px;
     border-width: 0;
     border-radius: 3px;
-    background-color: rgb(40, 52, 45);
+    background-color: rgba(0, 255, 65, 0.22);
 }
 
 .sk-root .unity-scroller .unity-base-slider__dragger:hover {
-    background-color: rgb(58, 74, 65);
+    background-color: rgba(0, 255, 65, 0.4);
 }
 
 .sk-list__header {
     margin: 0;
     padding: 13px 0 6px 0;
-    font-size: 10px;
-    letter-spacing: 1.2px;
+    font-size: 11px;
+    letter-spacing: 2px;
     -unity-font-style: bold;
-    color: var(--sk-faint);
+    color: var(--sk-ac);
     -unity-text-align: middle-left;
 }
 
@@ -362,7 +366,7 @@
     flex-direction: row;
     align-items: center;
     margin: 0 -8px 0 -8px;
-    padding: 11px 8px 11px 8px;
+    padding: 12px 8px 12px 8px;
     border-bottom-width: 1px;
     border-bottom-color: var(--sk-line);
     border-radius: 6px;
@@ -372,7 +376,7 @@
 }
 
 .sk-row:hover {
-    background-color: rgba(255, 255, 255, 0.025);
+    background-color: rgba(0, 255, 65, 0.045);
 }
 
 .sk-row--pre {
@@ -396,23 +400,26 @@
     flex-shrink: 0;
     margin: 0 7px 0 0;
     padding: 0;
-    font-size: 13px;
+    font-size: 14px;
     -unity-font-style: bold;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     -unity-text-align: middle-left;
+    color: var(--sk-text);
 }
 
 .sk-tag {
     flex-shrink: 0;
     margin: 0 4px 0 0;
-    padding: 3px 5px 3px 5px;
+    padding: 2px 6px 2px 6px;
     border-radius: 3px;
-    background-color: var(--sk-bg4);
-    color: var(--sk-faint);
-    font-size: 10px;
+    background-color: rgba(0, 0, 0, 0);
+    color: rgb(120, 232, 150);
+    font-size: 11px;
     -unity-text-align: middle-center;
+    border-width: 1px;
+    border-color: var(--sk-line2);
 }
 
 .sk-tag--id {
@@ -424,24 +431,28 @@
 }
 
 .sk-tag--core {
-    color: var(--sk-ac);
-    background-color: var(--sk-acbg);
+    color: rgb(3, 8, 5);
+    background-color: var(--sk-ac);
+    border-color: var(--sk-ac);
+    -unity-font-style: bold;
 }
 
 .sk-tag--writes {
     color: var(--sk-warn);
-    background-color: rgba(255, 209, 102, 0.1);
+    background-color: rgba(255, 209, 102, 0.14);
+    border-color: rgba(255, 209, 102, 0.4);
 }
 
 .sk-tag--destructive {
     color: var(--sk-bad);
-    background-color: rgba(255, 125, 99, 0.1);
+    background-color: rgba(255, 125, 99, 0.14);
+    border-color: rgba(255, 125, 99, 0.45);
 }
 
 .sk-row__desc {
-    margin: 2px 0 0 0;
+    margin: 4px 0 0 0;
     padding: 0;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--sk-dim);
     white-space: nowrap;
     overflow: hidden;
@@ -465,7 +476,7 @@
 .sk-hint__off {
     margin: 0;
     padding: 0;
-    font-size: 11px;
+    font-size: 12px;
     color: var(--sk-warn);
 }
 
@@ -480,7 +491,7 @@
     border-width: 0;
     background-color: rgba(0, 0, 0, 0);
     color: var(--sk-warn);
-    font-size: 11px;
+    font-size: 12px;
     -unity-text-align: middle-left;
 }
 
@@ -497,8 +508,8 @@
     min-width: 34px;
     margin: 0 14px 0 14px;
     padding: 0;
-    font-size: 10px;
-    color: var(--sk-faint);
+    font-size: 11px;
+    color: rgb(120, 232, 150);
     -unity-text-align: middle-right;
 }
 
@@ -518,29 +529,31 @@
     flex-grow: 1;
     margin: 0;
     padding: 0;
-    border-width: 0;
+    border-width: 1px;
     border-radius: 9px;
-    background-color: rgb(39, 49, 43);
+    background-color: var(--sk-bg3);
     transition-property: background-color;
     transition-duration: 0.16s;
     transition-timing-function: ease-out;
+    border-color: var(--sk-line2);
 }
 
 .sk-sw .unity-toggle__input:checked {
     background-color: var(--sk-ac);
+    border-color: var(--sk-ac);
 }
 
 .sk-sw .unity-toggle__checkmark {
     position: absolute;
-    left: 2px;
-    top: 2px;
+    left: 1px;
+    top: 1px;
     width: 13px;
     height: 13px;
     margin: 0;
     padding: 0;
     border-radius: 7px;
     background-image: none;
-    background-color: rgb(138, 155, 145);
+    background-color: var(--sk-faint);
     translate: 0 0;
     transition-property: translate, background-color;
     transition-duration: 0.16s;
@@ -560,7 +573,7 @@
     justify-content: space-between;
     padding: 10px 16px 10px 16px;
     border-top-width: 1px;
-    border-top-color: var(--sk-line);
+    border-top-color: var(--sk-line2);
     background-color: var(--sk-bg2);
 }
 
@@ -585,7 +598,7 @@
     height: 5px;
     margin: 0 12px 0 0;
     border-radius: 3px;
-    background-color: rgb(27, 35, 30);
+    background-color: var(--sk-bg4);
     overflow: hidden;
 }
 
@@ -616,14 +629,14 @@
     top: 0;
     bottom: 0;
     width: 1px;
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(0, 255, 65, 0.3);
 }
 
 .sk-foot__cost {
     flex-shrink: 1;
     margin: 0;
     padding: 0;
-    font-size: 11px;
+    font-size: 12px;
     color: var(--sk-dim);
     white-space: nowrap;
     overflow: hidden;
@@ -634,7 +647,7 @@
     flex-shrink: 0;
     margin: 0 0 0 7px;
     padding: 0;
-    font-size: 9px;
+    font-size: 10px;
     letter-spacing: 1px;
     -unity-font-style: bold;
     color: var(--sk-ac);
@@ -656,20 +669,20 @@
     border-radius: 5px;
     background-color: rgba(0, 0, 0, 0);
     color: var(--sk-dim);
-    font-size: 11px;
+    font-size: 12px;
     transition-property: color, border-color, background-color;
     transition-duration: 0.12s;
 }
 
 .sk-btn:hover,
 .sk-btn:focus {
-    color: var(--sk-text);
-    border-color: rgba(160, 230, 180, 0.32);
-    background-color: var(--sk-bg3);
+    color: var(--sk-ac);
+    border-color: var(--sk-ac);
+    background-color: rgba(0, 255, 65, 0.08);
 }
 
 .sk-btn:active {
-    background-color: var(--sk-bg4);
+    background-color: rgba(0, 255, 65, 0.16);
 }
 
 .sk-btn--primary,
@@ -681,8 +694,8 @@
 
 .sk-btn--primary:hover {
     color: rgb(4, 21, 11);
-    background-color: rgb(84, 236, 144);
-    border-color: rgb(84, 236, 144);
+    background-color: rgb(110, 255, 140);
+    border-color: rgb(110, 255, 140);
 }
 
 .sk-off {
@@ -707,7 +720,7 @@
     font-size: 18px;
     letter-spacing: 6px;
     -unity-font-style: bold;
-    color: var(--sk-dim);
+    color: var(--sk-ac);
 }
 
 .sk-off__text {
@@ -715,6 +728,6 @@
     margin: 0 0 16px 0;
     padding: 0;
     white-space: normal;
-    color: var(--sk-faint);
+    color: var(--sk-dim);
     -unity-text-align: middle-center;
 }

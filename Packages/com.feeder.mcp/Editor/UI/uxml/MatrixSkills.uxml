@@ -2,8 +2,8 @@
     <ui:VisualElement name="sk-root" class="sk-root">
         <ui:VisualElement class="sk-side">
             <ui:VisualElement class="sk-side__head">
-                <ui:Label text="Skills" class="sk-side__title" />
-                <ui:Label name="sk-side-count" class="sk-side__count" />
+                <ui:Label text="SKILLS" class="sk-side__title sk-mono" />
+                <ui:Label name="sk-side-count" class="sk-side__count sk-mono" />
             </ui:VisualElement>
             <ui:ScrollView name="sk-groups" class="sk-side__list" horizontal-scroller-visibility="Hidden" />
             <ui:VisualElement class="sk-side__foot">
@@ -28,8 +28,8 @@
                         <ui:VisualElement name="sk-tick-lean" class="sk-meter__tick" />
                         <ui:VisualElement name="sk-tick-heavy" class="sk-meter__tick" />
                     </ui:VisualElement>
-                    <ui:Label name="sk-cost" class="sk-foot__cost" tooltip="Tokens these skills add to every request while they are on." />
-                    <ui:Label name="sk-tier" class="sk-foot__tier" />
+                    <ui:Label name="sk-cost" class="sk-foot__cost sk-mono" tooltip="Tokens these skills add to every request while they are on." />
+                    <ui:Label name="sk-tier" class="sk-foot__tier sk-mono" />
                 </ui:VisualElement>
                 <ui:VisualElement class="sk-foot__actions">
                     <ui:Button name="sk-core" text="Core only" class="sk-btn" />

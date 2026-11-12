@@ -4,8 +4,8 @@
             <ui:VisualElement class="sk-row__head">
                 <ui:Label name="sk-row-title" class="sk-row__title" />
                 <ui:Label name="sk-row-id" class="sk-tag sk-tag--id sk-mono" />
-                <ui:Label name="sk-row-core" text="core" class="sk-tag sk-tag--core" />
-                <ui:Label name="sk-row-risk" class="sk-tag" />
+                <ui:Label name="sk-row-core" text="core" class="sk-tag sk-tag--core sk-mono" />
+                <ui:Label name="sk-row-risk" class="sk-tag sk-mono" />
             </ui:VisualElement>
             <ui:Label name="sk-row-desc" class="sk-row__desc" />
             <ui:VisualElement name="sk-row-hint" class="sk-row__hint" />
