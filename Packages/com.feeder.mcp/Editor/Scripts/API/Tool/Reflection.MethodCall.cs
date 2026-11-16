@@ -47,6 +47,7 @@ namespace Feeder.MCP.Editor.API
             "Receives input parameters and returns result.")]
         public SerializedMember MethodCall
         (
+            [Description("The method to call, as returned by reflection-method-find.")]
             MethodRef filter,
 
             [Description("Set to true if 'Namespace' is known and full namespace name is specified in the 'filter.Namespace' property. Otherwise, set to false.")]

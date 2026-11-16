@@ -223,8 +223,7 @@ namespace Feeder.MCP.Editor.API
         {
             if (frameRate <= 0 || frameRate > 1000)
                 throw new ArgumentException("frameRate must be between 1 and 1000.");
-            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path) != null)
-                throw new InvalidOperationException($"'{path}' already exists.");
+            MxGuard.NotExisting(path);
             EnsureFolder(path);
             var clip = new AnimationClip { frameRate = frameRate };
             var settings = AnimationUtility.GetAnimationClipSettings(clip);
@@ -238,14 +237,23 @@ namespace Feeder.MCP.Editor.API
         public static AnimationClip LoadClip(string path)
             => AssetDatabase.LoadAssetAtPath<AnimationClip>(path) ?? throw new ArgumentException($"No AnimationClip at '{path}'.");
 
-        public static int SetCurve(AnimationClip clip, string bindingPath, string componentType, string property, IReadOnlyList<CurveKey>? keys, string? interpolation, bool remove)
+        // checks every input without touching an asset, so a bad call creates no file
+        public static (EditorCurveBinding binding, AnimationCurve? curve) PrepareCurve(string bindingPath, string componentType, string property, IReadOnlyList<CurveKey>? keys, string? interpolation, bool remove)
         {
             if (string.IsNullOrWhiteSpace(property))
                 throw new ArgumentException("property is empty. Use e.g. 'm_LocalPosition.x' for a Transform or 'm_Intensity' for a Light.");
             var type = ResolveType(componentType);
             var binding = EditorCurveBinding.FloatCurve((bindingPath ?? string.Empty).Trim().Trim('/'), type, property.Trim());
-            var curve = remove ? null : BuildCurve(keys, interpolation);
-            Undo.RegisterCompleteObjectUndo(clip, remove ? "Remove animation curve" : "Set animation curve");
+            return (binding, remove ? null : BuildCurve(keys, interpolation));
+        }
+
+        public static int SetCurve(AnimationClip clip, string bindingPath, string componentType, string property, IReadOnlyList<CurveKey>? keys, string? interpolation, bool remove)
+            => WriteCurve(clip, PrepareCurve(bindingPath, componentType, property, keys, interpolation, remove));
+
+        public static int WriteCurve(AnimationClip clip, (EditorCurveBinding binding, AnimationCurve? curve) prepared)
+        {
+            var (binding, curve) = prepared;
+            Undo.RegisterCompleteObjectUndo(clip, curve == null ? "Remove animation curve" : "Set animation curve");
             AnimationUtility.SetEditorCurve(clip, binding, curve);
             EditorUtility.SetDirty(clip);
             AssetDatabase.SaveAssetIfDirty(clip);
@@ -299,8 +307,7 @@ namespace Feeder.MCP.Editor.API
 
         public static AnimatorController CreateController(string path)
         {
-            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path) != null)
-                throw new InvalidOperationException($"'{path}' already exists.");
+            MxGuard.NotExisting(path);
             EnsureFolder(path);
             return AnimatorController.CreateAnimatorControllerAtPath(path);
         }
@@ -381,12 +388,23 @@ namespace Feeder.MCP.Editor.API
             }
         }
 
-        public static string ApplyOps(AnimatorController controller, IReadOnlyList<ControllerOp>? ops)
+        static readonly string[] OpKinds = { "add-parameter", "remove-parameter", "add-layer", "remove-layer", "add-state", "remove-state", "set-default-state", "add-transition", "add-blend-tree" };
+
+        // the list shape and every op name, checked before any controller file is created
+        public static void CheckOps(IReadOnlyList<ControllerOp>? ops)
         {
             if (ops == null || ops.Count == 0)
                 throw new ArgumentException("operations is empty.");
             if (ops.Count > MaxOps)
                 throw new ArgumentException($"At most {MaxOps} operations, got {ops.Count}.");
+            for (var i = 0; i < ops.Count; i++)
+                if (!OpKinds.Contains((ops[i]?.Op ?? string.Empty).Trim().ToLowerInvariant()))
+                    throw new ArgumentException($"Operation #{i} has unknown op '{ops[i]?.Op}'. Valid: {string.Join(", ", OpKinds)}.");
+        }
+
+        public static string ApplyOps(AnimatorController controller, IReadOnlyList<ControllerOp>? ops)
+        {
+            CheckOps(ops);
 
             Undo.IncrementCurrentGroup();
             Undo.SetCurrentGroupName("Matrix animator edit");

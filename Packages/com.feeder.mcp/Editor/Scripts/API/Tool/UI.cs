@@ -17,6 +17,7 @@ namespace Feeder.MCP.Editor.API
         // not a real overflow the user can see.
         internal const float LayoutEpsilon = 1.5f;
         internal const int MaxTreeLines = 3000;
+        internal const int DefaultTreeLines = 400;
         internal const int MaxIssues = 200;
         internal const int TextPreviewLength = 60;
 
@@ -51,7 +52,7 @@ namespace Feeder.MCP.Editor.API
 
             throw new ArgumentException(
                 $"No open EditorWindow matches '{windowName}'. "
-                + "Use 'ui-inspect-windows' to list the open windows first.");
+                + "Call 'ui-inspect-tree' with an empty windowName to list the open windows first.");
         }
 
         // Resolves '#name' (UQuery by name), '.class' (first match), or a hierarchy index path
@@ -214,9 +215,9 @@ namespace Feeder.MCP.Editor.API
         }
 
         internal static void AppendTree(StringBuilder sb, VisualElement element, VisualElement root,
-            int depth, int maxDepth, bool includeHidden, ref int lines)
+            int depth, int maxDepth, bool includeHidden, int maxLines, ref int lines)
         {
-            if (lines >= MaxTreeLines)
+            if (lines >= maxLines)
                 return;
 
             var indent = new string(' ', depth * 2);
@@ -254,7 +255,7 @@ namespace Feeder.MCP.Editor.API
             }
 
             for (var i = 0; i < childCount; i++)
-                AppendTree(sb, element.hierarchy[i], root, depth + 1, maxDepth, includeHidden, ref lines);
+                AppendTree(sb, element.hierarchy[i], root, depth + 1, maxDepth, includeHidden, maxLines, ref lines);
         }
 
         internal static string BuildElementDetail(EditorWindow window, VisualElement element, VisualElement root)

@@ -1,4 +1,6 @@
 #nullable enable
+using System;
+using System.IO;
 using Feeder.ToolHost;
 using UnityEngine;
 
@@ -39,6 +41,7 @@ namespace Feeder.MCP.Editor.API
             return (Mathf.Max(1, Mathf.RoundToInt(width * scale)),
                     Mathf.Max(1, Mathf.RoundToInt(height * scale)));
         }
+
 
         private static (int width, int height) ClampToTransportLimit(int width, int height)
         {

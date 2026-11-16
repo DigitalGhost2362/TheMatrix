@@ -1,12 +1,9 @@
 #nullable enable
-using System;
 using System.ComponentModel;
-using System.IO;
 using Feeder.ToolHost;
 using Feeder.Reflect.Utils;
 using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Data;
-using UnityEditor;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -16,63 +13,31 @@ namespace Feeder.MCP.Editor.API
         [AiTool
         (
             AssetsMaterialCreateToolId,
-            Title = "Assets / Create Material"
+            Title = "Assets / Create Material",
+            Enabled = false
         )]
-        [AiSkillDescription("Create a new Material asset with default parameters at a given 'Assets/'-rooted " +
-            "path ending in '.mat'. Creates intermediate folders if missing. Use '" +
-            Tool_Assets_Shader.AssetsShaderListAllToolId + "' to find a valid `shaderName`.")]
-        [AiSkillBody("Create new material asset with default parameters. " +
-            "Creates folders recursively if they do not exist. " +
-            "Provide proper 'shaderName' - use '" + Tool_Assets_Shader.AssetsShaderListAllToolId + "' tool to find available shaders.\n\n" +
-            "## Inputs\n\n" +
-            "- `assetPath` — must start with `Assets/` and end with `.mat`.\n" +
-            "- `shaderName` — name resolvable via `UnityEngine.Shader.Find`.\n\n" +
-            "## Behavior\n\n" +
-            "Throws if the path is empty, malformed, or the shader cannot be resolved. " +
-            "Creates a default Material from the resolved shader, saves it, refreshes the AssetDatabase, " +
-            "and returns an `AssetObjectRef` pointing at the new asset.")]
-        [Description("Create new material asset with default parameters. " +
-            "Creates folders recursively if they do not exist. " +
-            "Provide proper 'shaderName' - use '" + Tool_Assets_Shader.AssetsShaderListAllToolId + "' tool to find available shaders.")]
+        [AiSkillDescription("Create a Material asset from a shader name at a new `.mat` path under Assets/.")]
+        [AiSkillBody("- `assetPath` - new path under `Assets/` ending in `.mat`; missing folders are created, an existing file is never overwritten.\n" +
+            "- `shaderName` - a name `Shader.Find` resolves, e.g. `Universal Render Pipeline/Lit`. List shaders with `rql-query` `assets(\"t:Shader\")`.\n\n" +
+            "Creating the file is not undoable.")]
+        [Description("Create a Material asset at a new .mat path under Assets/ from a shader name.")]
         public AssetObjectRef CreateMaterial
         (
-            [Description("Asset path. Starts with 'Assets/'. Ends with '.mat'.")]
+            [Description("New asset path, e.g. 'Assets/Materials/Red.mat'.")]
             string assetPath,
-            [Description("Name of the shader that need to be used to create the material.")]
+            [Description("Shader name for Shader.Find, e.g. 'Universal Render Pipeline/Lit'.")]
             string shaderName
         )
         {
+            var path = MxGuard.AssetPath(assetPath, ".mat");
+            var name = MxGuard.NotEmpty(shaderName, "shaderName", "Universal Render Pipeline/Lit");
             return MainThread.Instance.Run(() =>
             {
-                if (string.IsNullOrEmpty(assetPath))
-                    throw new ArgumentException(Error.EmptyAssetPath(), nameof(assetPath));
-
-                if (!assetPath.StartsWith("Assets/"))
-                    throw new ArgumentException(Error.AssetPathMustStartWithAssets(assetPath), nameof(assetPath));
-
-                if (!assetPath.EndsWith(".mat"))
-                    throw new ArgumentException(Error.AssetPathMustEndWithMat(assetPath), nameof(assetPath));
-
-                var shader = UnityEngine.Shader.Find(shaderName);
-                if (shader == null)
-                    throw new ArgumentException(Error.ShaderNotFound(shaderName), nameof(shaderName));
-
+                var shader = UnityEngine.Shader.Find(name)
+                    ?? throw MxGuard.Fail($"No shader named '{name}'. List shaders with rql-query: assets(\"t:Shader\").");
                 var material = new UnityEngine.Material(shader);
-
-                // Create all folders in the path if they do not exist
-                var directory = Path.GetDirectoryName(assetPath);
-                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                    AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-                }
-
-                AssetDatabase.CreateAsset(material, assetPath);
-                AssetDatabase.SaveAssets();
-                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-
+                Mx.CreateAsset(material, path);
                 EditorUtils.RepaintAllEditorWindows();
-
                 return new AssetObjectRef(material);
             });
         }

@@ -25,16 +25,15 @@ namespace Feeder.MCP.Editor.API
             AssetsShaderGetDataToolId,
             Title = "Assets / Shader / Get Data",
             ReadOnlyHint = true,
-            IdempotentHint = true
+            IdempotentHint = true,
+            Enabled = false
         )]
         [AiSkillDescription("Get detailed data about a shader asset — properties, subshaders, passes, " +
             "compilation messages, and supported status. Supports token-saving path-scoped reads via `paths` or " +
-            "`viewQuery`. Use '" + Tool_Rql.QueryToolId + "' with `t:Shader` or '" +
-            AssetsShaderListAllToolId + "' to locate the shader first.")]
+            "`viewQuery`. Use '" + Tool_Rql.QueryToolId + "' with `t:Shader` to locate the shader first.")]
         [AiSkillBody("Get detailed data about a shader asset in the Unity project. " +
             "Returns shader properties, subshaders, passes, compilation errors, and supported status. " +
-            "Use '" + Tool_Rql.QueryToolId + "' tool with filter 't:Shader' to find shaders, " +
-            "or '" + AssetsShaderListAllToolId + "' tool to list all shader names.\n\n" +
+            "Use '" + Tool_Rql.QueryToolId + "' tool with filter 't:Shader' to find shaders.\n\n" +
             "## Toggles (most default off to keep responses small)\n\n" +
             "- `includeMessages` (default `true`) — shader compilation messages.\n" +
             "- `includeProperties` (default `false`) — uniforms list.\n" +
@@ -49,8 +48,7 @@ namespace Feeder.MCP.Editor.API
             "`fieldName`, `nested/field`, `arrayField/[i]`, `dictField/[key]`. Leading `#/` is stripped.")]
         [Description("Get detailed data about a shader asset in the Unity project. " +
             "Returns shader properties, subshaders, passes, compilation errors, and supported status. " +
-            "Use '" + Tool_Rql.QueryToolId + "' tool with filter 't:Shader' to find shaders, " +
-            "or '" + AssetsShaderListAllToolId + "' tool to list all shader names.\n\n" +
+            "Use '" + Tool_Rql.QueryToolId + "' tool with filter 't:Shader' to find shaders.\n\n" +
             "Path-scoped reads (token-saving): supply '" + "paths" + "' (a list of paths) to read only the listed " +
             "fields/elements via Reflector.TryReadAt, or '" + "viewQuery" + "' (a ViewQuery) to navigate to a " +
             "subtree and/or filter by name regex / max depth / type via Reflector.View. The result populates " +
@@ -58,6 +56,7 @@ namespace Feeder.MCP.Editor.API
             "Path syntax: 'fieldName', 'nested/field', 'arrayField/[i]', 'dictField/[key]'. Leading '#/' is stripped.")]
         public Feeder.MCP.Data.ShaderData GetData
         (
+            [Description("The shader asset: path, GUID or instance id.")]
             AssetObjectRef assetRef,
             [Description("Include compilation error and warning messages. Default: true")]
             bool? includeMessages = true,

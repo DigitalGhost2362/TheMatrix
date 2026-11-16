@@ -23,17 +23,20 @@ namespace Feeder.MCP.Editor.API
         (
             TestsRunToolId,
             Title = "Tests / Run",
-            Enabled = true
+            Enabled = false
         )]
         [AiSkillDescription("Execute Unity tests (`EditMode` or `PlayMode`) and return per-test results. " +
             "Supports filtering by test assembly, namespace, class, and method. " +
             "Refreshes the AssetDatabase first; defers execution across domain reloads if scripts changed. " +
-            "Precondition: every open scene must be saved — dirty scenes abort the run.")]
+            "action=list lists tests, action=clear frees a stuck run slot.")]
         [AiSkillBody("Execute Unity tests and return detailed results. " +
             "Supports filtering by test mode, assembly, namespace, class, and method. " +
             "Recommended to use '" + nameof(TestMode.EditMode) + "' for faster iteration during development. " +
-            "Precondition: every open scene MUST be saved (no unsaved changes). If any open scene is dirty, " +
-            "this tool throws an InvalidOperationException listing the dirty scenes; save them and retry.\n\n" +
+            "A run with unsaved scenes is refused with their list.\n\n" +
+            "## Actions\n\n" +
+            "- `action=run` (default) runs tests, see below.\n" +
+            "- `action=list` lists the tests of `testMode` (filters `testAssembly` / `testNamespace` / `testClass`, plus `nameContains` and `limit`) with a per-assembly count.\n" +
+            "- `action=clear` frees a stuck run slot (drops the deferred run and the in-progress marker); it does not stop a run that is really executing.\n\n" +
             "## Filters\n\n" +
             "- `testMode` (default `EditMode`) — `EditMode` or `PlayMode`. EditMode is faster; prefer it during iteration.\n" +
             "- `testAssembly` / `testNamespace` / `testClass` / `testMethod` — optional, layered filters. Namespace and " +
@@ -50,14 +53,14 @@ namespace Feeder.MCP.Editor.API
             "If the AssetDatabase refresh triggers compilation, the tool persists the run parameters to `SessionState`, " +
             "returns `Processing`, and resumes the run automatically after the reload completes. Pre-existing " +
             "compilation errors short-circuit the run and return the error details so the caller can fix the project first.")]
-        [Description("Execute Unity tests and return detailed results. " +
+        [Description("Run Unity tests (action=run, default), list them (action=list) or free a stuck run slot (action=clear). " +
             "Supports filtering by test mode, assembly, namespace, class, and method. " +
-            "Recommended to use '" + nameof(TestMode.EditMode) + "' for faster iteration during development. " +
-            "Precondition: every open scene MUST be saved (no unsaved changes). If any open scene is dirty, " +
-            "this tool throws an InvalidOperationException listing the dirty scenes; save them and retry.")]
+            "Recommended to use '" + nameof(TestMode.EditMode) + "' for faster iteration during development.")]
         public static async Task<ResponseCallValueTool<TestRunResponse>> Run
         (
-            [Description("Test mode to run. Options: '" + nameof(TestMode.EditMode) + "', '" + nameof(TestMode.PlayMode) + "'. Default: '" + nameof(TestMode.EditMode) + "'")]
+            [Description("run | list | clear. Default: run.")]
+            string action = "run",
+            [Description("Test mode to run or list. Options: '" + nameof(TestMode.EditMode) + "', '" + nameof(TestMode.PlayMode) + "'. Default: '" + nameof(TestMode.EditMode) + "'")]
             TestMode testMode = TestMode.EditMode,
             [Description("Specific test assembly name to run (optional). Example: 'Assembly-CSharp-Editor-testable'")]
             string? testAssembly = null,
@@ -67,6 +70,11 @@ namespace Feeder.MCP.Editor.API
             string? testClass = null,
             [Description("Specific fully qualified test method to run (optional). Example: 'MyTestNamespace.FixtureName.TestName'")]
             string? testMethod = null,
+
+            [Description("list: keep only tests whose full name contains this text, case-insensitive.")]
+            string? nameContains = null,
+            [Description("list: maximum number of test names returned (default: 200).")]
+            int limit = 200,
 
             [Description("Include details for all tests, both passing and failing (default: false). If you just need details for failing tests, set to false.")]
             bool includePassingTests = false,
@@ -89,6 +97,13 @@ namespace Feeder.MCP.Editor.API
             string? requestId = null
         )
         {
+            if (action == "list")
+                return ResponseCallValueTool<TestRunResponse>.Success(await List(testMode, testAssembly, testNamespace, testClass, nameContains, limit));
+            if (action == "clear")
+                return ResponseCallValueTool<TestRunResponse>.Success(Clear());
+            if (action != "run")
+                return ResponseCallValueTool<TestRunResponse>.Error($"unknown action '{action}'. Valid: run|list|clear");
+
             if (requestId == null || string.IsNullOrWhiteSpace(requestId))
                 return ResponseCallValueTool<TestRunResponse>.Error("Original request with valid RequestID must be provided.");
 

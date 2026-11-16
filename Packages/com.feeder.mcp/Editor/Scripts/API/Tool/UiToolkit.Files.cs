@@ -41,11 +41,11 @@ namespace Feeder.MCP.Editor.API
             string? content = null,
             [Description("'create', 'overwrite', 'append' or 'replace'. Default: 'create'")]
             string mode = "create",
-            [Description("Text to replace; must occur exactly once. Only for mode 'replace'.")]
+            [Description("Text to replace, for mode 'replace'.")]
             string? oldText = null
         )
         {
-            var p = RequireAssetPath(path, ".uxml", ".uss");
+            var p = MxGuard.AssetPath(path, ".uxml", ".uss");
             var kind = (mode ?? string.Empty).Trim().ToLowerInvariant();
             if (kind != "create" && kind != "overwrite" && kind != "append" && kind != "replace")
                 throw new ArgumentException("mode must be 'create', 'overwrite', 'append' or 'replace'.");
@@ -125,16 +125,26 @@ namespace Feeder.MCP.Editor.API
                 return null;
             }
 
+            // braces inside comments, quoted strings and url(...) do not count
             var depth = 0;
             var inComment = false;
+            var quote = '\0';
+            var inUrl = false;
             for (var i = 0; i < text.Length; i++)
             {
-                if (!inComment && text[i] == '/' && i + 1 < text.Length && text[i + 1] == '*') { inComment = true; i++; }
-                else if (inComment && text[i] == '*' && i + 1 < text.Length && text[i + 1] == '/') { inComment = false; i++; }
-                else if (!inComment && text[i] == '{') depth++;
-                else if (!inComment && text[i] == '}' && --depth < 0)
+                var c = text[i];
+                var next = i + 1 < text.Length ? text[i + 1] : '\0';
+                if (inComment) { if (c == '*' && next == '/') { inComment = false; i++; } }
+                else if (quote != '\0') { if (c == '\\') i++; else if (c == quote) quote = '\0'; }
+                else if (inUrl) { if (c == '"' || c == '\'') quote = c; else if (c == ')') inUrl = false; }
+                else if (c == '/' && next == '*') { inComment = true; i++; }
+                else if (c == '"' || c == '\'') quote = c;
+                else if ((c == 'u' || c == 'U') && string.Compare(text, i, "url(", 0, 4, StringComparison.OrdinalIgnoreCase) == 0) { inUrl = true; i += 3; }
+                else if (c == '{') depth++;
+                else if (c == '}' && --depth < 0)
                     return "USS has a '}' without a matching '{'.";
             }
+            if (quote != '\0') return "USS has an unclosed string.";
             return depth != 0 ? "USS has an unclosed '{'." : inComment ? "USS has an unclosed comment." : null;
         }
     }

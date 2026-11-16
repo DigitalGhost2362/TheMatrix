@@ -16,6 +16,7 @@ namespace Feeder.MCP.Editor.Tests.Tools
         const string SortingName = "MxTestSortingG2";
 
         readonly Tool_Settings tool = new Tool_Settings();
+        readonly Tool_Serialized serialized = new Tool_Serialized();
         EditorBuildSettingsScene[] buildBefore = Array.Empty<EditorBuildSettingsScene>();
         string timeBefore = string.Empty;
 
@@ -23,7 +24,7 @@ namespace Feeder.MCP.Editor.Tests.Tools
         public void SetUp()
         {
             buildBefore = EditorBuildSettings.scenes;
-            timeBefore = tool.Get("time", "Maximum Allowed Timestep").Properties.Single().Value;
+            timeBefore = serialized.Get("time", "Maximum Allowed Timestep").Properties.Single().Value;
         }
 
         [TearDown]
@@ -38,7 +39,7 @@ namespace Feeder.MCP.Editor.Tests.Tools
             {
             }
             tool.Tags("remove-sorting-layer", SortingName);
-            tool.Set("time", new[] { "Maximum Allowed Timestep=" + timeBefore });
+            serialized.Set("time", new[] { "Maximum Allowed Timestep=" + timeBefore });
             EditorBuildSettings.scenes = buildBefore;
         }
 
@@ -104,18 +105,18 @@ namespace Feeder.MCP.Editor.Tests.Tools
         [Test]
         public void Get_ReadsAndSet_WritesAPhysicsValue_WithOneUndoStep()
         {
-            var result = tool.Set("time", new[] { "Maximum Allowed Timestep=0.25" });
+            var result = serialized.Set("time", new[] { "Maximum Allowed Timestep=0.25" });
 
             Assert.AreEqual(0, result.Failed);
             Assert.AreEqual(0.25f, Time.maximumDeltaTime, 1e-6f);
-            Assert.AreEqual("0.25", tool.Get("time", "Maximum Allowed Timestep").Properties.Single().Value);
-            Assert.AreEqual("Matrix settings set", Undo.GetCurrentGroupName());
+            Assert.AreEqual("0.25", serialized.Get("time", "Maximum Allowed Timestep").Properties.Single().Value);
+            Assert.AreEqual("Matrix serialized set", Undo.GetCurrentGroupName());
         }
 
         [Test]
         public void Set_ReportsABadValue_AndStillAppliesTheOthers()
         {
-            var result = tool.Set("time", new[] { "Maximum Allowed Timestep=abc", "NoSuchProperty=1", "Maximum Allowed Timestep=0.3" });
+            var result = serialized.Set("time", new[] { "Maximum Allowed Timestep=abc", "NoSuchProperty=1", "Maximum Allowed Timestep=0.3" });
 
             Assert.AreEqual(2, result.Failed);
             Assert.AreEqual(1, result.Changed);
@@ -125,7 +126,7 @@ namespace Feeder.MCP.Editor.Tests.Tools
         [Test]
         public void Get_PhysicsGravityIsAVector()
         {
-            var gravity = tool.Get("physics", "m_Gravity").Properties.Single();
+            var gravity = serialized.Get("physics", "m_Gravity").Properties.Single();
 
             Assert.AreEqual("Vector3", gravity.Type);
             Assert.AreEqual(3, gravity.Value.Split(',').Length);
@@ -134,7 +135,7 @@ namespace Feeder.MCP.Editor.Tests.Tools
         [Test]
         public void Get_WholeAreaIsListedAndCappedByLimit()
         {
-            var result = tool.Get("player", null, 1, 5);
+            var result = serialized.Get("player", null, 1, 5);
 
             Assert.AreEqual(5, result.Properties.Count);
             Assert.IsTrue(result.Truncated);
@@ -143,8 +144,8 @@ namespace Feeder.MCP.Editor.Tests.Tools
         [Test]
         public void Get_UnknownAreaOrPathThrows()
         {
-            Assert.Throws<ArgumentException>(() => tool.Get("nope"));
-            Assert.Throws<ArgumentException>(() => tool.Get("time", "NoSuchProperty"));
+            Assert.Throws<ArgumentException>(() => serialized.Get("nope"));
+            Assert.Throws<ArgumentException>(() => serialized.Get("time", "NoSuchProperty"));
         }
 
         [Test]

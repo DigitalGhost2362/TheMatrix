@@ -245,7 +245,8 @@ namespace Feeder.MCP.Editor.API
                 baseDepth = found.depth;
                 cursor = found.Copy();
                 end = found.GetEndProperty();
-                if (found.propertyType != SerializedPropertyType.Generic && !found.isArray)
+                // a string reports isArray, but it is a single value
+                if (found.propertyType != SerializedPropertyType.Generic && (!found.isArray || found.propertyType == SerializedPropertyType.String))
                 {
                     list.Add(Entry(found));
                     return list;

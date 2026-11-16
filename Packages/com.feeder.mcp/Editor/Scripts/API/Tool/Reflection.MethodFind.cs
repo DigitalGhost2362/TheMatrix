@@ -21,11 +21,11 @@ namespace Feeder.MCP.Editor.API
             Enabled = false
         )]
         [AiSkillDescription("Find C# methods across every loaded assembly by name / type / parameters — " +
-            "including private methods. Returns serialized `MethodData` entries usable as schemas for '" +
+            "including private methods of public types (non-public types are not scanned). Returns serialized `MethodData` entries usable as schemas for '" +
             ReflectionMethodCallToolId + "'.")]
         [AiSkillBody("Find method in the project using C# Reflection. " +
             "It looks for all assemblies in the project and finds method by its name, class name and parameters. " +
-            "Even private methods are available. " +
+            "Only public (visible) types are scanned; their private methods are included. " +
             "Use '" + ReflectionMethodCallToolId + "' to call the method after finding it.\n\n" +
             "## Match levels (apply to `typeName`, `MethodName`, `Parameters`)\n\n" +
             "- `typeNameMatchLevel` / `methodNameMatchLevel` (default 1 — contains ignoring case): " +
@@ -37,10 +37,11 @@ namespace Feeder.MCP.Editor.API
             "`MethodData`. Pass any single entry to '" + ReflectionMethodCallToolId + "' as its `filter`.")]
         [Description("Find method in the project using C# Reflection. " +
             "It looks for all assemblies in the project and finds method by its name, class name and parameters. " +
-            "Even private methods are available. " +
+            "Only public (visible) types are scanned; their private methods are included. " +
             "Use '" + ReflectionMethodCallToolId + "' to call the method after finding it.")]
         public string MethodFind
         (
+            [Description("What to look for: namespace, type name, method name and parameters; see the match levels.")]
             MethodRef filter,
 
             [Description("Set to true if 'Namespace' is known and full namespace name is specified in the 'filter.Namespace' property. Otherwise, set to false.")]

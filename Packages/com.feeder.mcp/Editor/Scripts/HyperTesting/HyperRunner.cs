@@ -31,17 +31,16 @@ namespace Feeder.MCP.Editor.HyperTesting
 
         static readonly string[] PlaytestTools =
         {
-            "ping", "unity-tool-list", "tool-set-enabled-state", "editor-application-get-state", "editor-application-set-state",
-            "console-get-logs", "screenshot-game-view", "screenshot-camera", "script-execute", "rql-query", "rql-schema",
-            "rql-mutate", "scene-open", "reflection-method-find", "reflection-method-call", "ui-inspect-tree",
-            "ui-inspect-element", "profiler-get-memory-stats",
+            "unity-tool-list", "tool-set-enabled-state", "editor-application-get-state", "editor-application-set-state",
+            "console-get-logs", "screenshot-game-view", "script-execute", "rql-query", "rql-schema",
+            "rql-mutate", "scene-open", "menu-execute", "ui-inspect-tree", "ui-inspect-element", "profiler-stats",
         };
 
         static readonly string[] BlockedTools =
         {
-            "script-update-or-create", "script-delete", "assets-delete", "assets-move", "assets-copy",
-            "assets-create-folder", "assets-material-create", "assets-prefab-create", "assets-prefab-save", "scene-save",
-            "scene-create", "package-add", "package-remove", "assets-refresh",
+            "scene-save", "serialized-set", "package-add", "package-remove", "assets-refresh",
+            "assets-delete", "assets-move", "assets-copy", "assets-create-folder", "assets-material-create",
+            "assets-prefab-create", "scene-create",
         };
 
         public static HyperCloneMarker? Marker { get; private set; }

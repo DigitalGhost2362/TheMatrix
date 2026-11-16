@@ -6,6 +6,39 @@ All notable changes to this package are documented here.
 
 ### Added
 
+- `matrix-tool-create` skill: how to add a tool of your own for one project (an Editor `.cs` file with
+  `[AiToolType]` / `[AiTool]`), for a `script-execute` job that keeps coming back. It replaces the
+  `unity-skill-create` tool.
+- `skillTools` in `UserSettings/Feeder-MCP-Config.json`: the enabled tools that get a `matrix-<tool>` skill folder.
+  Default `script-execute` and `rql-query`; the other tool folders are removed on the next skill refresh.
+- `Mx` helpers for `script-execute` (body mode imports them, no `using` needed): `Mx.OpenScene`, `Mx.SaveScene`,
+  `Mx.NewScene`, `Mx.CreateAsset`, `Mx.EnsureFolder`, `Mx.TrashAsset`, `Mx.Instantiate`, `Mx.EditPrefab`, `Mx.Call` and
+  `Mx.Shot`. Each one refuses unsaved scenes, overwrites, paths outside the project and play mode with a message that says
+  what to pass instead, and records Undo where Unity supports it. The `script-execute` skill lists them.
+- `MxGuard` checks for tool code: `NotEmpty`, `InRange`, `OneOf`, `AssetPath`, `ProjectFile`, `NotExisting`, `NotPlaying`
+  and `ScenesSaved`.
+- `MxProjectTool` base class for project tools, with `Run` and `RunUndo`. A project tool (title `Project / ...` or code
+  outside the package) that declares `Enabled = true` starts off with a Console warning; a tool without a `[Description]` on
+  its method or a parameter stays off, logs an error and shows the problem in `unity-tool-list`.
+- The server sends MCP `instructions` at the start of every session: open the matching `matrix-*` skill, look for a
+  disabled tool before writing a script, and add a project tool when a job repeats. A project can replace the text with
+  `ProjectSettings/Packages/com.feeder.mcp/AgentInstructions.md` (at most 2 KB; read for every new session).
+- Tool usage stats: the server appends one line per tool call (time, tool, client, duration, status, argument and result
+  size; never the arguments or results) to `Library/MatrixUsage/usage-YYYY-MM.jsonl` and keeps three months. The Skills
+  window shows calls in 7 and 30 days, last use and error rate per tool, and filters `Unused 30d` and `Off, called`.
+  Nothing is sent to the agent. `FeederMatrix:UsageLog=false` turns it off.
+- `console-get-logs` takes `afterCursor` and returns `nextCursor` and `truncated`; default `maxEntries` is 50.
+- `screenshot-game-view` takes `cameraRef` (render that camera instead of the Game View) and `savePath`
+  (also write the PNG inside the project). `screenshot-editor-window` `savePath` must be inside the project. Both, and
+  `Mx.Shot`, only write a `.png` and never overwrite an existing file under `Assets/` or `Packages/`.
+- `ui-inspect-tree` lists the open windows when `windowName` is empty, takes `onlyIssues` and `maxLines`
+  (default 400).
+- New tools that replace several old ones: `profiler-stats`, `profiler-memory` (`action` take, list, delete,
+  compare), `serialized-get` and `serialized-set` (an asset path or a project settings area). `tests-run`
+  takes `action` run, list or clear; `package-search` takes `installedOnly`; `vfx-apply` and `vfx-read` take
+  `target` for a scene object.
+- `scene-save` takes `all` to save every changed scene.
+
 - `Tools > Feeder > Matrix Bridge > Getting Started` replaces `Setup...`. One window lists every Setup change before
   it runs, shows each step's result in place, and links every page of the Matrix Bridge manual, which opens offline
   in your browser. Revert lives in the same window; the `Revert Setups...` menu item is gone.
@@ -37,6 +70,30 @@ All notable changes to this package are documented here.
 
 ### Changed
 
+- A dirty scene in an idle Editor no longer stops a session: the `matrix-shared-editor` skill and the server
+  instructions now tell agents to save it and go on (Unity often marks a scene dirty by itself, for example a
+  scrollbar driving a RectTransform when the Game view resizes). Discarding unsaved changes is still never allowed.
+- Core tool set: `script-execute`, `console-get-logs`, `assets-refresh`, `editor-application-set-state`,
+  `screenshot-game-view`, `scene-open`, `scene-save`, `menu-execute`, `rql-query`, `unity-tool-list`,
+  `tool-set-enabled-state`. `rql-schema` and `editor-application-get-state` are no longer on by default
+  (`editor-health` reports playing, paused and compiling). Every other tool starts disabled, also before Setup runs.
+- `scene-open` takes a scene `path` and refuses to close open scenes with unsaved changes unless `ifDirty` is
+  `save` or `discard`. It is refused in play mode.
+- `scene-save` with a `path` on a scene that already has a file writes a copy; the open scene stays on its file.
+  It is refused in play mode.
+- `assets-refresh` waits up to half a second for a compile to start, so a compile that starts a few frames late
+  is no longer reported as a plain success without its errors.
+- `editor-application-set-state` leaves play mode and pauses even while the project has compile errors; only
+  entering play mode is refused. `isPaused` left out keeps the current pause state.
+- `menu-execute` refuses items that quit, delete or open a modal dialog (`File/Exit`, `File/Open Scene`,
+  `Assets/Delete`, `File/Build And Run` and others), and lists the project's own `[MenuItem]` entries.
+- `matrix-shared-editor` skill is about a third of its old size and says to rely on the implicit claim for short
+  steps and claim explicitly only for a multi-step burst such as a play session.
+- Refusals from tool checks (bad path, unsaved scene, existing file) reach the Console as one warning line instead of an
+  exception and an error.
+- `matrix-tool-create` skill: one tool per area with an `action` parameter, after the third repeat; the sample derives
+  from `MxProjectTool`.
+
 - A main agent that holds the lock and waits for a subagent it spawned passes its claim to that subagent when it asks
   for the editor, ahead of the queue. The main agent is told with its next tool result.
 - A subagent that ends frees its claim and leaves the queue at once, and play mode it started is stopped.
@@ -51,7 +108,54 @@ All notable changes to this package are documented here.
 - `FeederMatrix:EditorLockHardCap` (off by default) frees an explicit claim older than the given time between two calls
   while other sessions wait.
 
+### Removed
+
+- Tools that `script-execute` or the agent's own file tools do as well, and tools that reported invented state:
+  `script-read`, `script-update-or-create`, `script-delete`, `script-validate`, `script-execute-history`,
+  `type-get-json-schema`, `batch-execute`, `console-clear-logs`, `console-get-logs-page`, `ping`,
+  `unity-skill-create`, `unity-skill-generate`, `assets-prefab-save`, `assets-shader-list-all`,
+  `gameobject-duplicate`, `gameobject-component-list-all`, `settings-get`, `settings-set`, `scriptableobject-get`,
+  `scriptableobject-set`, `scriptableobject-create`, `screenshot-camera`, `screenshot-scene-view`,
+  `ui-inspect-windows`, `ui-inspect-issues`, `vfx-scene-read`, `vfx-scene-apply`, `animation-clip-create`,
+  `animation-controller-create`, `package-list`, `tests-list`, `tests-clear` and the profiler tools other than
+  `profiler-frame-debugger`. `animation-clip-set-curve` and `animation-controller-edit` create a missing asset; the
+  `Mx` helpers in `script-execute` cover the rest.
+- Off by default and safer, instead of removed: `scene-create`, `scene-set-active`, `scene-unload`, `assets-copy`,
+  `assets-move`, `assets-create-folder`, `assets-delete`, `assets-material-create`, `assets-prefab-create`,
+  `assets-prefab-instantiate`, `assets-prefab-open`, `assets-prefab-close`, `reflection-method-find`,
+  `reflection-method-call`, `editor-selection-set`, `settings-build-scenes`, `lighting-environment-get`,
+  `lighting-environment-set`, `rendering-features-list`, `rendering-features-set`, `uitoolkit-document-attach`,
+  `uitoolkit-write`, `vfx-control` and `animation-clip-set-events`. Turn one on with `tool-set-enabled-state` or the
+  Skills window. Compared with the old versions: `scene-create` and `scene-unload` take `ifDirty` and never drop
+  unsaved scenes; `scene-create` never overwrites a file and makes missing folders; `scene-set-active` and
+  `scene-unload` take a scene path (a name only when it is unique); `assets-delete` moves to the OS trash unless
+  `trash=false` and refuses the `Assets` root and `Packages/`; `assets-copy` and `assets-move` refuse a destination
+  outside `Assets/`; `assets-create-folder` makes nested folders; `assets-material-create` and `assets-prefab-create`
+  never overwrite; `assets-prefab-close` with `save=false` refuses unsaved changes unless `discard=true`;
+  `assets-prefab-instantiate` reverts a half-made instance when it fails; `uitoolkit-document-attach` writes no
+  PanelSettings file when the parent is wrong; `uitoolkit-write` ignores braces in USS strings and `url()`;
+  `lighting-environment-set` reports an error instead of changing nothing.
+
 ### Fixed
+
+- `serialized-set` with `createType` could create an asset outside `Assets/` through `..` in the path.
+- `screenshot-game-view` with `savePath="."` wrote `<project folder>.png` next to the project; the `.png` is now added
+  before the path is checked.
+- `serialized-get` with `path` pointing at a string returned no property.
+- Undoing a `serialized-set` that created its asset left a broken file on disk. Creating the file is no longer recorded
+  in Undo; only the values are.
+- `animation-clip-set-curve` and `animation-controller-edit` created the `.anim` or `.controller` even when the keys,
+  type, property, interpolation or operations were invalid, and `remove=true` on a missing clip created an empty one.
+- `animation-clip-set-curve` overwrote a file at the path that was not a valid clip.
+- `assets-refresh` in play mode with changed scripts never answered; it now answers at once that script changes are held
+  until play mode ends.
+- `editor-undo` also returns `NextRedo`, the group the next redo restores.
+- `script-execute` explains a method that is not static and a parameter entry without `name` or `typeName`.
+- `package-search` with `installedOnly` and `directDependenciesOnly` lists the right packages (the flag was
+  read as offline mode).
+- `editor-undo` has a skill description and body.
+- `profiler-frame-debugger` turns itself off after a domain reload instead of leaving the Game View frozen.
+- `profiler-memory` compares types by full name and shows a counter missing on one side as `n/a`.
 
 - Editor lock queue: a second editor-changing call of a waiting session made its first call answer `queued` at once
   instead of waiting. Calls of one agent now wait together.

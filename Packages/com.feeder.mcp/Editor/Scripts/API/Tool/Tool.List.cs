@@ -37,7 +37,8 @@ namespace Feeder.MCP.Editor.API
             ToolListId,
             Title = "Tool / List",
             ReadOnlyHint = true,
-            IdempotentHint = true
+            IdempotentHint = true,
+            Enabled = true
         )]
         [AiSkillDescription("List all Feeder MCP tools registered in the connected Unity Editor instance, including disabled ones " +
             "(see `enabled`); only a core set is on by default, so use this to find a tool, then enable it with tool-set-enabled-state. " +
@@ -108,6 +109,8 @@ namespace Feeder.MCP.Editor.API
 
                     if (descriptionRequested)
                         info.Description = tool.Description;
+                    if (MxProjectTool.Problems.TryGetValue(tool.Name, out var problem))
+                        info.Description = problem;
 
                     if (inputsRequested != InputRequest.None)
                     {

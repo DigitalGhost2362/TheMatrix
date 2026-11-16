@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Feeder.ToolHost;
+using Feeder.ToolHost.Common.Model;
 using Feeder.Reflect.Utils;
 using UnityEditor.PackageManager;
 
@@ -24,42 +25,43 @@ namespace Feeder.MCP.Editor.API
             OpenWorldHint = true,
             Enabled = false
         )]
-        [AiSkillDescription("Search Unity's package registry plus locally installed packages (Git, local, " +
-            "embedded sources) by query string. Returns available versions and installation status. " +
+        [AiSkillDescription("Search Unity's package registry plus locally installed packages by query string, or list the installed packages (installedOnly=true). " +
+            "Returns available versions and installation status. " +
             "Online mode fetches exact matches from the live registry then supplements with cached substring matches.")]
         [AiSkillBody("Search for packages in both Unity Package Manager registry and installed packages. " +
-            "Use this to find packages by name before installing them. Returns available versions and installation status. " +
-            "Searches both the Unity registry and locally installed packages (including Git, local, and embedded sources). " +
+            "Use this to find packages by name before installing them. " +
             "Results are prioritized: exact name match, exact display name match, name substring, display name substring, description substring. " +
             "Note: Online mode fetches exact matches from live registry, then supplements with cached substring matches.\n\n" +
             "## Inputs\n\n" +
-            "- `query` — package id, name, display name, or description keyword (case-insensitive). Required.\n" +
-            "- `maxResults` (default 10) — caps the returned list.\n" +
+            "- `query` — package id, name, display name, or description keyword (case-insensitive). Required unless `installedOnly`.\n" +
+            "- `maxResults` (default 10) — caps the returned list when searching.\n" +
             "- `offlineMode` (default `true`) — when `false`, hits the live registry for exact matches; cached registry " +
-            "data still backs the substring matches in both modes.\n\n" +
-            "## Result composition\n\n" +
-            "Each entry includes name, display name, latest version, truncated description, install status, installed " +
-            "version (if any), and the top-5 compatible versions.")]
-        [Description("Search for packages in both Unity Package Manager registry and installed packages. " +
-            "Use this to find packages by name before installing them. Returns available versions and installation status. " +
-            "Searches both the Unity registry and locally installed packages (including Git, local, and embedded sources). " +
-            "Results are prioritized: exact name match, exact display name match, name substring, display name substring, description substring. " +
-            "Note: Online mode fetches exact matches from live registry, then supplements with cached substring matches.")]
-        public async Task<List<PackageSearchResult>> Search
+            "data still backs the substring matches in both modes.\n" +
+            "- `installedOnly` (default `false`) — list the packages installed in the project instead of searching the registry. " +
+            "`query` then filters by name / displayName / description (optional), `sourceFilter` restricts by source " +
+            "(`All`, `Registry`, `Embedded`, `Local`, `Git`, `BuiltIn`, `LocalTarball`), `directDependenciesOnly` keeps only packages " +
+            "listed in `manifest.json`. `maxResults` does not apply.\n\n" +
+            "## Result\n\n" +
+            "One line per package. Search: name, latest version, installed version or `no`, display name, description, top-5 compatible versions. " +
+            "Installed list: name, version, source, display name, description.")]
+        [Description("Search packages in the Unity registry and installed packages (query), or list installed packages (installedOnly=true, optional query / sourceFilter / directDependenciesOnly).")]
+        public async Task<ResponseCallTool> Search
         (
-            [Description("The package id, name, or description. " +
-                "Can be: Full package id 'com.unity.textmeshpro', " +
-                "Full package name 'TextMesh Pro', " +
-                "Partial name 'TextMesh' (will search in Unity registry and installed packages), " +
-                "Description keyword 'rendering' (searches in package descriptions).")]
-            string query,
-            [Description("Maximum number of results to return. Default: 10")]
+            [Description("Package id, name or description keyword, e.g. 'com.unity.textmeshpro' or 'rendering' (case-insensitive). Optional when installedOnly: then it filters the installed list.")]
+            string? query = null,
+            [Description("Maximum number of results to return when searching. Default: 10")]
             int maxResults = 10,
             [Description("Whether to perform the search in offline mode (uses cached registry data only). Default: true. Set to false to fetch latest exact matches from Unity registry.")]
-            bool offlineMode = true
+            bool offlineMode = true,
+            [Description("List the installed packages instead of searching the registry. Default: false")]
+            bool installedOnly = false,
+            [Description("installedOnly: filter by package source.")]
+            PackageSourceFilter sourceFilter = PackageSourceFilter.All,
+            [Description("installedOnly: only direct dependencies (packages in manifest.json). Default: false")]
+            bool directDependenciesOnly = false
         )
         {
-            if (string.IsNullOrWhiteSpace(query))
+            if (!installedOnly && string.IsNullOrWhiteSpace(query))
                 throw new ArgumentException("Search query cannot be empty. Please provide a package name or search term.");
 
             if (maxResults <= 0)
@@ -67,11 +69,18 @@ namespace Feeder.MCP.Editor.API
 
             return await MainThread.Instance.RunAsync(async () =>
             {
-                // First, get list of installed packages
-                var listRequest = Client.List(offlineMode: true);
+                var listRequest = Client.List(offlineMode: true, includeIndirectDependencies: !(installedOnly && directDependenciesOnly));
                 while (!listRequest.IsCompleted)
                     await Task.Yield();
 
+                if (installedOnly)
+                {
+                    if (listRequest.Status == StatusCode.Failure)
+                        return ResponseCallTool.Error(Error.PackageListFailed(listRequest.Error?.message ?? "Unknown error"));
+                    return FormatInstalled(listRequest.Result, sourceFilter, query);
+                }
+
+                var text = query!;
                 var installedPackages = listRequest.Status == StatusCode.Success
                     ? listRequest.Result.ToList()
                     : new List<PackageInfo>();
@@ -84,14 +93,14 @@ namespace Feeder.MCP.Editor.API
                 // Online mode: first fetch exact matches from live registry, then supplement with cached substring matches
                 if (!offlineMode)
                 {
-                    var onlineSearchRequest = Client.Search(query, offlineMode: false);
+                    var onlineSearchRequest = Client.Search(text, offlineMode: false);
                     while (!onlineSearchRequest.IsCompleted)
                         await Task.Yield();
 
                     if (onlineSearchRequest.Status == StatusCode.Success)
                     {
                         var onlineResults = onlineSearchRequest.Result
-                            .Select(p => (pkg: p, priority: GetSearchPriority(p.name, p.displayName, p.description, query)))
+                            .Select(p => (pkg: p, priority: GetSearchPriority(p.name, p.displayName, p.description, text)))
                             .Where(x => x.priority > 0)
                             .OrderBy(x => x.priority)
                             .Take(maxResults)
@@ -117,7 +126,7 @@ namespace Feeder.MCP.Editor.API
                     {
                         var cachedResults = cachedSearchRequest.Result
                             .Where(p => !addedPackageNames.Contains(p.name))
-                            .Select(p => (pkg: p, priority: GetSearchPriority(p.name, p.displayName, p.description, query)))
+                            .Select(p => (pkg: p, priority: GetSearchPriority(p.name, p.displayName, p.description, text)))
                             .Where(x => x.priority > 0)
                             .OrderBy(x => x.priority)
                             .Take(maxResults - results.Count)
@@ -135,7 +144,7 @@ namespace Feeder.MCP.Editor.API
                 // This catches packages from Git, local, embedded sources not in registry
                 var matchingInstalled = installedPackages
                     .Where(p => !addedPackageNames.Contains(p.name))
-                    .Select(p => (pkg: p, priority: GetSearchPriority(p.name, p.displayName, p.description, query)))
+                    .Select(p => (pkg: p, priority: GetSearchPriority(p.name, p.displayName, p.description, text)))
                     .Where(x => x.priority > 0)
                     .OrderBy(x => x.priority)
                     .Take(maxResults - results.Count)
@@ -157,7 +166,10 @@ namespace Feeder.MCP.Editor.API
                     results.Add(result);
                 }
 
-                return results;
+                return ResponseCallTool.Success(results.Count == 0
+                    ? "no packages found"
+                    : string.Join("\n", results.Select(r =>
+                        $"{r.Name} latest={r.LatestVersion} installed={r.InstalledVersion ?? "no"} | {r.DisplayName} | {r.Description} | {string.Join(",", r.AvailableVersions)}")));
             }).Unwrap();
         }
 

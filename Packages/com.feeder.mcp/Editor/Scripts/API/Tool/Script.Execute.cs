@@ -22,7 +22,8 @@ namespace Feeder.MCP.Editor.API
         (
             ScriptExecuteToolId,
             Title = "Script / Execute",
-            OpenWorldHint = true
+            OpenWorldHint = true,
+            Enabled = true
         )]
         [AiSkillDescription("Compiles and executes C# code dynamically using Roslyn. " +
             "Supports a full-code mode (default) and a body-only mode — see the skill body for the difference and for how to pass Unity object references as parameters.")]
@@ -50,10 +51,6 @@ namespace Feeder.MCP.Editor.API
             "code must start from empty statics every time; that loads a new assembly per call, which Unity only frees on a " +
             "domain reload. To share a value between different pieces of code, store it in the domain: " +
             "`AppDomain.CurrentDomain.SetData(\"my-key\", value)` and `AppDomain.CurrentDomain.GetData(\"my-key\")`.\n\n" +
-            "## Replaying a run\n\n" +
-            "The last 20 runs are kept until the Editor closes; '" + ScriptExecuteHistoryToolId + "' lists them with an id. " +
-            "Pass that id as `replayId` (leave `csharpCode` empty) to run it again with the same class, method, mode and parameters; " +
-            "parameters you pass now replace the stored ones.\n\n" +
             "## Watching something change over time\n\n" +
             "The time between two calls includes your own thinking, often seconds, so polling from outside misses fast " +
             "changes. Record inside Unity instead: register a callback that samples every frame, removes itself after N " +
@@ -72,78 +69,46 @@ namespace Feeder.MCP.Editor.API
             "```\n\n" +
             "`EditorApplication.update` also runs while the editor window is in the background; in play mode " +
             "`Application.onBeforeRender` runs once per rendered frame. Several agents can share one editor, so use keys " +
-            "of your own and never leave a callback registered.")]
-        [Description("Compiles and executes C# code dynamically using Roslyn. " +
-            "Supports two modes: full code mode (default) requires a complete class definition, " +
-            "while body-only mode (isMethodBody=true) auto-generates the boilerplate so you only " +
-            "provide the method body. Unity objects (GameObject, Component, etc.) can be passed as " +
-            "parameters using their Ref types (GameObjectRef, ComponentRef, etc.) or directly by type. " +
-            "Running the same code again reuses its loaded assembly, so static fields persist between identical runs " +
-            "(pass freshAssembly=true to avoid that). replayId repeats a run listed by script-execute-history.")]
+            "of your own and never leave a callback registered.\n\n" +
+            "## Async code\n\n" +
+            "A method that returns a `Task` is not awaited: start the work, keep progress in the domain and read it in a later call.\n\n" +
+            "## Cookbook: `Mx` helpers (body mode imports them; guards and Undo built in)\n\n" +
+            "Know the member names before writing: read the code, or turn on `rql-schema` (off by default) and call it with `typeName`. A wrong guess costs a compile round trip. " +
+            "Body mode imports both `System` and `UnityEngine`: write `UnityEngine.Object`, a bare `Object` does not compile.\n\n" +
+            "- `Mx.OpenScene(path, additive, ifDirty)` / `Mx.SaveScene(scene)` / `Mx.NewScene(path, ifDirty)` - `ifDirty`: `refuse` (default), `save`, `discard`.\n" +
+            "- `Mx.CreateAsset(obj, path)` (never overwrites, makes folders) / `Mx.EnsureFolder(path)` / `Mx.TrashAsset(path)`.\n" +
+            "- `Mx.Instantiate(prefabPath, parent)` (keeps the prefab link, one Undo step) / `Mx.EditPrefab(path, root => ...)`.\n" +
+            "- `Mx.Call(objOrType, \"Method\", args)` - any method, private or static.\n" +
+            "- `Mx.Shot(path, camera)` - PNG of the Game View or a camera, inside the project.\n" +
+            "- Scene edits: `Undo.RecordObject(target, \"Edit\")` before the change, then `UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(go.scene)` (body mode does not import that namespace).\n" +
+            "- A job you repeat for this project: make it a project tool (skill `matrix-tool-create`).")]
+        [Description("Compiles C# with Roslyn and runs it in the Editor. Full mode (default): a class with a static method. " +
+            "Body mode (isMethodBody=true): only the method body; usings, class and the Mx helpers come with it. " +
+            "Unity objects can be passed as parameters. Identical code reuses its assembly, so statics persist (freshAssembly=true starts empty). " +
+            "Before writing a script for prefab, asset file, scene create/unload, selection, build scenes or a debug method call, check unity-tool-list: a disabled tool may already do it.")]
         public static SerializedMember? Execute
         (
-            [Description("C# code to compile and execute. " +
-                "In full code mode (default, isMethodBody=false): must define a complete class with a static method. " +
-                "Example: 'using UnityEngine; public class Script { public static void Main() { Debug.Log(\"Hello\"); } }'. " +
-                "Do NOT use top-level statements. " +
-                "In body-only mode (isMethodBody=true): provide only the method body statements. " +
-                "The tool auto-generates usings, class, and method header. " +
-                "Example body: 'go.SetActive(false);'. A body may 'return' a value (e.g. 'return go.name;'), which becomes the result. " +
-                "Custom helper classes can still be defined inline in the body-only string after the main logic, " +
-                "but for complex additional class definitions use full code mode instead.")]
+            [Description("The C#. Full mode, e.g. 'using UnityEngine; public class Script { public static void Main() { Debug.Log(\"Hi\"); } }'. " +
+                "Body mode: statements only, e.g. 'go.SetActive(false);'; a 'return value;' becomes the result.")]
             string csharpCode = "",
-            [Description("The name of the class containing the method to execute. " +
-                "In body-only mode this becomes the generated class name.")]
+            [Description("Class that holds the method; in body mode, the generated class name.")]
             string className = "Script",
-            [Description("The name of the method to execute. Must be a static method. " +
-                "In body-only mode this becomes the generated method name.")]
+            [Description("Static method to run; in body mode, the generated method name.")]
             string methodName = "Main",
-            [Description("Serialized parameters to pass to the method. Each entry must specify 'name' and 'typeName'. " +
-                "Supported parameter types include primitives, strings, and Unity object references: " +
-                "- 'UnityEngine.GameObject': resolves an actual GameObject from value '{\"instanceID\": N}', '{\"name\": \"...\"}', or '{\"path\": \"...\"}'. " +
-                "- 'UnityEngine.Component' (or any component subtype): resolves from '{\"instanceID\": N}'. " +
-                "- 'Feeder.MCP.Data.GameObjectRef': passes a GameObjectRef POCO directly; " +
-                "  the method body calls goRef.FindGameObject() to resolve it. " +
-                "- 'Feeder.MCP.Data.ComponentRef': passes a ComponentRef POCO. " +
-                "- 'Feeder.MCP.Data.ObjectRef': passes a base ObjectRef POCO. " +
-                "If the method does not require parameters, leave this empty.")]
+            [Description("Method arguments as {name, typeName, value}. 'UnityEngine.GameObject' resolves from {\"instanceID\": N}, {\"name\": \"...\"} or {\"path\": \"...\"}; " +
+                "a Component type from {\"instanceID\": N}; 'Feeder.MCP.Data.GameObjectRef' / 'ComponentRef' / 'ObjectRef' pass the reference itself.")]
             SerializedMemberList? parameters = null,
-            [Description("When true, 'csharpCode' is treated as just the method body. " +
-                "The tool auto-generates standard using directives (System, UnityEngine, " +
-                "Feeder.MCP.Data, Feeder.MCP.Runtime.Extensions, UnityEditor), " +
-                "the class definition, and the method signature (returns object when the body has 'return value;', otherwise void). " +
-                "Parameters from the 'parameters' list are automatically added to the method signature using their typeName and name. " +
-                "When false (default), 'csharpCode' must be a complete C# compilation unit with class and method definitions.")]
+            [Description("true: csharpCode is a method body. Usings (System, UnityEngine, UnityEditor, Feeder.MCP.Editor), the class and the signature are generated; " +
+                "parameters become method arguments.")]
             bool isMethodBody = false,
-            [Description("Seconds this call may run before it times out. 0 (default) keeps the project's tool timeout. " +
-                "Set it for code that runs long on purpose; the server caps it (30 minutes by default).")]
+            [Description("Seconds this call may run; 0 (default) keeps the tool timeout. The server caps it (30 minutes by default).")]
             int timeoutSeconds = 0,
-            [Description("When true, the code is loaded as a new assembly for this call, so its static fields start empty. " +
-                "Default false: identical code reuses its loaded assembly and static fields persist between runs until a domain reload.")]
+            [Description("true: load a new assembly for this call, so statics start empty. Default false reuses the assembly of identical code.")]
             bool freshAssembly = false,
-            [Description("Id of an earlier run (see script-execute-history). Repeats that run; csharpCode may then be empty. " +
-                "Passed 'parameters' replace the stored ones. 0 = off.")]
-            int replayId = 0,
             [RequestID]
             string? requestId = null
         )
         {
-            if (replayId > 0)
-            {
-                var past = MainThread.Instance.Run(() => ScriptRunHistory.Get(replayId));
-                if (past == null)
-                    throw new ToolCallerException($"[replay_not_found] No run with id {replayId}. List the runs with '{ScriptExecuteHistoryToolId}'.");
-                if (past.tooLarge)
-                    throw new ToolCallerException($"[replay_not_found] Run {replayId} was too large to keep.");
-                csharpCode = past.code;
-                className = past.className;
-                methodName = past.methodName;
-                isMethodBody = past.isMethodBody;
-                if (parameters == null && !string.IsNullOrEmpty(past.parametersJson))
-                    parameters = Feeder.Json.JsonSerializer.Deserialize<SerializedMemberList>(
-                        past.parametersJson, (MatrixPluginEditor.Instance.Reflector ?? throw new Exception("Reflector is not available.")).JsonSerializerOptions);
-            }
-
             if (string.IsNullOrEmpty(csharpCode))
                 throw new ToolCallerException($"'{nameof(csharpCode)}' is null or empty. Please provide valid C# code to execute.");
 
@@ -152,6 +117,9 @@ namespace Feeder.MCP.Editor.API
 
             if (string.IsNullOrEmpty(methodName))
                 throw new ToolCallerException($"'{nameof(methodName)}' cannot be null or empty.");
+
+            if (parameters != null && parameters.Any(p => p == null || string.IsNullOrWhiteSpace(p.name) || string.IsNullOrWhiteSpace(p.typeName)))
+                throw new ToolCallerException("Every entry of 'parameters' needs 'name' and 'typeName', e.g. {\"name\":\"go\",\"typeName\":\"UnityEngine.GameObject\",\"value\":{\"path\":\"Player\"}}.");
 
             if (HyperTesting.HyperTestingActivation.LooksLikeActivationAttempt(csharpCode))
                 throw new Exception(HyperTesting.HyperTestingActivation.ActivationRefusal);
@@ -188,11 +156,6 @@ namespace Feeder.MCP.Editor.API
                 var logger = UnityLoggerFactory.LoggerFactory.CreateLogger("Tool_Script.Execute");
                 var waitMs = timer.ElapsedMilliseconds - compileMs;
                 using var timing = new Timing(logger, compileMs, cached, waitMs, timer);
-
-                if (replayId <= 0)
-                    ScriptRunHistory.Add(csharpCode, className, methodName, isMethodBody, parameters == null || parameters.Count == 0
-                        ? string.Empty
-                        : Feeder.Json.JsonSerializer.Serialize(parameters, MatrixPluginEditor.Instance.Reflector?.JsonSerializerOptions));
 
                 // load the assembly the server compiled and execute it immediately
                 if (!ExecuteCSharpCode(
@@ -355,6 +318,7 @@ namespace Feeder.MCP.Editor.API
             sb.AppendLine("using Feeder.MCP.Data;");
             sb.AppendLine("using Feeder.MCP.Runtime.Extensions;");
             sb.AppendLine("using UnityEditor;");
+            sb.AppendLine("using Feeder.MCP.Editor;");
             sb.AppendLine();
 
             // Build method parameter list from the parameters SerializedMemberList
@@ -527,6 +491,13 @@ namespace Feeder.MCP.Editor.API
             if (method == null)
             {
                 error = $"Method '{methodName}' not found in class '{className}'.";
+                returnValue = null;
+                returnType = null;
+                return false;
+            }
+            if (!method.IsStatic)
+            {
+                error = $"Method '{className}.{methodName}' is not static. Declare it 'public static', or use isMethodBody=true.";
                 returnValue = null;
                 returnType = null;
                 return false;

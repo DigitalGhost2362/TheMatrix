@@ -98,9 +98,14 @@ public class ToolHost : IToolHost, IDisposable
 		}
 		else
 		{
-			List<IRunTool> disabledTools = enumerable.Where((IRunTool tool) => !toolManager!.IsToolEnabled(tool.Name)).ToList();
+			List<IRunTool> disabledTools = enumerable.Where((IRunTool tool) => !toolManager!.IsToolEnabled(tool.Name) || !WritesSkill(tool)).ToList();
 			enumerable = enumerable.Except(disabledTools);
 			IEnumerable<IRunTool> enumerable2 = McpManager.SystemToolManager?.GetAllTools();
+			if (enumerable2 != null)
+			{
+				disabledTools.AddRange(enumerable2.Where((IRunTool tool) => !WritesSkill(tool)));
+				enumerable2 = enumerable2.Where(WritesSkill).ToList();
+			}
 			IEnumerable<IRunTool> enumerable4;
 			if (enumerable2 == null)
 			{
@@ -127,6 +132,12 @@ public class ToolHost : IToolHost, IDisposable
 			result = false;
 		}
 		return result;
+	}
+
+	private bool WritesSkill(IRunTool tool)
+	{
+		List<string>? skillTools = _connectionConfig.SkillTools;
+		return skillTools == null || skillTools.Contains(tool.Name, StringComparer.OrdinalIgnoreCase);
 	}
 
 	public bool DeleteSkillFiles(string? path = null)

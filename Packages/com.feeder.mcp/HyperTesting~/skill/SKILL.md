@@ -95,7 +95,7 @@ the Game view; capture the world camera instead.
    `refresh NOT confirmed` gets no test cases this round - note it in `clone-issues.md`.
 3. `status`: every clone `runner active`, not playing, `BLOCKED WRITES` and `CRITICAL` absent, commit left above
    the reserve, original not in play mode while a clone imports or plays.
-4. Probe one clone tool before dispatching (ToolSearch for `+matrix-hcN`, then `ping`). If the tools are missing,
+4. Probe one clone tool before dispatching (ToolSearch for `+matrix-hcN`, then `editor-health`). If the tools are missing,
    that subagent would come back `blocked` after 30 s: restart Claude Code or use the HTTP scripts above.
 5. `up` already took a git baseline of the original and `down` compares against it; keep your own
    `git status --porcelain` output too, to tell your edits from anything a clone wrote.

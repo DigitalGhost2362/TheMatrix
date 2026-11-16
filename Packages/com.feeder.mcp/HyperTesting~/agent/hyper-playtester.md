@@ -42,9 +42,9 @@ other clones at the same time.
 1. Read the case file. Set the preconditions (open the scene with `scene-open`, back up prefs you will
    change - they are isolated per clone, but restore them anyway).
 2. Run the steps exactly: enter play with `editor-application-set-state`, drive the game with
-   `script-execute` / debug methods / `reflection-method-call`, read state, read logs.
+   `script-execute` / debug methods, read state, read logs.
 3. Evidence for every TC: the exact log line, the state value read, and a screenshot
-   (`screenshot-game-view`; if it fails because the window is hidden, use `screenshot-camera`). To keep a
+   (`screenshot-game-view`; if it fails because the window is hidden, pass `cameraRef` to `screenshot-game-view`). To keep a
    screenshot file, call `UnityEngine.ScreenCapture.CaptureScreenshot("<run folder>/<case>-TC<n>.png")`
    in play mode via `script-execute`.
 4. Record memory again after each case (snippet above). If the commit grew more than 1 GB during one

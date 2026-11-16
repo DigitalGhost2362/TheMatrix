@@ -47,7 +47,7 @@ namespace Feeder.MCP.Editor.API
             });
         }
 
-        [AiTool(QueryToolId, Title = "Query / Read", ReadOnlyHint = true, IdempotentHint = true)]
+        [AiTool(QueryToolId, Title = "Query / Read", ReadOnlyHint = true, IdempotentHint = true, Enabled = true)]
         [AiSkillDescription("Read anything in the open scenes, prefabs, assets, console and project with one pipeline query " +
             "(`objects | where Light.intensity > 1 | select name, $path`). Filters, projects, sorts, groups and counts many objects in one call and " +
             "answers as a compact text table. Use '" + SchemaToolId + "' for the syntax and a type's members, '" + MutateToolId + "' to change things.")]
@@ -81,7 +81,7 @@ namespace Feeder.MCP.Editor.API
             return Respond(() => MatrixQuery.Run(query, Math.Min(limit, 2000), format).Text);
         }
 
-        [AiTool(MutateToolId, Title = "Query / Change", DestructiveHint = true)]
+        [AiTool(MutateToolId, Title = "Query / Change", DestructiveHint = true, Enabled = false)]
         [AiSkillDescription("Change many objects, components and assets in one query: `objects | where name startswith \"Enemy\" | set Rigidbody.mass = 2`. " +
             "Also `call` methods, `add` components, `destroy` objects and create them with `new(...)`. All-or-nothing, one undo step, optional dry run.")]
         [AiSkillBody("# Query / Change\n\n" +
@@ -134,7 +134,7 @@ namespace Feeder.MCP.Editor.API
             return Respond(() => MatrixQuery.Mutate(query, dryRun, maxTargets, save).Text);
         }
 
-        [AiTool(SchemaToolId, Title = "Query / Schema", ReadOnlyHint = true, IdempotentHint = true)]
+        [AiTool(SchemaToolId, Title = "Query / Schema", ReadOnlyHint = true, IdempotentHint = true, Enabled = false)]
         [AiSkillDescription("Syntax card of the query language plus the component types present in the open scenes; with `typeName`, " +
             "the members (type, read or write) and methods of that type. Call it before writing a '" + QueryToolId + "' or '" + MutateToolId + "' query you are unsure of.")]
         [AiSkillBody("# Query / Schema\n\n" +

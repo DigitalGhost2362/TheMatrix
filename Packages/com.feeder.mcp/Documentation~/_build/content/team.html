@@ -16,7 +16,7 @@ lead: Commit the package with the project; keep the per-machine files out. Teamm
     <tr><td><code>Packages/manifest.json</code> with the git URL</td><td>Yes</td><td>Everyone gets the same package version.</td></tr>
     <tr><td><code>.mcp.json</code>, <code>.codex/config.toml</code></td><td>No</td><td>They hold this machine's port. Setup adds both to <code>.gitignore</code>.</td></tr>
     <tr><td><code>.cursor/mcp.json</code>, <code>.vscode/mcp.json</code>, <code>.gemini/settings.json</code> and other client files</td><td>No</td><td>Same reason. Setup does not ignore these: add the ones you wire to <code>.gitignore</code> yourself.</td></tr>
-    <tr><td><code>.claude/skills/matrix-*/</code></td><td>Your choice</td><td>Matrix adds and deletes one folder per tool as tools are switched on and off. Ignore <code>&lt;skills folder&gt;/matrix-*/</code>, or accept the changes in your diffs.</td></tr>
+    <tr><td><code>.claude/skills/matrix-*/</code></td><td>Your choice</td><td>Matrix writes its workflow skills and one folder per tool listed in <code>skillTools</code>, and deletes a tool folder when the tool is switched off. Ignore <code>&lt;skills folder&gt;/matrix-*/</code>, or accept the changes in your diffs.</td></tr>
     <tr><td><code>UserSettings/Feeder-MCP-Config.json</code></td><td>No</td><td>Port, token and tool switches for this machine. Unity's standard ignore rules already skip <code>UserSettings</code>.</td></tr>
     <tr><td><code>ProjectSettings/ProjectSettings.asset</code></td><td>Yes</td><td>Setup turns Run In Background on here. It is a normal project setting.</td></tr>
   </tbody>

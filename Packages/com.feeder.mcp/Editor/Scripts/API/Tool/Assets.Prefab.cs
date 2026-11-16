@@ -9,13 +9,11 @@ namespace Feeder.MCP.Editor.API
     {
         public static class Error
         {
-            static string PrefabsPrinted => string.Join("\n", AssetDatabase.FindAssets("t:Prefab"));
-
             public static string PrefabPathIsEmpty()
-                => "Prefab path is empty. Available prefabs:\n" + PrefabsPrinted;
+                => "Prefab path is empty. Pass a path such as 'Assets/Prefabs/Hero.prefab'.";
 
             public static string NotFoundPrefabAtPath(string path)
-                => $"Prefab '{path}' not found. Available prefabs:\n" + PrefabsPrinted;
+                => $"Prefab '{path}' not found. Find prefabs with rql-query: assets(\"t:Prefab\").";
 
             public static string PrefabPathIsInvalid(string path)
                 => $"Prefab path '{path}' is invalid.";

@@ -40,10 +40,9 @@ namespace Feeder.MCP.Editor.API
             float? sortingOrder = null
         )
         {
-            if (string.IsNullOrWhiteSpace(gameObject))
-                throw new ArgumentException("gameObject is required.");
-            var uxml = string.IsNullOrWhiteSpace(uxmlPath) ? null : RequireAssetPath(uxmlPath, ".uxml");
-            var psPath = string.IsNullOrWhiteSpace(panelSettingsPath) ? null : RequireAssetPath(panelSettingsPath, ".asset");
+            MxGuard.NotEmpty(gameObject, "gameObject", "UI/HUD");
+            var uxml = string.IsNullOrWhiteSpace(uxmlPath) ? null : MxGuard.ReadableAssetPath(uxmlPath, ".uxml");
+            var psPath = string.IsNullOrWhiteSpace(panelSettingsPath) ? null : MxGuard.ReadableAssetPath(panelSettingsPath, ".asset");
 
             return MainThread.Instance.Run(() =>
             {
@@ -54,21 +53,22 @@ namespace Feeder.MCP.Editor.API
                         ?? throw new ArgumentException($"uxmlPath: no UXML asset at '{uxml}'.");
                 }
 
-                Undo.IncrementCurrentGroup();
-                var group = Undo.GetCurrentGroup();
-
-                var settings = ResolvePanelSettings(psPath);
                 var path = gameObject.Trim().Trim('/');
                 var go = SceneLookup.Find(path);
+                var cut = path.LastIndexOf('/');
+                GameObject? parent = null;
+                if (go == null && cut >= 0)
+                    parent = SceneLookup.Find(path.Substring(0, cut))
+                        ?? throw MxGuard.Fail($"gameObject: the parent '{path.Substring(0, cut)}' does not exist. Pass an existing parent path, or a root name.");
+
+                // inputs are checked before any asset is written
+                var settings = ResolvePanelSettings(psPath);
+                Undo.IncrementCurrentGroup();
+                var group = Undo.GetCurrentGroup();
                 var created = false;
                 if (go == null)
                 {
-                    var cut = path.LastIndexOf('/');
                     var name = cut < 0 ? path : path.Substring(cut + 1);
-                    GameObject? parent = null;
-                    if (cut >= 0)
-                        parent = SceneLookup.Find(path.Substring(0, cut))
-                            ?? throw new ArgumentException($"gameObject: the parent '{path.Substring(0, cut)}' does not exist.");
                     go = new GameObject(name);
                     Undo.RegisterCreatedObjectUndo(go, "Matrix attach UIDocument");
                     if (parent != null)
@@ -113,27 +113,11 @@ namespace Feeder.MCP.Editor.API
             return CreatePanelSettings(DefaultPanelSettingsPath);
         }
 
-        internal static PanelSettings NewPanelSettings()
-        {
-            var settings = ScriptableObject.CreateInstance<PanelSettings>();
-            var theme = AssetDatabase.FindAssets("t:ThemeStyleSheet")
-                .Select(AssetDatabase.GUIDToAssetPath)
-                .OrderByDescending(p => p.IndexOf("DefaultRuntimeTheme", StringComparison.OrdinalIgnoreCase) >= 0)
-                .Select(AssetDatabase.LoadAssetAtPath<ThemeStyleSheet>)
-                .FirstOrDefault(t => t != null);
-            if (theme != null)
-                settings.themeStyleSheet = theme;
-            return settings;
-        }
-
+        // asset files are not undoable, so the PanelSettings file stays after an Undo of the attach
         static PanelSettings CreatePanelSettings(string path)
         {
-            var dir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(dir))
-                Directory.CreateDirectory(dir);
             var settings = NewPanelSettings();
-            AssetDatabase.CreateAsset(settings, path);
-            Undo.RegisterCreatedObjectUndo(settings, "Matrix attach UIDocument");
+            Mx.CreateAsset(settings, path);
             return settings;
         }
     }

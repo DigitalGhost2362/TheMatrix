@@ -2,8 +2,9 @@
 using System.ComponentModel;
 using Feeder.ToolHost;
 using Feeder.Reflect.Utils;
-using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Data;
+using Feeder.MCP.Editor.Utils;
+using UnityEditor.SceneManagement;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -13,49 +14,32 @@ namespace Feeder.MCP.Editor.API
         [AiTool
         (
             SceneCreateToolId,
-            Title = "Scene / Create"
+            Title = "Scene / Create",
+            Enabled = false
         )]
-        [AiSkillDescription("Create a new Unity scene asset and save it at the given `.unity` path. " +
-            "Use '" + Tool_Rql.QueryToolId + "' to inspect the resulting opened-scene set afterwards.")]
-        [AiSkillBody("Create new scene in the project assets. " +
-            "Use '" + Tool_Rql.QueryToolId + "' tool to list all opened scenes after creation.\n\n" +
-            "## Inputs\n\n" +
-            "- `path` — must end with `.unity`. Non-empty.\n" +
-            "- `newSceneSetup` (default `DefaultGameObjects`) — Unity's `NewSceneSetup` flag (`EmptyScene` or `DefaultGameObjects`).\n" +
-            "- `newSceneMode` (default `Single`) — `Single` closes other scenes, `Additive` keeps them open.\n\n" +
-            "## Behavior\n\n" +
-            "Calls `EditorSceneManager.NewScene` + `SaveScene(path)` on the main thread, repaints editor windows, " +
-            "and returns a `SceneDataShallow` for the newly created scene.")]
-        [Description("Create new scene in the project assets. " +
-            "Use '" + Tool_Rql.QueryToolId + "' tool to list all opened scenes after creation.")]
+        [AiSkillDescription("Create a new scene asset at a `.unity` path, without losing unsaved work in the scenes already open.")]
+        [AiSkillBody("## Inputs\n\n" +
+            "- `path` - new `.unity` path under `Assets/`; missing folders are created.\n" +
+            "- `newSceneSetup` (default `DefaultGameObjects`) - `EmptyScene` or `DefaultGameObjects`.\n" +
+            "- `newSceneMode` (default `Single`) - `Single` replaces the open scenes, `Additive` keeps them.\n" +
+            "- `ifDirty` (default `refuse`) - Single mode with unsaved scenes: `refuse`, `save` or `discard`.")]
+        [Description("Create and save a new scene asset. Returns the new scene.")]
         public SceneDataShallow Create
         (
-            [Description("Path to the scene file. Should end with \".unity\" extension.")]
+            [Description("New scene path, e.g. 'Assets/Scenes/Level2.unity'.")]
             string path,
-            UnityEditor.SceneManagement.NewSceneSetup? newSceneSetup = UnityEditor.SceneManagement.NewSceneSetup.DefaultGameObjects,
-            UnityEditor.SceneManagement.NewSceneMode? newSceneMode = UnityEditor.SceneManagement.NewSceneMode.Single
+            [Description("EmptyScene or DefaultGameObjects (default).")]
+            NewSceneSetup newSceneSetup = NewSceneSetup.DefaultGameObjects,
+            [Description("Single (default) replaces the open scenes; Additive keeps them.")]
+            NewSceneMode newSceneMode = NewSceneMode.Single,
+            [Description("Single mode with unsaved scenes: 'refuse' (default), 'save' or 'discard'.")]
+            string ifDirty = MxGuard.Refuse
         )
         {
+            var scene = Mx.NewScene(path, ifDirty, newSceneMode == NewSceneMode.Additive, newSceneSetup == NewSceneSetup.EmptyScene);
             return MainThread.Instance.Run(() =>
             {
-                if (string.IsNullOrEmpty(path))
-                    throw new System.Exception(Error.ScenePathIsEmpty());
-
-                if (!path.EndsWith(".unity"))
-                    throw new System.Exception(Error.FilePathMustEndsWithUnity());
-
-                // Create a new empty scene
-                var scene = UnityEditor.SceneManagement.EditorSceneManager.NewScene(
-                    newSceneSetup ?? UnityEditor.SceneManagement.NewSceneSetup.DefaultGameObjects,
-                    newSceneMode ?? UnityEditor.SceneManagement.NewSceneMode.Single);
-
-                // Save the scene asset at the specified path
-                bool saved = UnityEditor.SceneManagement.EditorSceneManager.SaveScene(scene, path);
-                if (!saved)
-                    throw new System.Exception($"Failed to save scene at '{path}'.\n{OpenedScenesText}");
-
                 EditorUtils.RepaintAllEditorWindows();
-
                 return scene.ToSceneDataShallow();
             });
         }

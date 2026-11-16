@@ -1,19 +1,15 @@
 #nullable enable
-using Feeder.MCP.Data;
-using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using System.Threading.Tasks;
-using Feeder.ToolHost;
-using Feeder.Reflect.Utils;
+using Feeder.ToolHost.Common.Model;
 using UnityEditor.PackageManager;
 
 namespace Feeder.MCP.Editor.API
 {
     public partial class Tool_Package
     {
-        [Description("Filter for package source in listing operations.")]
+        [Description("Filter for package source when listing installed packages.")]
         public enum PackageSourceFilter
         {
             [Description("Show all packages regardless of source.")]
@@ -38,88 +34,37 @@ namespace Feeder.MCP.Editor.API
             LocalTarball
         }
 
-        public const string PackageListToolId = "package-list";
-        [AiTool
-        (
-            PackageListToolId,
-            Title = "Package Manager / List Installed",
-            ReadOnlyHint = true,
-            IdempotentHint = true,
-            Enabled = false
-        )]
-        [AiSkillDescription("List all UPM packages installed in the Unity project — name, version, source, " +
-            "description. Optionally filter by source (registry, embedded, local, git, built-in, local tarball), " +
-            "by name/display/description substring, and by direct-dependency-only.")]
-        [AiSkillBody("List all packages installed in the Unity project (UPM packages). " +
-            "Returns information about each installed package including name, version, source, and description. " +
-            "Use this to check which packages are currently installed before adding or removing packages.\n\n" +
-            "## Inputs\n\n" +
-            "- `sourceFilter` (default `All`) — restrict by Unity `PackageSource`: `All`, `Registry`, `Embedded`, " +
-            "`Local`, `Git`, `BuiltIn`, `LocalTarball`.\n" +
-            "- `nameFilter` (optional) — case-insensitive substring filter over name / displayName / description. " +
-            "Results are prioritized: exact name → exact displayName → name substring → displayName substring → " +
-            "description substring.\n" +
-            "- `directDependenciesOnly` (default `false`) — when true, return only packages listed in `manifest.json` " +
-            "(no transitive dependencies).")]
-        [Description("List all packages installed in the Unity project (UPM packages). " +
-            "Returns information about each installed package including name, version, source, and description. " +
-            "Use this to check which packages are currently installed before adding or removing packages.")]
-        public async Task<List<PackageData>> List
-        (
-            [Description("Filter packages by source.")]
-            PackageSourceFilter sourceFilter = PackageSourceFilter.All,
-            [Description("Filter packages by name, display name, or description (case-insensitive). Results are prioritized: exact name match, exact display name match, name substring, display name substring, description substring.")]
-            string? nameFilter = null,
-            [Description("Include only direct dependencies (packages in manifest.json). If false, includes all resolved packages. Default: false")]
-            bool directDependenciesOnly = false
-        )
+        static ResponseCallTool FormatInstalled(IEnumerable<PackageInfo> packages, PackageSourceFilter sourceFilter, string? nameFilter)
         {
-            return await MainThread.Instance.RunAsync(async () =>
+            if (sourceFilter != PackageSourceFilter.All)
             {
-                var listRequest = Client.List(directDependenciesOnly);
-
-                while (!listRequest.IsCompleted)
-                    await Task.Yield();
-
-                if (listRequest.Status == StatusCode.Failure)
-                    throw new Exception(Error.PackageListFailed(listRequest.Error?.message ?? "Unknown error"));
-
-                var packages = listRequest.Result.AsEnumerable();
-
-                // Apply source filter
-                if (sourceFilter != PackageSourceFilter.All)
+                var unitySource = sourceFilter switch
                 {
-                    var unitySource = sourceFilter switch
-                    {
-                        PackageSourceFilter.Registry => PackageSource.Registry,
-                        PackageSourceFilter.Embedded => PackageSource.Embedded,
-                        PackageSourceFilter.Local => PackageSource.Local,
-                        PackageSourceFilter.Git => PackageSource.Git,
-                        PackageSourceFilter.BuiltIn => PackageSource.BuiltIn,
-                        PackageSourceFilter.LocalTarball => PackageSource.LocalTarball,
-                        _ => PackageSource.Unknown
-                    };
-                    if (unitySource != PackageSource.Unknown)
-                        packages = packages.Where(p => p.source == unitySource);
-                }
+                    PackageSourceFilter.Registry => PackageSource.Registry,
+                    PackageSourceFilter.Embedded => PackageSource.Embedded,
+                    PackageSourceFilter.Local => PackageSource.Local,
+                    PackageSourceFilter.Git => PackageSource.Git,
+                    PackageSourceFilter.BuiltIn => PackageSource.BuiltIn,
+                    PackageSourceFilter.LocalTarball => PackageSource.LocalTarball,
+                    _ => PackageSource.Unknown
+                };
+                if (unitySource != PackageSource.Unknown)
+                    packages = packages.Where(p => p.source == unitySource);
+            }
 
-                // Apply name filter with priority ordering
-                if (!string.IsNullOrEmpty(nameFilter))
-                {
-                    return packages
-                        .Select(p => (pkg: p, priority: GetSearchPriority(p.name, p.displayName, p.description, nameFilter!)))
-                        .Where(x => x.priority > 0)
-                        .OrderBy(x => x.priority)
-                        .ThenBy(x => x.pkg.name)
-                        .Select(x => PackageData.FromPackageInfo(x.pkg))
-                        .ToList();
-                }
-
-                return packages
-                    .OrderBy(p => p.name)
-                    .Select(PackageData.FromPackageInfo)
+            var ordered = string.IsNullOrEmpty(nameFilter)
+                ? packages.OrderBy(p => p.name).ToList()
+                : packages
+                    .Select(p => (pkg: p, priority: GetSearchPriority(p.name, p.displayName, p.description, nameFilter!)))
+                    .Where(x => x.priority > 0)
+                    .OrderBy(x => x.priority)
+                    .ThenBy(x => x.pkg.name)
+                    .Select(x => x.pkg)
                     .ToList();
-            }).Unwrap();
+
+            return ResponseCallTool.Success(ordered.Count == 0
+                ? "no installed packages match"
+                : string.Join("\n", ordered.Select(p => $"{p.name} {p.version} {p.source} | {p.displayName ?? p.name} | {TruncateDescription(p.description ?? string.Empty, 120)}")));
         }
     }
 }

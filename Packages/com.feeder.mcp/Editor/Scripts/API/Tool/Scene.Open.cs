@@ -1,11 +1,14 @@
 #nullable enable
+using System;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using Feeder.ToolHost;
 using Feeder.Reflect.Utils;
 using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Data;
-using Feeder.MCP.Runtime.Extensions;
+using UnityEditor;
+using UnityEditor.SceneManagement;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -15,47 +18,33 @@ namespace Feeder.MCP.Editor.API
         [AiTool
         (
             SceneOpenToolId,
-            Title = "Scene / Open"
+            Title = "Scene / Open",
+            Enabled = true
         )]
-        [AiSkillDescription("Open a Unity scene asset in Single or Additive mode. " +
-            "Returns the post-open list of all opened scenes. " +
-            "Use '" + Tool_Rql.QueryToolId + "' to locate the scene asset first.")]
-        [AiSkillBody("Open scene from the project asset file. " +
-            "Use '" + Tool_Rql.QueryToolId + "' tool to find the scene asset first.\n\n" +
-            "## Inputs\n\n" +
-            "- `sceneRef` — `AssetObjectRef` pointing at a `SceneAsset`. Throws if the asset cannot be resolved or " +
-            "is not a `SceneAsset`.\n" +
-            "- `loadSceneMode` (default `Single`):\n" +
-            "  - `Single` — closes the currently opened scenes and opens this one.\n" +
-            "  - `Additive` — keeps the currently opened scenes and opens this one alongside them.")]
-        [Description("Open scene from the project asset file. " +
-            "Use '" + Tool_Rql.QueryToolId + "' tool to find the scene asset first.")]
+        [AiSkillDescription("Open a scene asset in Single or Additive mode without losing unsaved work in the scenes already open. " +
+            "Returns the opened-scene list.")]
+        [AiSkillBody("## Inputs\n\n" +
+            "- `path` - scene asset path, for example `Assets/Scenes/Main.unity`.\n" +
+            "- `loadSceneMode` (default `Single`) - `Single` replaces the open scenes, `Additive` opens it next to them.\n" +
+            "- `ifDirty` (default `refuse`) - what Single mode does when an open scene has unsaved changes: " +
+            "`refuse` stops and lists those scenes, `save` saves them first, `discard` drops the changes.\n\n" +
+            "Refused in play mode. Opening a scene that is already open only makes it active.")]
+        [Description("Open a scene asset in Single or Additive mode. Returns the open scenes.")]
         public SceneDataShallow[] Open
         (
-            AssetObjectRef sceneRef,
-            [Description("Open scene mode. " +
-                "Single: closes the current scenes and opens a new one. " +
-                "Additive: keeps the current scene and opens additional one.")]
-            UnityEditor.SceneManagement.OpenSceneMode loadSceneMode = UnityEditor.SceneManagement.OpenSceneMode.Single
+            [Description("Scene asset path, e.g. 'Assets/Scenes/Main.unity'.")]
+            string path,
+            [Description("Single: replace the open scenes. Additive: open it next to them.")]
+            OpenSceneMode loadSceneMode = OpenSceneMode.Single,
+            [Description("Single mode with unsaved scenes: 'refuse' (default), 'save' or 'discard'.")]
+            string ifDirty = "refuse"
         )
         {
+            Mx.OpenScene(path, loadSceneMode, ifDirty);
             return MainThread.Instance.Run(() =>
             {
-                var sceneAsset = sceneRef.FindAssetObject<UnityEditor.SceneAsset>()
-                    ?? throw new System.ArgumentException($"Requested scene is not valid or not found.");
-
-                var scenePath = sceneAsset.GetAssetPath();
-
-                var sceneOpened = UnityEditor.SceneManagement.EditorSceneManager.OpenScene(scenePath, loadSceneMode);
-
-                if (!sceneOpened.IsValid())
-                    throw new System.Exception($"Failed to load scene at '{scenePath}'.\n{OpenedScenesText}");
-
                 EditorUtils.RepaintAllEditorWindows();
-
-                return OpenedScenes
-                    .Select(scene => scene.ToSceneDataShallow())
-                    .ToArray();
+                return OpenedScenes.Select(scene => scene.ToSceneDataShallow()).ToArray();
             });
         }
     }

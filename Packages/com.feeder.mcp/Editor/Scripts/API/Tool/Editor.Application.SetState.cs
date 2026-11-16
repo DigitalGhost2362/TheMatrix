@@ -20,48 +20,44 @@ namespace Feeder.MCP.Editor.API
             EditorApplicationSetStateToolId,
             Title = "Editor / Application / Set State",
             IdempotentHint = true,
-            Enabled = false
+            Enabled = true
         )]
-        [AiSkillDescription("Start / stop / pause the Unity Editor 'playmode'. " +
-            "Use '" + EditorApplicationGetStateToolId + "' to inspect the current state first. " +
-            "Throws if the project currently has compilation errors.")]
-        [AiSkillBody("Control the Unity Editor application state. " +
-            "You can start, stop, or pause the 'playmode'. " +
-            "Use '" + EditorApplicationGetStateToolId + "' tool to get the current state first.\n\n" +
-            "## Inputs\n\n" +
-            "- `isPlaying` (default `false`) — sets `EditorApplication.isPlaying`.\n" +
-            "- `isPaused` (default `false`) — sets `EditorApplication.isPaused`.\n\n" +
+        [AiSkillDescription("Enter, leave or pause play mode. Answers once the editor has reached the new state, domain reload included. " +
+            "Refuses to enter play mode while the project has compile errors.")]
+        [AiSkillBody("## Inputs\n\n" +
+            "- `isPlaying` (default `false`) - true enters play mode, false leaves it.\n" +
+            "- `isPaused` (optional) - true pauses, false resumes; leave it out to keep the current pause state.\n\n" +
             "## Behavior\n\n" +
-            "Refuses any state change while `EditorUtility.scriptCompilationFailed` is true — instead throws with " +
-            "the compilation error details so the caller can fix them first. Entering or leaving play mode answers " +
-            "only once the editor has reached the new state, domain reload included, so the next call can rely on it. " +
-            "Returns the `EditorStatsData` snapshot taken in the new state.")]
-        [Description("Control the Unity Editor application state. " +
-            "You can start, stop, or pause the 'playmode'. " +
-            "Use '" + EditorApplicationGetStateToolId + "' tool to get the current state first.")]
+            "Entering play mode is refused while `EditorUtility.scriptCompilationFailed` is true; the error lists the compile errors. " +
+            "Leaving play mode and pausing always work. A play mode change answers only once the editor has settled, " +
+            "so the next call can rely on it. Returns the `EditorStatsData` snapshot taken in the new state. " +
+            "`editor-health` reports the current phase (playing, paused, compiling) at any time.")]
+        [Description("Enter (isPlaying=true), leave (false) or pause play mode. Answers once the editor has settled. " +
+            "Entering is refused while there are compile errors.")]
         public ResponseCallTool SetApplicationState
         (
-            [Description("If true, the 'playmode' will be started. If false, the 'playmode' will be stopped.")]
+            [Description("True enters play mode, false leaves it.")]
             bool isPlaying = false,
-            [Description("If true, the 'playmode' will be paused. If false, the 'playmode' will be resumed.")]
-            bool isPaused = false,
+            [Description("True pauses, false resumes. Leave it out to keep the current pause state.")]
+            bool? isPaused = null,
             [RequestID]
             string? requestId = null
         )
         {
             return MainThread.Instance.Run(() =>
             {
-                if (UnityEditor.EditorUtility.scriptCompilationFailed)
+                if (isPlaying && !EditorApplication.isPlaying && UnityEditor.EditorUtility.scriptCompilationFailed)
                 {
                     var compilationErrorDetails = ScriptUtils.GetCompilationErrorDetails();
-                    throw new Exception($"Unity project has compilation error. Please fix all compilation errors before doing this operation.\n{compilationErrorDetails}");
+                    throw new Exception($"Unity project has compilation errors. Fix them before entering play mode.\n{compilationErrorDetails}");
                 }
                 if (isPlaying && !EditorApplication.isPlaying)
                     AgentActivity.MarkAgentPlay();
 
                 var changesPlayMode = EditorApplication.isPlayingOrWillChangePlaymode != isPlaying || EditorApplication.isPlaying != isPlaying;
                 EditorApplication.isPlaying = isPlaying;
-                EditorApplication.isPaused = isPaused;
+                if (isPaused.HasValue)
+                    EditorApplication.isPaused = isPaused.Value;
 
                 if (!changesPlayMode || string.IsNullOrWhiteSpace(requestId))
                     return PlayModeWait.Result(requestId);

@@ -3,40 +3,19 @@ using System.ComponentModel;
 using Feeder.ToolHost;
 using Feeder.Reflect.Utils;
 using UnityEditor;
+using UnityEditor.Animations;
+using UnityEngine;
 
 namespace Feeder.MCP.Editor.API
 {
     [AiToolType]
     public static partial class Tool_Animation
     {
-        public const string ClipCreateToolId = "animation-clip-create";
         public const string ClipGetToolId = "animation-clip-get";
         public const string ClipSetCurveToolId = "animation-clip-set-curve";
         public const string ClipSetEventsToolId = "animation-clip-set-events";
-        public const string ControllerCreateToolId = "animation-controller-create";
         public const string ControllerGetToolId = "animation-controller-get";
         public const string ControllerEditToolId = "animation-controller-edit";
-
-        [AiTool(ClipCreateToolId, Title = "Animation / Clip Create", Enabled = false)]
-        [AiSkillDescription("Create an empty AnimationClip asset (frame rate, loop).")]
-        [Description("Creates an empty AnimationClip asset. Fails when the path already exists. Add curves with 'animation-clip-set-curve'.")]
-        public static string ClipCreate
-        (
-            [Description("Asset path ending in .anim, e.g. 'Assets/Animations/Spin.anim'.")]
-            string path,
-            [Description("Frames per second. Default: 60")]
-            float frameRate = 60,
-            [Description("Loop the clip. Default: false")]
-            bool loop = false
-        )
-        {
-            var clean = AnimationEdit.CheckAssetPath(path, ".anim");
-            return MainThread.Instance.Run(() =>
-            {
-                var clip = AnimationEdit.CreateClip(clean, frameRate, loop);
-                return $"Created {clean} (frame_rate={clip.frameRate:0.###} loop={loop}).";
-            });
-        }
 
         [AiTool(ClipGetToolId, Title = "Animation / Clip Get", ReadOnlyHint = true, IdempotentHint = true, Enabled = false)]
         [AiSkillDescription("Read an AnimationClip: length, frame rate, loop, every curve (target path, component, property, keys) and events.")]
@@ -52,8 +31,9 @@ namespace Feeder.MCP.Editor.API
         }
 
         [AiTool(ClipSetCurveToolId, Title = "Animation / Clip Set Curve", Enabled = false)]
-        [AiSkillDescription("Set or remove one property curve of an AnimationClip from {time, value} keys (smooth, linear or constant).")]
-        [AiSkillBody("Sets (replaces) or removes the curve of one property on an AnimationClip.\n\n" +
+        [AiSkillDescription("Set or remove one float property curve of an AnimationClip from {time, value} keys (smooth, linear or constant). Creates the .anim when it does not exist.")]
+        [AiSkillBody("Sets (replaces) or removes the curve of one property on an AnimationClip. Creates the clip asset first when the path does not exist (`frameRate` and `loop` apply only then; an existing non-clip asset at the path is an error).\n\n" +
+            "Float curves only: object-reference curves (sprite swaps) are not handled; events go through animation-clip-set-events.\n\n" +
             "- `bindingPath` is the child path from the animated root, e.g. `Arm/Hand`; empty means the root itself.\n" +
             "- `componentType` is a type name such as `Transform`, `Light`, `SpriteRenderer`.\n" +
             "- `property` is the serialized property name: `m_LocalPosition.x`, `localEulerAnglesRaw.y`, `m_LocalScale.z`, `m_Intensity`, `m_IsActive` (on GameObject).\n" +
@@ -61,11 +41,11 @@ namespace Feeder.MCP.Editor.API
             "- `interpolation` is `smooth` (default), `linear` or `constant`.\n" +
             "- A property the component does not have is accepted (Unity allows it) but the result carries a `warning:` line.\n" +
             "- `remove=true` deletes the curve and needs no keys.\n\n" +
-            "Read the result back with `animation-clip-get`. The change is one Undo step.")]
-        [Description("Sets or removes a property curve on an AnimationClip. Keys are sorted by time; times must be unique and >= 0. Undo is recorded.")]
+            "Read the result back with `animation-clip-get`. The curve change is recorded in Undo; a clip created by this call is not removed by Undo.")]
+        [Description("Sets or removes a float property curve on an AnimationClip, creating the .anim if missing.")]
         public static string ClipSetCurve
         (
-            [Description("Asset path of the .anim file.")]
+            [Description("Asset path of the .anim file; created when missing.")]
             string path,
             [Description("Child path of the animated object from the animator root ('' = the root).")]
             string bindingPath,
@@ -78,14 +58,22 @@ namespace Feeder.MCP.Editor.API
             [Description("'smooth' (default), 'linear' or 'constant'.")]
             string? interpolation = null,
             [Description("Remove the curve instead of setting it. Default: false")]
-            bool remove = false
+            bool remove = false,
+            [Description("Only when the clip is created: frames per second. Default: 60")]
+            float frameRate = 60,
+            [Description("Only when the clip is created: loop the clip. Default: false")]
+            bool loop = false
         )
         {
             var clean = AnimationEdit.CheckAssetPath(path, ".anim");
             return MainThread.Instance.Run(() =>
             {
-                var clip = AnimationEdit.LoadClip(clean);
-                var count = AnimationEdit.SetCurve(clip, bindingPath, componentType, property, keys, interpolation, remove);
+                var prepared = AnimationEdit.PrepareCurve(bindingPath, componentType, property, keys, interpolation, remove);
+                var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(clean);
+                if (clip == null && remove)
+                    throw MxGuard.Fail($"No AnimationClip at '{clean}', so there is no curve to remove.");
+                var count = AnimationEdit.WriteCurve(clip ?? AnimationEdit.CreateClip(clean, frameRate, loop), prepared);
+                clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(clean);
                 var warning = remove ? null : AnimationEdit.PropertyWarning(AnimationEdit.ResolveType(componentType), property);
                 var text = remove
                     ? $"Removed {property} curve from {clean}."
@@ -113,23 +101,6 @@ namespace Feeder.MCP.Editor.API
             });
         }
 
-        [AiTool(ControllerCreateToolId, Title = "Animation / Controller Create", Enabled = false)]
-        [AiSkillDescription("Create an empty AnimatorController asset.")]
-        [Description("Creates an AnimatorController asset with one base layer. Fails when the path already exists.")]
-        public static string ControllerCreate
-        (
-            [Description("Asset path ending in .controller, e.g. 'Assets/Animations/Player.controller'.")]
-            string path
-        )
-        {
-            var clean = AnimationEdit.CheckAssetPath(path, ".controller");
-            return MainThread.Instance.Run(() =>
-            {
-                AnimationEdit.CreateController(clean);
-                return $"Created {clean}.";
-            });
-        }
-
         [AiTool(ControllerGetToolId, Title = "Animation / Controller Get", ReadOnlyHint = true, IdempotentHint = true, Enabled = false)]
         [AiSkillDescription("Read an AnimatorController: parameters, layers, states (motion, speed), transitions (conditions, exit time, duration), blend trees.")]
         [Description("Reads an AnimatorController: parameters, layers, states with their motion, and every transition with conditions.")]
@@ -145,7 +116,7 @@ namespace Feeder.MCP.Editor.API
 
         [AiTool(ControllerEditToolId, Title = "Animation / Controller Edit", Enabled = false)]
         [AiSkillDescription("Edit an AnimatorController with an ordered list of operations: parameters, layers, states, transitions with conditions, blend trees.")]
-        [AiSkillBody("Applies `operations` in order to an AnimatorController (one Undo step). It stops at the first failing operation and reports how many were applied; earlier ones stay.\n\n" +
+        [AiSkillBody("Applies `operations` in order to an AnimatorController, creating the .controller (with one base layer) first when the path does not exist. Undo covers the controller asset but not every sub-asset (states, transitions, blend trees), so do not rely on it to revert an edit completely. It stops at the first failing operation and reports how many were applied; earlier ones stay.\n\n" +
             "Operations (`op`):\n" +
             "- `add-parameter` name, type (Float|Int|Bool|Trigger), default\n" +
             "- `remove-parameter` name\n" +
@@ -157,17 +128,33 @@ namespace Feeder.MCP.Editor.API
             "Conditions: `Speed > 0.5`, `Speed < 1`, `Mode == 2`, `Mode != 2`, `Jump` (bool or trigger), `!Grounded`. " +
             "Add parameters before the conditions that use them. Omit `layer` for the base layer. Check with `animation-controller-get`.")]
         [Description("Edits an AnimatorController with ordered operations (add/remove parameter, layer, state; set default state; add transition; add blend tree). " +
-            "Stops at the first failing operation; undo is recorded as one step.")]
+            "Creates the controller when missing. Stops at the first failing operation; Undo does not fully cover sub-assets.")]
         public static string ControllerEdit
         (
-            [Description("Asset path of the .controller file.")]
+            [Description("Asset path of the .controller file; created when missing.")]
             string path,
             [Description("Operations, 1 to 200, applied in order.")]
             ControllerOp[] operations
         )
         {
             var clean = AnimationEdit.CheckAssetPath(path, ".controller");
-            return MainThread.Instance.Run(() => AnimationEdit.ApplyOps(AnimationEdit.LoadController(clean), operations));
+            AnimationEdit.CheckOps(operations);
+            return MainThread.Instance.Run(() =>
+            {
+                var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(clean);
+                var created = controller == null;
+                controller ??= AnimationEdit.CreateController(clean);
+                try
+                {
+                    return AnimationEdit.ApplyOps(controller, operations);
+                }
+                catch when (created)
+                {
+                    // a controller this call created is not left behind half-built
+                    AssetDatabase.DeleteAsset(clean);
+                    throw;
+                }
+            });
         }
     }
 }

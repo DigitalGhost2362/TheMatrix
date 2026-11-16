@@ -22,6 +22,8 @@ namespace Feeder.MCP.Editor.API
             ["tagmanager"] = "ProjectSettings/TagManager.asset",
         };
 
+        public const int MaxDepth = 6;
+
         public const string AreaList = "player, quality, physics, physics2d, time, editor, graphics, tagmanager";
 
         public static UnityEngine.Object LoadArea(string area)

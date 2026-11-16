@@ -30,7 +30,7 @@ of protocol design makes two play mode sessions coexist in one Editor process.
 | Console log stream | global | lane A sees lane B's exceptions and "fixes" the wrong bug |
 | Asset writes in disjoint folders | per-path | safe **if** the folders really are disjoint |
 | Pure reads (`*-find`, `*-get-data`) | — | safe |
-| `screenshot-isolated` / `screenshot-camera` | transient global (layers, lights) | needs a short lock, not a long lease |
+| `screenshot-isolated` / `screenshot-game-view` with `cameraRef` | transient global (layers, lights) | needs a short lock, not a long lease |
 
 ### 2.1 Gaps in the current implementation
 
@@ -122,8 +122,8 @@ agents overwriting each other's scripts, which no lock can prevent.
 ```
 
 Enforcement point: a `LaneWriteGate` check at the top of every mutating tool
-(`script-update-or-create`, `script-delete`, `rql-mutate`, `assets-move`, `assets-delete`,
-`gameobject-*`, `scene-save`, `package-*`). Outside `owns` ∪ `shared.writable`:
+(script file edits followed by `assets-refresh`, `rql-mutate`, `assets-move`, `assets-delete`,
+`serialized-set`, `scene-save`, `package-*`). Outside `owns` ∪ `shared.writable`:
 `writePolicy: "warn"` logs and proceeds, `"reject"` throws with the owning lane's name. Start with
 `warn`, flip to `reject` once the manifest is trustworthy.
 
@@ -143,9 +143,9 @@ enum EditorResource { None, Read, Write, Scene, Prefab, World }
 
 | Mode | Grants | Blocks |
 | --- | --- | --- |
-| `Read` (shared) | reads, `screenshot-isolated`, `screenshot-camera`, `console-get-logs` | nothing |
+| `Read` (shared) | reads, `screenshot-isolated`, `screenshot-game-view` with `cameraRef`, `console-get-logs` | nothing |
 | `Write` (exclusive vs `World`) | script/asset writes → compile → reload | `World` |
-| `Scene` (exclusive) | `scene-open`, `scene-save`, prefab stage, `gameobject-*` in scene | `Scene`, `World` |
+| `Scene` (exclusive) | `scene-open`, `scene-save`, prefab stage, `rql-mutate` in scene | `Scene`, `World` |
 | `World` (exclusive vs all) | play mode, `tests-run`, `screenshot-game-view` while playing | everything |
 
 Classification lives in `ToolResourceTable` — a `Dictionary<string, EditorResource>` keyed by the
@@ -177,7 +177,7 @@ sealed record Lease(string LeaseId, string LaneId, EditorResource Resource,
 The nastiest bug class today: lane `ui` saves a `.cs` file while lane `combat` is in play mode.
 Unity recompiles, domain-reloads, and `combat`'s run dies halfway with no explanation.
 
-Rule: **while a `World` lease is held, writes are queued, not applied.** `script-update-or-create`
+Rule: **while a `World` lease is held, writes are queued, not applied.** A script change (`assets-refresh`)
 returns `{ queued: true, position: n, appliesAfter: "vfy_7" }` immediately instead of blocking for
 30 s. The Arbiter flushes the queue as the first step of its next cycle — one compile for all
 queued writes from all lanes.
@@ -191,7 +191,7 @@ Reuse `MatrixSpaceReloadCoordinator`'s `LockReloadAssemblies()` so compilation m
   throw: `WORLD is held by lane 'combat' (job vfy_7, ~14s remaining). Use verify-submit instead of
   driving play mode directly.` This one change alone stops the worst corruption.
 - `screenshot-game-view` — while playing, requires the `World` lease; otherwise you capture another
-  lane's frame. Suggest `screenshot-camera` in the error.
+  lane's frame. Suggest `screenshot-game-view` with `cameraRef` in the error.
 - `tests-run` — requires `World`; the Arbiter is the normal caller.
 - `scene-open` / `scene-save` / `assets-prefab-open` — require `Scene`.
 
@@ -204,8 +204,8 @@ contention before any queueing happens:
 
 | Tier | Tools | Lease | Parallel? |
 | --- | --- | --- | --- |
-| `isolated` | `screenshot-isolated`, `screenshot-camera`, `ui-inspect-*` | `Read` | effectively yes |
-| `editor` | `screenshot-scene-view`, scene inspection | `Scene` | serialized, cheap (~1 s) |
+| `isolated` | `screenshot-isolated`, `screenshot-game-view` with `cameraRef`, `ui-inspect-*` | `Read` | effectively yes |
+| `editor` | `screenshot-editor-window` (`window=SceneView`), scene inspection | `Scene` | serialized, cheap (~1 s) |
 | `runtime` | play mode behaviour, physics, input, coroutines | `World` via job queue | batched |
 
 Lane `ui` assembling a Shop panel lives almost entirely in `isolated` — render the prefab
@@ -365,7 +365,7 @@ is slow.
    static state between jobs, and drivers declare what they touch. If a feature genuinely depends
    on domain-reload semantics, mark its job `requiresDomainReload: true` and the Arbiter gives it
    its own play mode entry.
-3. **Prefer `screenshot-camera` over `screenshot-game-view`.** Explicit `RenderTexture` render:
+3. **Prefer `screenshot-game-view` with `cameraRef` over the plain Game View read.** Explicit `RenderTexture` render:
    focus-independent, size-deterministic, no dependency on a Game View window existing or being
    unobscured.
 4. **A Game View must still exist and be reasonably sized** for any tool that reads it, and its
@@ -406,7 +406,7 @@ is slow.
 | `screenshot-game-view` | + lease check while playing |
 | `tests-run` | + `World` lease required |
 | `scene-open`, `scene-save`, `assets-prefab-open` | + `Scene` lease required |
-| `script-update-or-create`, `script-delete`, `assets-*`, `gameobject-*`, `package-*` | + write gate + `LaneWriteGate` |
+| `assets-refresh` (script changes), `assets-*`, `rql-mutate`, `package-*` | + write gate + `LaneWriteGate` |
 
 ## 12. Phased rollout
 

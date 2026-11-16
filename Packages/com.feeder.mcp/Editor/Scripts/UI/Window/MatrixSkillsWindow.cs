@@ -23,6 +23,8 @@ namespace Feeder.MCP.Editor.UI
 
         private const int FilterAll = 0;
         private const int FilterOn = 1;
+        private const int FilterUnused = 3;
+        private const int FilterOffCalled = 4;
         private const int SyncDelayMs = 1000;
         private const int RevealRows = 8;
         private const int RevealStepMs = 26;
@@ -33,18 +35,20 @@ namespace Feeder.MCP.Editor.UI
 
         private sealed class RowView
         {
-            public RowView(SkillInfo info, VisualElement root, Toggle toggle, VisualElement hint)
+            public RowView(SkillInfo info, VisualElement root, Toggle toggle, VisualElement hint, Label? usage)
             {
                 Info = info;
                 Root = root;
                 Toggle = toggle;
                 Hint = hint;
+                Usage = usage;
             }
 
             public SkillInfo Info { get; }
             public VisualElement Root { get; }
             public Toggle Toggle { get; }
             public VisualElement Hint { get; }
+            public Label? Usage { get; }
             public string HintKey { get; set; } = string.Empty;
         }
 
@@ -70,6 +74,7 @@ namespace Feeder.MCP.Editor.UI
         private readonly Dictionary<string, SkillInfo> _byName = new();
 
         private IReadOnlyList<SkillInfo> _infos = Array.Empty<SkillInfo>();
+        private IReadOnlyDictionary<string, ToolUsage> _usage = new Dictionary<string, ToolUsage>();
         private IToolManager? _manager;
         private SkillGroup? _selected;
         private string _query = string.Empty;
@@ -158,6 +163,7 @@ namespace Feeder.MCP.Editor.UI
             var core = root.Q<Button>("sk-core");
             var all = root.Q<Button>("sk-all");
             var setup = root.Q<Button>("sk-setup");
+            var usageRefresh = root.Q<Button>("sk-usage-refresh");
 
             if (off == null || groups == null || list == null || search == null || filterSlot == null || title == null || subtitle == null ||
                 sideCount == null || sync == null || syncDot == null || meter == null || meterFill == null || tickLean == null ||
@@ -193,7 +199,8 @@ namespace Feeder.MCP.Editor.UI
             _built = true;
             SetSync(false, "Skill files up to date");
 
-            var filter = new SegmentedControl("All", "On", "Off");
+            var filter = new SegmentedControl("All", "On", "Off", "Unused 30d", "Off, called");
+            filter.tooltip = "Unused 30d: candidates to turn off. Off, called: off, but agents reached them through tool-call; candidates to turn on.";
             filter.SetValueWithoutNotify(FilterAll);
             filter.RegisterCallback<ChangeEvent<int>>(OnFilterChanged);
             filterSlot.Add(filter);
@@ -206,6 +213,11 @@ namespace Feeder.MCP.Editor.UI
             all.clicked += OnAllClicked;
             setup.clicked -= OnSetupClicked;
             setup.clicked += OnSetupClicked;
+            if (usageRefresh != null)
+            {
+                usageRefresh.clicked -= OnUsageRefreshClicked;
+                usageRefresh.clicked += OnUsageRefreshClicked;
+            }
 
             Bind();
             Rebuild();
@@ -278,6 +290,7 @@ namespace Feeder.MCP.Editor.UI
 
             if (_manager != null)
             {
+                LoadUsage();
                 _infos = SkillCatalog.Build(_manager.GetAllTools().Select(Facts), CoreNames);
                 _totalTokens = _infos.Sum(info => info.Tokens);
                 foreach (var info in _infos)
@@ -378,6 +391,7 @@ namespace Feeder.MCP.Editor.UI
             var hint = root?.Q<VisualElement>("sk-row-hint");
             var cost = root?.Q<Label>("sk-row-cost");
             var toggle = root?.Q<Toggle>("sk-row-toggle");
+            var usage = root?.Q<Label>("sk-row-usage");
             if (root == null || title == null || id == null || core == null || risk == null || desc == null || hint == null || cost == null || toggle == null)
             {
                 Logger.LogError("{method} SkillRow.uxml is missing .sk-row or one of its elements.", nameof(CreateRow));
@@ -397,7 +411,8 @@ namespace Feeder.MCP.Editor.UI
             title.tooltip = tooltip;
             desc.tooltip = tooltip;
 
-            var view = new RowView(info, root, toggle, hint);
+            var view = new RowView(info, root, toggle, hint, usage);
+            ShowUsage(view);
             toggle.userData = view;
             toggle.RegisterValueChangedCallback(OnToggled);
             return view;
@@ -452,7 +467,7 @@ namespace Feeder.MCP.Editor.UI
                 var info = row.Info;
                 var show = manager != null &&
                            (_selected == null || info.Group == _selected) &&
-                           (_filter == FilterAll || (_filter == FilterOn) == manager.IsToolEnabled(info.Name)) &&
+                           MatchesFilter(info.Name, manager) &&
                            words.All(word => info.SearchText.Contains(word));
                 row.Root.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
                 if (!show)
@@ -470,6 +485,50 @@ namespace Feeder.MCP.Editor.UI
             _list.scrollOffset = Vector2.zero;
             if (reveal)
                 Reveal(visible);
+        }
+
+        private bool MatchesFilter(string name, IToolManager manager)
+        {
+            _usage.TryGetValue(name, out var usage);
+            return _filter switch
+            {
+                FilterAll => true,
+                FilterUnused => usage == null || usage.Calls30 == 0,
+                FilterOffCalled => !manager.IsToolEnabled(name) && usage != null && usage.ViaToolCall30 > 0,
+                _ => (_filter == FilterOn) == manager.IsToolEnabled(name),
+            };
+        }
+
+        // read once per open or Refresh click, never per frame
+        private void LoadUsage()
+        {
+            try
+            {
+                _usage = ToolUsageStats.Load(MatrixPluginEditor.ProjectRootPath, DateTimeOffset.UtcNow);
+            }
+            catch (Exception e)
+            {
+                Logger.LogWarning("{method} could not read the tool usage file: {error}", nameof(LoadUsage), e.Message);
+                _usage = new Dictionary<string, ToolUsage>();
+            }
+        }
+
+        private void ShowUsage(RowView row)
+        {
+            if (row.Usage == null)
+                return;
+            _usage.TryGetValue(row.Info.Name, out var usage);
+            row.Usage.text = ToolUsageStats.Describe(usage, DateTimeOffset.UtcNow);
+            row.Usage.tooltip = usage == null ? "No call in the last 30 days." :
+                $"{usage.Calls30} calls in 30 days, {usage.Errors30} failed or timed out, {usage.ViaToolCall30} through tool-call.";
+        }
+
+        private void OnUsageRefreshClicked()
+        {
+            LoadUsage();
+            foreach (var row in _rows)
+                ShowUsage(row);
+            ApplyFilter(false);
         }
 
         private static void Reveal(List<VisualElement> rows)

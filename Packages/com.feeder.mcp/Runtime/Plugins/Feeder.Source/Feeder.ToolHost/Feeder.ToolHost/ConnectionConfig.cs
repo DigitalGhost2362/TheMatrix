@@ -23,6 +23,9 @@ public class ConnectionConfig
 
 	public virtual string SkillsPath { get; set; } = "SKILLS";
 
+	// tools that get a SKILL.md of their own when enabled; null writes one for every enabled tool
+	public virtual List<string>? SkillTools { get; set; }
+
 	[JsonIgnore]
 	public string? ProjectRootPath { get; set; }
 

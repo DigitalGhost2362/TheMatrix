@@ -18,69 +18,49 @@ namespace Feeder.MCP.Editor.API
             Title = "Assets / Copy",
             Enabled = false
         )]
-        [AiSkillDescription("Copy assets at given paths and store them at new paths. " +
-            "Refreshes the AssetDatabase at the end. " +
-            "Use '" + Tool_Rql.QueryToolId + "' to locate the source assets first.")]
-        [AiSkillBody("Copy assets at given paths and store them at new paths. " +
-            "Does AssetDatabase.Refresh() at the end. " +
-            "Use '" + Tool_Rql.QueryToolId + "' tool to find assets before copying.\n\n" +
-            "## Inputs\n\n" +
-            "- `sourcePaths` — paths of the assets to copy.\n" +
-            "- `destinationPaths` — paths to store the copied assets (must match `sourcePaths` length).\n\n" +
-            "## Behavior\n\n" +
-            "Each source/destination pair is copied in order. Per-pair errors are accumulated in the response " +
-            "instead of throwing, so a single bad pair does not abort the whole batch.")]
-        [Description("Copy assets at given paths and store them at new paths. " +
-            "Does AssetDatabase.Refresh() at the end. " +
-            "Use '" + Tool_Rql.QueryToolId + "' tool to find assets before copying.")]
+        [AiSkillDescription("Copy assets to new paths under Assets/. Each pair succeeds or fails on its own.")]
+        [AiSkillBody("- `sourcePaths` - assets to copy (under `Assets/` or `Packages/`).\n" +
+            "- `destinationPaths` - new paths under `Assets/`, one per source; an existing file is never overwritten.\n\n" +
+            "A bad pair is reported in `Errors` and the others still run.")]
+        [Description("Copy assets to new paths under Assets/ (pairs by index). Returns the copies and per-pair errors.")]
         public CopyAssetsResponse Copy
         (
             [Description("The paths of the assets to copy.")]
             string[] sourcePaths,
-            [Description("The paths to store the copied assets.")]
+            [Description("The new paths, one per source, under Assets/.")]
             string[] destinationPaths
         )
         {
+            CheckPairs(sourcePaths, destinationPaths);
             return MainThread.Instance.Run(() =>
             {
-                if (sourcePaths.Length == 0)
-                    throw new System.Exception(Error.SourcePathsArrayIsEmpty());
-
-                if (sourcePaths.Length != destinationPaths.Length)
-                    throw new System.Exception(Error.SourceAndDestinationPathsArrayMustBeOfTheSameLength());
-
                 var response = new CopyAssetsResponse();
-
                 for (var i = 0; i < sourcePaths.Length; i++)
                 {
-                    var sourcePath = sourcePaths[i];
-                    var destinationPath = destinationPaths[i];
-
-                    if (string.IsNullOrEmpty(sourcePath) || string.IsNullOrEmpty(destinationPath))
+                    try
                     {
-                        response.Errors ??= new();
-                        response.Errors.Add(Error.SourceOrDestinationPathIsEmpty());
-                        continue;
+                        var source = MxGuard.ReadableAssetPath(sourcePaths[i]);
+                        var destination = MxGuard.NotExisting(MxGuard.AssetPath(destinationPaths[i]));
+                        if (!AssetDatabase.CopyAsset(source, destination))
+                            throw MxGuard.Fail($"Unity failed to copy '{source}' to '{destination}'. Check that the source exists.");
+                        (response.CopiedAssets ??= new List<AssetObjectRef>()).Add(new AssetObjectRef(AssetDatabase.LoadMainAssetAtPath(destination)));
                     }
-                    if (!AssetDatabase.CopyAsset(sourcePath, destinationPath))
+                    catch (ToolCallerException e)
                     {
-                        response.Errors ??= new();
-                        response.Errors.Add($"Failed to copy asset from {sourcePath} to {destinationPath}.");
-                        continue;
+                        (response.Errors ??= new List<string>()).Add(e.Message);
                     }
-                    var newAssetType = AssetDatabase.GetMainAssetTypeAtPath(destinationPath);
-                    var newAsset = AssetDatabase.LoadAssetAtPath(destinationPath, newAssetType);
-
-                    response.CopiedAssets ??= new();
-                    response.CopiedAssets.Add(new AssetObjectRef(newAsset));
                 }
-
-                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
                 EditorUtils.RepaintAllEditorWindows();
-
                 return response;
             });
         }
 
+        static void CheckPairs(string[]? sources, string[]? destinations)
+        {
+            if (sources == null || sources.Length == 0)
+                throw MxGuard.Fail("'sourcePaths' is empty. Pass at least one asset path, e.g. ['Assets/A.mat'].");
+            if (destinations == null || destinations.Length != sources.Length)
+                throw MxGuard.Fail($"'destinationPaths' must have one path per source ({sources.Length}); got {destinations?.Length ?? 0}.");
+        }
     }
 }

@@ -17,8 +17,8 @@ namespace Feeder.MCP.Editor.Tests.Tools
 {
     public sealed class EditorToolFixesTests
     {
-        const string TempBaseScenePath = "Assets/__MatrixSceneUnloadBase.unity";
-        const string TempScenePath = "Assets/__MatrixSceneUnloadTest.unity";
+        const string TempBaseScenePath = MxTestScene.Folder + "/UnloadBase.unity";
+        const string TempScenePath = MxTestScene.Folder + "/UnloadTest.unity";
 
         [Test]
         public void TestFilter_NamespaceAndClass_AreAndedInOneGroupPattern()
@@ -46,6 +46,7 @@ namespace Feeder.MCP.Editor.Tests.Tools
         [UnityTest]
         public IEnumerator SceneUnload_EditMode_ClosesAdditiveScene()
         {
+            MxTestScene.EnsureFolder();
             try
             {
                 // an untitled scene blocks additive scene creation, so the base scene is saved first
@@ -64,8 +65,7 @@ namespace Feeder.MCP.Editor.Tests.Tools
             finally
             {
                 EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-                AssetDatabase.DeleteAsset(TempScenePath);
-                AssetDatabase.DeleteAsset(TempBaseScenePath);
+                AssetDatabase.DeleteAsset(MxTestScene.Folder);
             }
         }
     }

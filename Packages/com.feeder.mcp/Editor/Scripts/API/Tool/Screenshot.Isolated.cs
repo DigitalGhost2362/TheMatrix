@@ -33,17 +33,17 @@ namespace Feeder.MCP.Editor.API
 
         public enum CameraView
         {
-            [Description("Camera faces the object's forward side (-Z). Standard front view.")]
+            [Description("Camera sits on the world -Z side of the object and looks along +Z. Standard front view.")]
             Front,
-            [Description("Camera faces the object's rear side (+Z).")]
+            [Description("Camera sits on the world +Z side of the object.")]
             Back,
-            [Description("Camera faces the object's left side (-X).")]
+            [Description("Camera sits on the world -X side of the object.")]
             Left,
-            [Description("Camera faces the object's right side (+X).")]
+            [Description("Camera sits on the world +X side of the object.")]
             Right,
-            [Description("Camera looks down at the object from above (+Y).")]
+            [Description("Camera looks down at the object from world +Y.")]
             Top,
-            [Description("Camera looks up at the object from below (-Y).")]
+            [Description("Camera looks up at the object from world -Y.")]
             Bottom,
             [Description("Produces a single 2x2 grid image with Front, Right, Back, and Top views. "
                        + "Each sub-view uses the specified resolution, so final image is resolution*2 x resolution*2.")]
@@ -88,7 +88,7 @@ namespace Feeder.MCP.Editor.API
             Title = "Screenshot / Isolated GameObject",
             ReadOnlyHint = true,
             IdempotentHint = true,
-            Enabled = true
+            Enabled = false
         )]
         [AiSkillDescription("Render a target GameObject from a chosen camera angle with optional layer-based " +
             "isolation, configurable background (solid/skybox/transparent), multi-light setup via JSON, Composite " +
@@ -102,7 +102,7 @@ namespace Feeder.MCP.Editor.API
                    + "the existing scene state is rendered as-is without activating inactive objects. Supports "
                    + "custom multi-light setups via JSON. Returns a base64-encoded PNG.\n\n" +
             "## Camera views\n\n" +
-            "`Front` (-Z), `Back` (+Z), `Left` (-X), `Right` (+X), `Top` (+Y), `Bottom` (-Y). " +
+            "World axes, not the object's own forward: `Front` (-Z), `Back` (+Z), `Left` (-X), `Right` (+X), `Top` (+Y), `Bottom` (-Y). Framing fits the bounding sphere, so `padding` 1.0 is not a tight fit. " +
             "`Composite` produces a single 2x2 image (Front, Right, Back, Top) where each sub-view uses the requested " +
             "`resolution`, so the final image is `resolution*2 x resolution*2`. `Surround` produces one 3x2 contact sheet (Front, Right, Back / Left, Top, Bottom) " +
             "so a single image shows the object from all sides.\n\n" +
@@ -142,7 +142,7 @@ namespace Feeder.MCP.Editor.API
             BackgroundMode? backgroundMode = BackgroundMode.SolidColor,
             [Description("Hex background color (e.g. '#404040'). Only used when backgroundMode is SolidColor.")]
             string? backgroundColor = "#404040",
-            [Description("Camera angle relative to the target object's bounding box. Default: Front.")]
+            [Description("Camera angle on world axes (not the object's own rotation), aimed at the object's bounding box. Default: Front.")]
             CameraView? cameraView = CameraView.Front,
             [Description("Camera vertical field of view in degrees. Default: 60.")]
             float? fieldOfView = 60f,
@@ -150,7 +150,7 @@ namespace Feeder.MCP.Editor.API
             float? nearClipPlane = 0.01f,
             [Description("Camera far clip plane distance. Default: 1000.")]
             float? farClipPlane = 1000f,
-            [Description("Framing multiplier around the object. 1.0 = tight fit, 1.5 = 50% extra space. Default: 1.2.")]
+            [Description("Framing multiplier around the object. Frames the object's bounding sphere, so a box leaves slack at 1.0; 1.5 = 50% more distance. Default: 1.2.")]
             float? padding = 1.2f,
             [Description("JSON array of light configurations. Each object defines type, color, intensity, "
                        + "rotation, position, range, spotAngle, shadows, etc. "

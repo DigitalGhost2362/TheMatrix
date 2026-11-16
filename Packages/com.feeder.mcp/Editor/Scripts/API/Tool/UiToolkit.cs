@@ -1,24 +1,28 @@
 #nullable enable
 using System;
 using System.IO;
+using System.Linq;
 using Feeder.ToolHost;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Feeder.MCP.Editor.API
 {
     [AiToolType]
     public partial class Tool_UiToolkit
     {
-        internal static string RequireAssetPath(string? path, params string[] extensions)
+        internal static PanelSettings NewPanelSettings()
         {
-            var p = (path ?? string.Empty).Trim().Replace('\\', '/');
-            if (p.Length == 0)
-                throw new ArgumentException("path is required.");
-            if (!(p.StartsWith("Assets/", StringComparison.Ordinal) || p.StartsWith("Packages/", StringComparison.Ordinal)) || p.Contains("../"))
-                throw new ArgumentException($"path '{p}' must start with 'Assets/' (or a writable 'Packages/' folder) and must not contain '..'.");
-            var ext = Path.GetExtension(p);
-            if (extensions.Length > 0 && Array.FindIndex(extensions, e => string.Equals(e, ext, StringComparison.OrdinalIgnoreCase)) < 0)
-                throw new ArgumentException($"path '{p}' must end with {string.Join(" or ", extensions)}.");
-            return p;
+            var settings = ScriptableObject.CreateInstance<PanelSettings>();
+            var theme = AssetDatabase.FindAssets("t:ThemeStyleSheet")
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .OrderByDescending(p => p.IndexOf("DefaultRuntimeTheme", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Select(AssetDatabase.LoadAssetAtPath<ThemeStyleSheet>)
+                .FirstOrDefault(t => t != null);
+            if (theme != null)
+                settings.themeStyleSheet = theme;
+            return settings;
         }
     }
 }

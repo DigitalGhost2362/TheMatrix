@@ -36,14 +36,17 @@ namespace Feeder.MCP.Editor
 
         internal static readonly string[] CoreTools =
         {
+            "script-execute",
+            "console-get-logs",
+            "assets-refresh",
+            "editor-application-set-state",
+            "screenshot-game-view",
+            "scene-open",
+            "scene-save",
+            "menu-execute",
+            "rql-query",
             "unity-tool-list",
             "tool-set-enabled-state",
-            "rql-query",
-            "rql-schema",
-            "console-get-logs",
-            "editor-application-get-state",
-            "screenshot-game-view",
-            "assets-refresh",
         };
 
         internal static readonly (string name, string plan)[] Steps =

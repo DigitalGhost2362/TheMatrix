@@ -36,7 +36,7 @@ namespace Feeder.MCP.Editor.API
         (
             [Description("Scene paths such as 'Assets/Scenes/Main.unity'. Default: the enabled scenes of the Build Settings.")]
             string[]? scenes = null,
-            [Description("Output file or folder, project-relative or absolute. Default: Builds/<target>/<product name>. Never inside Assets, Packages, ProjectSettings or Library. A missing .exe/.app/.apk extension is added.")]
+            [Description("Output file or folder, project-relative or absolute. Default: Builds/<target>/<product name>. A missing .exe/.app/.apk extension is added.")]
             string? outputPath = null,
             [Description("A BuildTarget name (StandaloneWindows64, StandaloneOSX, StandaloneLinux64, Android, iOS, WebGL...). Default: the active build target.")]
             string? target = null,

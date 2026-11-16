@@ -19,13 +19,15 @@ Inspector or in `Tools/Feeder/Matrix Bridge/VFX Studio (Experimental)`; you read
 | Tool | Use | Cost |
 |---|---|---|
 | `vfx-texture` | create/list procedural textures | text |
-| `vfx-apply` | create or patch a prefab from a spec, returns version + stats | text (image only with `preview=sheet`) |
-| `vfx-read` | current prefab as compact spec (non-defaults only) | text |
+| `vfx-apply` | create or patch from a spec on a prefab (`path`, returns version + stats) or a scene object (`target`, undoable, not saved, no version/preview); exactly one of the two | text (image only with `preview=sheet`, prefab only) |
+| `vfx-read` | current prefab (`path`) or scene object (`target`) as compact spec (non-defaults only) | text |
 | `vfx-preview` | stats + one contact sheet (8 cells, labelled times) | ~1k tokens image, `statsOnly` = text |
 | `vfx-history` | list / score / restore versions | text |
 
 They ship disabled. Enable once: `tool-set-enabled-state` with
 `vfx-apply, vfx-read, vfx-preview, vfx-texture, vfx-history`.
+
+To play, stop or simulate a live scene effect use `script-execute` (`ParticleSystem.Play/Stop/Simulate`).
 
 ## The loop
 

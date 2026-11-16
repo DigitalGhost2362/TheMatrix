@@ -16,7 +16,8 @@ namespace Feeder.MCP.Editor.API
         [AiTool
         (
             AssetsPrefabCloseToolId,
-            Title = "Assets / Prefab / Close"
+            Title = "Assets / Prefab / Close",
+            Enabled = false
         )]
         [AiSkillDescription("Close the currently opened prefab edit stage. " +
             "Optionally saves changes back to the prefab asset before closing. " +
@@ -35,8 +36,10 @@ namespace Feeder.MCP.Editor.API
             "Use '" + AssetsPrefabOpenToolId + "' tool to open a prefab first.")]
         public AssetObjectRef Close
         (
-            [Description("True to save prefab. False to discard changes.")]
-            bool save = true
+            [Description("True to save prefab. False to leave without saving.")]
+            bool save = true,
+            [Description("With save=false and unsaved changes: true drops them. Default false refuses.")]
+            bool discard = false
         )
         {
             return MainThread.Instance.Run(() =>
@@ -50,6 +53,8 @@ namespace Feeder.MCP.Editor.API
                     throw new InvalidOperationException(Error.PrefabStageIsNotOpened());
 
                 var assetPath = prefabStage.assetPath;
+                if (!save && !discard && prefabStage.scene.isDirty)
+                    throw MxGuard.Fail($"The prefab stage of '{assetPath}' has unsaved changes. Call again with save=true to keep them, or discard=true to drop them.");
 
                 if (save)
                 {

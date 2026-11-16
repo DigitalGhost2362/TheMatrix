@@ -24,12 +24,12 @@ namespace Feeder.MCP.Editor.API
             "trigger a domain reload — the final result is delivered after the reload via the request's `requestId`. " +
             "Built-in packages and packages that are dependencies of others cannot be removed. " +
             "Removing a package whose API is used by project code breaks compilation — check usages with '" +
-            PackageListToolId + "' (and search the codebase) first.")]
+            PackageSearchToolId + "' with installedOnly=true (and search the codebase) first.")]
         [AiSkillBody("Remove (uninstall) a package from the Unity project. " +
             "This removes the package from the project's manifest.json and triggers package resolution. " +
             "Note: Built-in packages and packages that are dependencies of other installed packages cannot be removed. " +
             "Note: Package removal may trigger a domain reload. The result will be sent after the reload completes. " +
-            "Use '" + PackageListToolId + "' tool to list installed packages first.\n\n" +
+            "Use '" + PackageSearchToolId + "' with installedOnly=true to list installed packages first.\n\n" +
             "## Warning\n\n" +
             "If project code uses APIs from the removed package, compilation breaks until that code is migrated. " +
             "Confirm the package is unused (or that you are ready to fix the fallout) before removing.\n\n" +
@@ -44,10 +44,10 @@ namespace Feeder.MCP.Editor.API
             "This removes the package from the project's manifest.json and triggers package resolution. " +
             "Note: Built-in packages and packages that are dependencies of other installed packages cannot be removed. " +
             "Note: Package removal may trigger a domain reload. The result will be sent after the reload completes. " +
-            "Use '" + PackageListToolId + "' tool to list installed packages first.")]
+            "Use '" + PackageSearchToolId + "' with installedOnly=true to list installed packages first.")]
         public static ResponseCallTool Remove
         (
-            [Description("The ID of the package to remove. Example: 'com.unity.textmeshpro'. Do not include version number.")]
+            [Description("The ID of the package to remove. Example: 'com.unity.textmeshpro'.")]
             string packageId,
             [RequestID]
             string? requestId = null
@@ -72,6 +72,16 @@ namespace Feeder.MCP.Editor.API
                 var listRequest = Client.List(offlineMode: true);
                 while (!listRequest.IsCompleted)
                     await Task.Yield();
+
+                if (listRequest.Status == StatusCode.Failure)
+                {
+                    _ = MatrixPluginEditor.NotifyToolRequestCompleted(new RequestToolCompletedData
+                    {
+                        RequestId = requestId,
+                        Result = ResponseCallTool.Error(Error.PackageListFailed(listRequest.Error?.message ?? "Unknown error")).SetRequestID(requestId)
+                    });
+                    return;
+                }
 
                 if (listRequest.Status == StatusCode.Success)
                 {

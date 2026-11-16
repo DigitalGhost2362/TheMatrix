@@ -17,7 +17,7 @@ Baseline measured 2026-07-10 against the earlier server ("previous local"), Unit
 | `prompts/list`, `prompts/get` | Advertised; currently returns empty list | Implement; empty list parity today |
 | `resources/list`, `resources/read`, templates | Advertised; currently returns empty lists | Implement; empty list parity today |
 | Session init | p50 4.0 ms / p95 8.3 ms (new session per iter) | ≤ baseline |
-| Long-running tools | `script-update-or-create`, `package-add/remove`, `tests-run`, `assets-refresh` return Processing and complete after compile/domain reload (100 ms polling loop in the previous server) | Processing is reported as deferred and gets `DeferredToolTimeout`; time with the link down does not count; a tool may ask for more time (FMP section 8) |
+| Long-running tools | `package-add/remove`, `tests-run`, `assets-refresh` return Processing and complete after compile/domain reload (100 ms polling loop in the previous server) | Processing is reported as deferred and gets `DeferredToolTimeout`; time with the link down does not count; a tool may ask for more time (FMP section 8) |
 | Error format | JSON-RPC error objects; tool failures as `isError: true` results | Byte-compatible mapping (FMP §4) |
 
 ## Tool inventory (25 exposed via `tools/list`)

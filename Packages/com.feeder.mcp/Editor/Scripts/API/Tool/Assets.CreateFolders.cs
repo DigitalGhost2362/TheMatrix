@@ -2,6 +2,7 @@
 using Feeder.MCP.Data;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using Feeder.ToolHost;
 using Feeder.Reflect.Utils;
 using Feeder.MCP.Editor.Utils;
@@ -11,12 +12,10 @@ namespace Feeder.MCP.Editor.API
 {
     public partial class Tool_Assets
     {
-        // Cross-platform invalid file name characters.
-        // Path.GetInvalidFileNameChars() is OS-dependent (Linux/Mac only returns '/' and '\0'),
-        // but Unity projects must be portable across all platforms.
+        // fixed set, not Path.GetInvalidFileNameChars(): that one is OS-dependent and projects move between platforms
         public static readonly char[] InvalidFileNameChars = new[]
         {
-            '/', '\\', '<', '>', ':', '"', '|', '?', '*',
+            '\\', '<', '>', ':', '"', '|', '?', '*',
             '\0', '\x01', '\x02', '\x03', '\x04', '\x05', '\x06', '\x07',
             '\x08', '\x09', '\x0A', '\x0B', '\x0C', '\x0D', '\x0E', '\x0F',
             '\x10', '\x11', '\x12', '\x13', '\x14', '\x15', '\x16', '\x17',
@@ -30,94 +29,44 @@ namespace Feeder.MCP.Editor.API
             Title = "Assets / Create Folder",
             Enabled = false
         )]
-        [AiSkillDescription("Create a new folder under a parent folder inside 'Assets/'. " +
-            "The parent path must start with 'Assets/' and every intermediate folder in it must already exist. " +
-            "Refreshes the AssetDatabase at the end and returns the GUID(s) of the created folder(s).")]
-        [AiSkillBody("Creates a new folder in the specified parent folder. " +
-            "The parent folder string must start with the 'Assets' folder, and all folders within the parent folder string must already exist. " +
-            "For example, when specifying 'Assets/ParentFolder1/ParentFolder2/', the new folder will be created in 'ParentFolder2' only if ParentFolder1 and ParentFolder2 already exist. " +
-            "Use it to organize scripts and assets in the project. " +
-            "Does AssetDatabase.Refresh() at the end. " +
-            "Returns the GUID of the newly created folder, if successful.\n\n" +
-            "## Inputs\n\n" +
-            "- `inputs` — list of `{ParentFolderPath, NewFolderName}` entries. Each entry is processed independently; " +
-            "per-entry errors are collected in the response so a single bad input does not abort the batch.\n\n" +
-            "## Validation\n\n" +
-            "- `NewFolderName` must be non-empty and must not contain any of `/`, `\\`, `<`, `>`, `:`, `\"`, `|`, `?`, `*`, or control characters (these checks are cross-platform even on Linux/Mac).\n" +
-            "- `ParentFolderPath` must already exist as an `AssetDatabase.IsValidFolder` path.\n" +
-            "- A folder with the same target name must not already exist under the parent.")]
-        [Description("Creates a new folder in the specified parent folder. " +
-            "The parent folder string must start with the 'Assets' folder, and all folders within the parent folder string must already exist. " +
-            "For example, when specifying 'Assets/ParentFolder1/ParentFolder2/', the new folder will be created in 'ParentFolder2' only if ParentFolder1 and ParentFolder2 already exist. " +
-            "Use it to organize scripts and assets in the project. " +
-            "Does AssetDatabase.Refresh() at the end. " +
-            "Returns the GUID of the newly created folder, if successful.")]
+        [AiSkillDescription("Create folders under Assets/, including every missing level ('A/B/C'). Returns their GUIDs.")]
+        [AiSkillBody("- `inputs` - `{ParentFolderPath, NewFolderName}` entries; `NewFolderName` may be nested (`A/B/C`) and missing parents are created.\n\n" +
+            "An existing target folder is reported in `Errors`. Each entry succeeds or fails on its own.")]
+        [Description("Create folders under Assets/, with every missing level. Returns the new folders' GUIDs and per-entry errors.")]
         public CreateFolderResponse CreateFolders
         (
-            [Description("The paths for the folders to create.")]
+            [Description("Folders to create: {ParentFolderPath, NewFolderName}; the name may be nested, e.g. 'A/B'.")]
             CreateFolderInput[] inputs
         )
         {
+            if (inputs == null || inputs.Length == 0)
+                throw MxGuard.Fail("'inputs' is empty. Pass e.g. [{\"ParentFolderPath\":\"Assets\",\"NewFolderName\":\"Art/Icons\"}].");
             return MainThread.Instance.Run(() =>
             {
-                if (inputs.Length == 0)
-                    throw new System.Exception("The input array is empty.");
-
                 var response = new CreateFolderResponse();
-
                 foreach (var input in inputs)
                 {
-                    if (string.IsNullOrWhiteSpace(input.NewFolderName))
+                    try
                     {
-                        response.Errors ??= new();
-                        response.Errors.Add($"Cannot create folder in '{input.ParentFolderPath}': folder name is empty or whitespace.");
-                        continue;
+                        var name = MxGuard.NotEmpty(input.NewFolderName, "NewFolderName", "Icons").Trim('/');
+                        var bad = name.IndexOfAny(InvalidFileNameChars);
+                        if (bad >= 0)
+                            throw MxGuard.Fail($"Folder name '{name}' contains the invalid character '{name[bad]}'.");
+                        var target = MxGuard.AssetPath((input.ParentFolderPath ?? string.Empty).TrimEnd('/') + "/" + name);
+                        if (AssetDatabase.IsValidFolder(target))
+                            throw MxGuard.Fail($"'{target}' already exists.");
+                        Mx.EnsureFolder(target);
+                        (response.CreatedFolderGuids ??= new List<string>()).Add(AssetDatabase.AssetPathToGUID(target));
                     }
-
-                    var invalidIndex = input.NewFolderName.IndexOfAny(InvalidFileNameChars);
-                    if (invalidIndex >= 0)
+                    catch (ToolCallerException e)
                     {
-                        response.Errors ??= new();
-                        response.Errors.Add($"Cannot create folder '{input.NewFolderName}' in '{input.ParentFolderPath}': folder name contains invalid character '{input.NewFolderName[invalidIndex]}'.");
-                        continue;
+                        (response.Errors ??= new List<string>()).Add(e.Message);
                     }
-
-                    if (!AssetDatabase.IsValidFolder(input.ParentFolderPath))
-                    {
-                        response.Errors ??= new();
-                        response.Errors.Add($"Cannot create folder '{input.NewFolderName}': invalid parent folder path '{input.ParentFolderPath}'. The path must start with 'Assets/' and all folders in the path must already exist.");
-                        continue;
-                    }
-
-                    var targetPath = $"{input.ParentFolderPath}/{input.NewFolderName}";
-                    if (AssetDatabase.IsValidFolder(targetPath))
-                    {
-                        response.Errors ??= new();
-                        response.Errors.Add($"Cannot create folder '{input.NewFolderName}' in '{input.ParentFolderPath}': a folder with the same name already exists at '{targetPath}'.");
-                        continue;
-                    }
-
-                    var guid = AssetDatabase.CreateFolder(input.ParentFolderPath, input.NewFolderName);
-                    if (string.IsNullOrEmpty(guid))
-                    {
-                        response.Errors ??= new();
-                        response.Errors.Add($"Failed to create folder '{input.NewFolderName}' in '{input.ParentFolderPath}'.");
-                        continue;
-                    }
-
-                    response.CreatedFolderGuids ??= new();
-                    response.CreatedFolderGuids.Add(guid);
                 }
-
-                if (response.CreatedFolderGuids is { Count: > 0 })
-                {
-                    AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+                if (response.CreatedFolderGuids?.Any() == true)
                     EditorUtils.RepaintAllEditorWindows();
-                }
-
                 return response;
             });
         }
-
     }
 }

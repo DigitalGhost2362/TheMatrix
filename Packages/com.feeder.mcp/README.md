@@ -40,7 +40,9 @@ Once Matrix is on, the package does this each time the editor loads:
 1. Extracts and starts the bundled local MCP server.
 2. Writes the project-root `.mcp.json` with the correct server URL (Claude Code picks it up on
    the next session in that folder).
-3. Generates skill files into `.claude/skills`, one `matrix-<tool>` folder for each enabled tool.
+3. Generates skill files into `.claude/skills`: the Matrix workflow skills, plus a `matrix-<tool>` folder for each
+   enabled tool listed in `skillTools` of `UserSettings/Feeder-MCP-Config.json` (default `script-execute` and
+   `rql-query`). The other tools are described by the MCP tool list alone.
 
 For other AI clients, open **Tools > Feeder > Matrix Bridge > Bridge** and click the client name at the
 bottom of the window to wire or unwire it. To turn Matrix off again, click the state word while it
@@ -71,6 +73,10 @@ only.
 Open **Tools > Feeder > Matrix Bridge > Skills**. It lists every MCP tool with its own switch.
 
 - Pick a group on the left or type in the search box; the All, On and Off buttons filter by state.
+  **Unused 30d** lists tools nobody called in 30 days (candidates to turn off); **Off, called** lists tools that are off
+  but agents reached through `tool-call` (candidates to turn on).
+- Each row also shows calls in the last 7 and 30 days, the last use and the error rate, read from
+  `Library/MatrixUsage` when the window opens or you click **Refresh usage**. The agent never sees these numbers.
 - Each row shows what the tool does, the tokens it adds to every request while it is on, and a
   `writes` or `destructive` tag when it changes the project. When a tool works with another one that
   is off, the row says so; click the name to switch it on too.
@@ -87,8 +93,10 @@ Run **Tools > Feeder > Matrix Bridge > Getting Started** once on each machine. I
 - adds `.mcp.json` and `.codex/config.toml` to the project's `.gitignore`; if a file is already committed, it prints
   the git command for you to run;
 - keeps only the core MCP tools enabled and disables the rest, to cut the tokens sent with every
-  request; switch more on in **Tools > Feeder > Matrix Bridge > Skills**, or a client enables them on demand with
-  `tool-set-enabled-state`;
+  request. The core set is `script-execute`, `console-get-logs`, `assets-refresh`,
+  `editor-application-set-state`, `screenshot-game-view`, `scene-open`, `scene-save`, `menu-execute`,
+  `rql-query`, `unity-tool-list` and `tool-set-enabled-state`. Switch more on in
+  **Tools > Feeder > Matrix Bridge > Skills**, or a client enables them on demand with `tool-set-enabled-state`;
 - regenerates the agent skills;
 - changes these editor settings so agents can share the editor:
   - Preferences > Asset Pipeline > Auto Refresh: Disabled. A file an agent writes on disk no longer compiles the
@@ -138,6 +146,19 @@ call; `reconnectGraceMs` (default 180 s) that a call waits for an editor that is
 `deferredToolTimeoutMs` (default 15 minutes) for tools that finish after a compile or domain reload.
 `script-execute` takes `timeoutSeconds` for code that runs long on purpose.
 
+## Agent instructions
+
+At the start of every session the server sends MCP `instructions`: open the matching `matrix-*` skill, look for a
+disabled tool before writing a script, add a project tool when a job repeats. To give your team its own text, commit
+`ProjectSettings/Packages/com.feeder.mcp/AgentInstructions.md`. It is read for every new session, so no restart is needed;
+only the first 2 KB is sent.
+
+## Tool usage
+
+The server appends one line per tool call to `Library/MatrixUsage/usage-YYYY-MM.jsonl`: time, tool, client, duration,
+status and the size of the arguments and the result. It never stores the arguments or results, keeps three months and
+sends nothing to the agent. Set `FeederMatrix:UsageLog=false` to turn it off.
+
 ## Editor lock
 
 When several agent sessions share one editor, they take turns with the editor lock, which the server
@@ -178,7 +199,7 @@ server cannot tell which session wrote it, so it refuses no tools for it.
 ## Query tools
 
 Three tools read and change many objects in one call with a pipeline query. Setup keeps `rql-query`
-and `rql-schema` enabled; turn `rql-mutate` on in the Skills window when clients should change things.
+enabled; turn `rql-schema` (a type's members) and `rql-mutate` on in the Skills window when clients need them.
 
 ```text
 objects | where Light.intensity > 1 | select name, Light.intensity, $path
@@ -277,9 +298,9 @@ static string Hello([Description("Who to greet.")] string name = "world") => "he
 
 ## Shared projects
 
-Matrix writes one `matrix-<tool>` skill folder per enabled tool into each agent's skills folder (for
-example `.claude/skills` or `.agents/skills`) and deletes it when the tool is switched off, so switching
-tools changes files in those folders. In a project shared through version control, either ignore
+Matrix writes its workflow skills and one `matrix-<tool>` folder per enabled tool in `skillTools` into each
+agent's skills folder (for example `.claude/skills` or `.agents/skills`), and deletes a tool's folder when the tool
+is switched off or leaves `skillTools`, so switching tools changes files in those folders. In a project shared through version control, either ignore
 `<skills folder>/matrix-*/` or accept those changes. Matrix does not edit the project's `.gitignore` for
 this. Hyper Testing keeps its guide in `matrix-hyper-testing-guide`, apart from the `matrix-hyper-testing`
 folder of the `hyper-testing` tool.
@@ -289,6 +310,8 @@ folder of the `hyper-testing` tool.
 Matrix only creates, edits and deletes things under names of its own:
 
 - the server lives in `Library/feeder-matrix` and the log in `Temp/feeder-matrix`;
+- tool usage stats go to `Library/MatrixUsage`;
+- the team's agent instructions, when you add them, are `ProjectSettings/Packages/com.feeder.mcp/AgentInstructions.md`;
 - its entry in `.mcp.json` and the other client configs is `Feeder-MCP`, and its environment
   variables start with `FEEDER_MATRIX_`;
 - its skill folders are `matrix-<tool>`;

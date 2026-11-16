@@ -1,7 +1,10 @@
 #nullable enable
 using System;
 using System.ComponentModel;
+using System.IO;
 using System.Reflection;
+using Feeder.MCP.Data;
+using Feeder.MCP.Runtime.Extensions;
 using Feeder.ToolHost;
 using Feeder.ToolHost.Common.Model;
 using Feeder.Reflect.Utils;
@@ -19,121 +22,173 @@ namespace Feeder.MCP.Editor.API
             Title = "Screenshot / Game View",
             ReadOnlyHint = true,
             IdempotentHint = true,
-            Enabled = false
+            Enabled = true
         )]
-        [AiSkillDescription("Capture a screenshot of the Unity Editor's Game View by reading its internal " +
-            "render texture directly. Image size matches the current Game View resolution; the tool corrects Y-flip on " +
-            "DirectX / Metal so the output is always upright. Requires an open Game View window. Scaled to `maxResolution` (default 1024; 0 = full size).")]
-        [AiSkillBody("Captures a screenshot from the Unity Editor Game View and returns it as an image. " +
-            "Reads the Game View's own render texture directly via the Unity Editor API. " +
-            "The image size matches the current Game View resolution, scaled so its longest side is at most `maxResolution` (default 1024; pass 0 for full size). " +
-            "Returns the image directly for visual inspection by the LLM.\n\n" +
+        [AiSkillDescription("Capture a screenshot of the Unity Editor's Game View, or of any Camera when `cameraRef` is given, " +
+            "and return it as a PNG for direct inspection. Optionally also saves the PNG inside the project. " +
+            "Scaled to `maxResolution` (default 1024; 0 = full size). For the Scene View as the user sees it use 'screenshot-editor-window' with window=SceneView.")]
+        [AiSkillBody("Captures the Game View, or one camera, and returns it as an image.\n\n" +
+            "## Inputs\n\n" +
+            "- `cameraRef` (optional) - GameObject hosting a `Camera`. When set, that camera is rendered into a temporary texture at its pixel size (1920x1080 when unknown) instead of reading the Game View. " +
+            "Use it for cameras that do not draw to the Game View.\n" +
+            "- `maxResolution` (default 1024) - longest side of the returned image; `0` returns the full size (capped at 3840).\n" +
+            "- `savePath` (optional) - also writes the returned PNG there and names the path in the reply text. Relative paths start at the project root; paths outside the project root are rejected; missing folders are created; `.png` is appended when there is no extension, any other extension is rejected, and an existing file under `Assets/` or `Packages/` is never overwritten.\n\n" +
             "## Behavior\n\n" +
-            "Locates `UnityEditor.GameView`, repaints it, then reflects the `m_RenderTexture` field and reads back via " +
-            "`Texture2D.ReadPixels`. On graphics APIs whose UV origin is top-left (`SystemInfo.graphicsUVStartsAtTop`), " +
-            "the read-back pixels are vertically flipped before encoding so the orientation matches what the user sees. " +
-            "Returns a PNG image with the resolution baked into the caption.")]
-        [Description("Captures a screenshot from the Unity Editor Game View and returns it as an image. " +
-            "Reads the Game View's own render texture directly via the Unity Editor API. " +
-            "The image size matches the current Game View resolution. " +
-            "Returns the image directly for visual inspection by the LLM.")]
+            "Without `cameraRef`: locates `UnityEditor.GameView`, repaints it, reads its `m_RenderTexture` and flips the pixels on graphics APIs whose UV origin is top-left. Requires an open Game View. " +
+            "With `cameraRef`: swaps a temporary `RenderTexture` onto the camera, calls `Camera.Render`, reads back and restores the camera's `targetTexture`.")]
+        [Description("Captures the Game View (or the camera given by cameraRef) and returns it as an image; savePath also saves it inside the project.")]
         public ResponseCallTool ScreenshotGameView
         (
-            string? nothing = null,
+            [Description("Optional camera GameObject to render instead of the Game View.")]
+            GameObjectRef? cameraRef = null,
             [Description("Longest side of the returned image in pixels; larger captures are scaled down to save tokens. Default: 1024. 0 = full size (still capped at 3840).")]
-            int maxResolution = 1024
+            int maxResolution = 1024,
+            [Description("Optional file to also save the PNG to, inside the project root. Relative paths start at the project root.")]
+            string? savePath = null
         )
         {
             return MainThread.Instance.Run(() =>
             {
-                var gameViewType = Type.GetType("UnityEditor.GameView,UnityEditor");
-                if (gameViewType == null)
-                    return ResponseCallTool.Error("GameView type not found in UnityEditor assembly.");
+                var path = string.IsNullOrWhiteSpace(savePath) ? null : MxGuard.PngFile(savePath);
 
-                var gameView = EditorWindow.GetWindow(gameViewType, false, null, false);
-                if (gameView == null)
-                    return ResponseCallTool.Error("No Game View window is open.");
-
-                gameView.Repaint();
-
-                var rtField = gameViewType.GetField("m_RenderTexture",
-                    BindingFlags.NonPublic | BindingFlags.Instance);
-                var sourceRt = rtField?.GetValue(gameView) as RenderTexture;
-
-                if (sourceRt == null || !sourceRt.IsCreated())
-                    return ResponseCallTool.Error("Game View render texture is not available. " +
-                        "Ensure the Game View window is open and visible.");
-
-                // Read pixels from the GameView's internal render texture, then correct the
-                // orientation for graphics APIs that render with the origin at the top-left.
-                // Reading directly from the GameView RT produces a vertically flipped image on
-                // DirectX/Metal because Unity performs a Y-flip at display-blit time — a step
-                // bypassed when ReadPixels runs against the GameView RT directly.
-                // `SystemInfo.graphicsUVStartsAtTop` identifies the APIs that need the flip.
-                //
-                // The Game View renders at the live resolution, which on high-DPI / 4K
-                // displays can be large enough that the encoded PNG exceeds the MCP transport's
-                // message-size limit — the result is then dropped in transit and never reaches
-                // the chat. Clamp the longest edge to `MaxScreenshotDimension`, downscaling on the
-                // GPU (an RT→RT blit preserves pixel orientation, so the flip compensation below
-                // stays correct), so the payload stays comparable to the other screenshot tools.
-                var srcWidth = sourceRt.width;
-                var srcHeight = sourceRt.height;
-
-                var limit = maxResolution > 0 ? Mathf.Min(maxResolution, MaxScreenshotDimension) : MaxScreenshotDimension;
-                var scale = Mathf.Min(1f, (float)limit / Mathf.Max(srcWidth, srcHeight));
-                var width = Mathf.Max(1, Mathf.RoundToInt(srcWidth * scale));
-                var height = Mathf.Max(1, Mathf.RoundToInt(srcHeight * scale));
-
-                var prevActive = RenderTexture.active;
-                RenderTexture? scaledRt = null;
-                Texture2D? tex = null;
-                byte[]? pngBytes = null;
-                try
+                byte[]? pngBytes;
+                string label;
+                int width, height;
+                string error;
+                if (cameraRef == null)
                 {
-                    // When the Game View is within the limit (scale == 1) the read path is
-                    // byte-identical to a direct read of the source RT; otherwise we read from a
-                    // downscaled copy.
-                    var readSource = sourceRt;
-                    if (scale < 1f)
-                    {
-                        scaledRt = RenderTexture.GetTemporary(width, height, 0, sourceRt.format);
-                        Graphics.Blit(sourceRt, scaledRt);
-                        readSource = scaledRt;
-                    }
-
-                    RenderTexture.active = readSource;
-                    tex = new Texture2D(width, height, TextureFormat.RGB24, false);
-                    tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-
-                    if (SystemInfo.graphicsUVStartsAtTop)
-                    {
-                        var pixels = tex.GetPixels32();
-                        var flipped = new Color32[pixels.Length];
-                        for (var y = 0; y < height; y++)
-                        {
-                            var srcRow = y * width;
-                            var dstRow = (height - 1 - y) * width;
-                            Array.Copy(pixels, srcRow, flipped, dstRow, width);
-                        }
-                        tex.SetPixels32(flipped);
-                    }
-
-                    tex.Apply();
-                    pngBytes = tex.EncodeToPNG();
+                    label = "Game View";
+                    pngBytes = CaptureGameView(maxResolution, out width, out height, out error);
                 }
-                finally
+                else
                 {
-                    RenderTexture.active = prevActive;
-                    if (scaledRt != null)
-                        RenderTexture.ReleaseTemporary(scaledRt);
-                    if (tex != null)
-                        UnityEngine.Object.DestroyImmediate(tex);
+                    var camera = cameraRef.FindGameObject()?.GetComponent<Camera>();
+                    if (camera == null)
+                        return ResponseCallTool.Error("The referenced GameObject was not found or has no Camera.");
+                    label = $"camera '{camera.name}'";
+                    pngBytes = CaptureCamera(camera, maxResolution, out width, out height, out error);
+                }
+                if (pngBytes == null)
+                    return ResponseCallTool.Error(error);
+
+                var caption = $"Screenshot from {label} ({width}x{height})";
+                if (path != null)
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    File.WriteAllBytes(path, pngBytes);
+                    caption += $", saved to {path}";
                 }
 
-                return ResponseCallTool.Image(pngBytes, Feeder.ToolHost.Common.Consts.MimeType.ImagePng,
-                    $"Screenshot from Game View ({width}x{height})");
+                return ResponseCallTool.Image(pngBytes, Feeder.ToolHost.Common.Consts.MimeType.ImagePng, caption);
             });
+        }
+
+        internal static byte[]? CaptureCamera(Camera camera, int maxResolution, out int width, out int height, out string error)
+        {
+            error = string.Empty;
+            (width, height) = camera.pixelWidth > 0 && camera.pixelHeight > 0 ? (camera.pixelWidth, camera.pixelHeight) : (1920, 1080);
+            (width, height) = ClampToTransportLimit(width, height);
+            (width, height) = ApplyMaxResolution(width, height, maxResolution);
+
+            var rt = new RenderTexture(width, height, 24);
+            var prevTarget = camera.targetTexture;
+            var prevActive = RenderTexture.active;
+            Texture2D? tex = null;
+            try
+            {
+                camera.targetTexture = rt;
+                camera.Render();
+
+                RenderTexture.active = rt;
+                tex = new Texture2D(width, height, TextureFormat.RGB24, false);
+                tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                tex.Apply();
+                return tex.EncodeToPNG();
+            }
+            finally
+            {
+                camera.targetTexture = prevTarget;
+                RenderTexture.active = prevActive;
+                rt.Release();
+                UnityEngine.Object.DestroyImmediate(rt);
+                if (tex != null)
+                    UnityEngine.Object.DestroyImmediate(tex);
+            }
+        }
+
+        internal static byte[]? CaptureGameView(int maxResolution, out int width, out int height, out string error)
+        {
+            error = string.Empty;
+            width = height = 0;
+
+            var gameViewType = Type.GetType("UnityEditor.GameView,UnityEditor");
+            if (gameViewType == null)
+            {
+                error = "GameView type not found in UnityEditor assembly.";
+                return null;
+            }
+
+            var gameView = EditorWindow.GetWindow(gameViewType, false, null, false);
+            if (gameView == null)
+            {
+                error = "No Game View window is open.";
+                return null;
+            }
+
+            gameView.Repaint();
+
+            var rtField = gameViewType.GetField("m_RenderTexture", BindingFlags.NonPublic | BindingFlags.Instance);
+            var sourceRt = rtField?.GetValue(gameView) as RenderTexture;
+            if (sourceRt == null || !sourceRt.IsCreated())
+            {
+                error = "Game View render texture is not available. Ensure the Game View window is open and visible.";
+                return null;
+            }
+
+            // The Game View RT is read directly, so DirectX/Metal need the Y-flip Unity otherwise does at display-blit time.
+            // A large live resolution is downscaled on the GPU (RT to RT blit keeps pixel orientation) to stay under the MCP message limit.
+            var limit = maxResolution > 0 ? Mathf.Min(maxResolution, MaxScreenshotDimension) : MaxScreenshotDimension;
+            var scale = Mathf.Min(1f, (float)limit / Mathf.Max(sourceRt.width, sourceRt.height));
+            width = Mathf.Max(1, Mathf.RoundToInt(sourceRt.width * scale));
+            height = Mathf.Max(1, Mathf.RoundToInt(sourceRt.height * scale));
+
+            var prevActive = RenderTexture.active;
+            RenderTexture? scaledRt = null;
+            Texture2D? tex = null;
+            try
+            {
+                var readSource = sourceRt;
+                if (scale < 1f)
+                {
+                    scaledRt = RenderTexture.GetTemporary(width, height, 0, sourceRt.format);
+                    Graphics.Blit(sourceRt, scaledRt);
+                    readSource = scaledRt;
+                }
+
+                RenderTexture.active = readSource;
+                tex = new Texture2D(width, height, TextureFormat.RGB24, false);
+                tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+
+                if (SystemInfo.graphicsUVStartsAtTop)
+                {
+                    var pixels = tex.GetPixels32();
+                    var flipped = new Color32[pixels.Length];
+                    for (var y = 0; y < height; y++)
+                        Array.Copy(pixels, y * width, flipped, (height - 1 - y) * width, width);
+                    tex.SetPixels32(flipped);
+                }
+
+                tex.Apply();
+                return tex.EncodeToPNG();
+            }
+            finally
+            {
+                RenderTexture.active = prevActive;
+                if (scaledRt != null)
+                    RenderTexture.ReleaseTemporary(scaledRt);
+                if (tex != null)
+                    UnityEngine.Object.DestroyImmediate(tex);
+            }
         }
     }
 }

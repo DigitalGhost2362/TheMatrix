@@ -102,7 +102,7 @@ namespace Feeder.MCP.Editor.Tests.Tools
             TestRunStore.Begin("job1", "EditMode", default, true);
             TestRunStore.SetState(TestRunStore.Running);
             StringAssert.Contains($"retry_after_ms={TestRunGuard.ExecutingRetryMs}", Tool_Tests.FormatResult(TestRunStore.Read(), "job1", false, true));
-            StringAssert.Contains("tests-clear", Tool_Tests.FormatResult(TestRunStore.Read(), null, false, false));
+            StringAssert.Contains("action=clear", Tool_Tests.FormatResult(TestRunStore.Read(), null, false, false));
         }
 
         [Test]

@@ -25,9 +25,9 @@ namespace Feeder.MCP.Editor.Tests.Tools
             _since = DateTime.UtcNow.AddSeconds(-2).ToString("o");
         }
 
-        LogEntry[] Mine(int maxEntries = 100, LogType? logTypeFilter = null, LogType[]? logTypes = null,
+        LogPageEntry[] Mine(int maxEntries = 50, LogType? logTypeFilter = null, LogType[]? logTypes = null,
             string? exclude = null, bool groupDuplicates = false, bool includeStackTrace = false)
-            => _tool.GetLogs(maxEntries, logTypeFilter, includeStackTrace, 0, logTypes, _since, _marker, exclude, groupDuplicates);
+            => _tool.GetLogs(maxEntries, logTypeFilter, includeStackTrace, 0, logTypes, _since, _marker, exclude, groupDuplicates).Entries;
 
         [Test]
         public void Include_ReturnsOwnEntriesOldestFirst()
@@ -157,7 +157,7 @@ namespace Feeder.MCP.Editor.Tests.Tools
 
             var future = DateTime.UtcNow.AddMinutes(5).ToString("o");
 
-            Assert.IsEmpty(_tool.GetLogs(include: _marker, sinceUtc: future));
+            Assert.IsEmpty(_tool.GetLogs(include: _marker, sinceUtc: future).Entries);
         }
 
         [Test]

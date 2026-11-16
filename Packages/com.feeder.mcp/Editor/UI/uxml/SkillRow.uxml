@@ -8,6 +8,7 @@
                 <ui:Label name="sk-row-risk" class="sk-tag sk-mono" />
             </ui:VisualElement>
             <ui:Label name="sk-row-desc" class="sk-row__desc" />
+            <ui:Label name="sk-row-usage" class="sk-row__usage sk-mono" />
             <ui:VisualElement name="sk-row-hint" class="sk-row__hint" />
         </ui:VisualElement>
         <ui:Label name="sk-row-cost" class="sk-row__cost sk-mono" />

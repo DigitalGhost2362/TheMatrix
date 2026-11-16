@@ -71,7 +71,7 @@ namespace Feeder.MCP.Editor.API
                         temp.SetActive(false);
                         var doc = temp.AddComponent<UIDocument>();
                         doc.visualTreeAsset = tree;
-                        var source = string.IsNullOrWhiteSpace(panelSettingsPath) ? null : AssetDatabase.LoadAssetAtPath<PanelSettings>(RequireAssetPath(panelSettingsPath, ".asset"));
+                        var source = string.IsNullOrWhiteSpace(panelSettingsPath) ? null : AssetDatabase.LoadAssetAtPath<PanelSettings>(MxGuard.ReadableAssetPath(panelSettingsPath, ".asset"));
                         if (!string.IsNullOrWhiteSpace(panelSettingsPath) && source == null)
                             throw new ArgumentException($"panelSettingsPath: no PanelSettings at '{panelSettingsPath}'.");
                         docs.Add((doc, null));

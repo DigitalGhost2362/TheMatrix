@@ -1,11 +1,10 @@
 #nullable enable
-using Feeder.MCP.Data;
-using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using Feeder.ToolHost;
 using Feeder.Reflect.Utils;
 using Feeder.MCP.Editor.Utils;
+using Feeder.MCP.Data;
 using UnityEditor;
 
 namespace Feeder.MCP.Editor.API
@@ -19,66 +18,42 @@ namespace Feeder.MCP.Editor.API
             Title = "Assets / Move",
             Enabled = false
         )]
-        [AiSkillDescription("Move or rename assets at the given project paths. " +
-            "Refreshes the AssetDatabase at the end. " +
-            "Moving/renaming can break references in scenes, prefabs and scripts — verify with '" +
-            Tool_Rql.QueryToolId + "' afterwards. Use '" + Tool_Rql.QueryToolId + "' to locate the assets first.")]
-        [AiSkillBody("Move the assets at paths in the project. " +
-            "Should be used for asset rename. " +
-            "Does AssetDatabase.Refresh() at the end. " +
-            "Use '" + Tool_Rql.QueryToolId + "' tool to find assets before moving.\n\n" +
-            "## Warning\n\n" +
-            "Moving or renaming an asset can break references to it from scenes, prefabs, materials and scripts. " +
-            "Unity usually retargets references for moves inside `Assets/`, but verify the result with '" +
-            Tool_Rql.QueryToolId + "' and check the Console for reference errors afterwards.\n\n" +
-            "## Inputs\n\n" +
-            "- `sourcePaths` — paths of the assets to move.\n" +
-            "- `destinationPaths` — target paths (must match `sourcePaths` length).\n\n" +
-            "## Behavior\n\n" +
-            "Each pair is moved independently via `AssetDatabase.MoveAsset`. " +
-            "Per-pair failures (Unity's `MoveAsset` returns a non-empty error string) are surfaced in " +
-            "`response.Errors`; successful moves accumulate into `response.MovedPaths`.")]
-        [Description("Move the assets at paths in the project. " +
-            "Should be used for asset rename. " +
-            "Does AssetDatabase.Refresh() at the end. " +
-            "Use '" + Tool_Rql.QueryToolId + "' tool to find assets before moving.")]
+        [AiSkillDescription("Move or rename assets inside Assets/, keeping their GUIDs so references stay intact.")]
+        [AiSkillBody("- `sourcePaths` - assets to move, under `Assets/`.\n" +
+            "- `destinationPaths` - new paths under `Assets/`, one per source; the folder must exist.\n\n" +
+            "A bad pair is reported in `Errors` and the others still run.")]
+        [Description("Move or rename assets inside Assets/ (pairs by index), keeping GUIDs. Returns moved paths and per-pair errors.")]
         public MoveAssetsResponse Move
         (
             [Description("The paths of the assets to move.")]
             string[] sourcePaths,
-            [Description("The paths of moved assets.")]
+            [Description("The new paths, one per source, under Assets/.")]
             string[] destinationPaths
         )
         {
+            CheckPairs(sourcePaths, destinationPaths);
             return MainThread.Instance.Run(() =>
             {
-                if (sourcePaths.Length == 0)
-                    throw new ArgumentException(Error.SourcePathsArrayIsEmpty(), nameof(sourcePaths));
-
-                if (sourcePaths.Length != destinationPaths.Length)
-                    throw new ArgumentException(Error.SourceAndDestinationPathsArrayMustBeOfTheSameLength());
-
                 var response = new MoveAssetsResponse();
-
-                for (int i = 0; i < sourcePaths.Length; i++)
+                for (var i = 0; i < sourcePaths.Length; i++)
                 {
-                    var error = AssetDatabase.MoveAsset(sourcePaths[i], destinationPaths[i]);
-                    if (string.IsNullOrEmpty(error))
+                    try
                     {
-                        response.MovedPaths ??= new();
-                        response.MovedPaths.Add(destinationPaths[i]);
+                        var source = MxGuard.AssetPath(sourcePaths[i]);
+                        var destination = MxGuard.AssetPath(destinationPaths[i]);
+                        var error = AssetDatabase.MoveAsset(source, destination);
+                        if (!string.IsNullOrEmpty(error))
+                            throw MxGuard.Fail($"Unity refused to move '{source}' to '{destination}': {error}");
+                        (response.MovedPaths ??= new List<string>()).Add(destination);
                     }
-                    else
+                    catch (ToolCallerException e)
                     {
-                        response.Errors ??= new();
-                        response.Errors.Add($"Failed to move asset from {sourcePaths[i]} to {destinationPaths[i]}: {error}.");
+                        (response.Errors ??= new List<string>()).Add(e.Message);
                     }
                 }
-                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
                 EditorUtils.RepaintAllEditorWindows();
                 return response;
             });
         }
-
     }
 }

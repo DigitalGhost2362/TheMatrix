@@ -34,6 +34,9 @@ public sealed class MatrixOptions
     /// </summary>
     public bool ImplicitLock { get; set; } = true;
 
+    /// <summary>Appends one line per tool call (tool, time, status, sizes; never arguments or results) to the project's Library/MatrixUsage. Off writes nothing.</summary>
+    public bool UsageLog { get; set; } = true;
+
     /// <summary>An implicit claim with no tool call for this long is freed.</summary>
     public TimeSpan EditorLockImplicitIdle { get; set; } = TimeSpan.FromSeconds(30);
 

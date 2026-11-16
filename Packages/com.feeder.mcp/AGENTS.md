@@ -22,7 +22,8 @@ Matrix server  --FMP/1 (SignalR + MessagePack, loopback)-->  Unity Editor plugin
 ## Adding a tool
 
 1. Put a partial class with `[AiToolType]` under `Editor/Scripts/API/Tool/` (one file per tool or tool family, named
-   like its id: `Editor.Undo.cs`, `Tests.Query.cs`, `Batch.Execute.cs` are recent examples).
+   like its id: `Editor.Undo.cs`, `Tests.Query.cs` are examples). Add one only when `script-execute` cannot do the job
+   well: work that crosses a domain reload, an image result, an internal API, or logic agents keep getting wrong.
 2. Add a method with `[AiTool(id, Title = "Group / Name", Enabled = false, ReadOnlyHint = ...)]`.
    - New tools start with `Enabled = false`; people turn them on in the Skills window.
    - Set `ReadOnlyHint = true` for tools that change nothing in the Editor or on disk. The server editor lock treats
@@ -61,7 +62,7 @@ Matrix server  --FMP/1 (SignalR + MessagePack, loopback)-->  Unity Editor plugin
   prefs restored. Never touch `TestRunGuard` or `TestResultCollector.TestCallRequestID` of a live run, and never save
   the open scene.
 - **Skill text is code.** Skill markdown lives in `Editor/Scripts/Skills/` and tool attributes; the generated
-  `.claude/skills/*/SKILL.md` files are output of `unity-skill-generate`, not hand-written.
+  `.claude/skills/*/SKILL.md` files are generated on editor load and from the Skills window, not hand-written.
 
 ## Packaging the server payload
 

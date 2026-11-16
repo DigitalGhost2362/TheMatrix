@@ -112,11 +112,13 @@ namespace Feeder.MCP.Editor.API
                 if (!scene.IsValid() || !scene.isLoaded)
                     throw new InvalidOperationException("There is no loaded active scene.");
 
-                var settings = GetRenderSettingsMethod?.Invoke(null, null) as UnityEngine.Object;
+                // without the settings object the change could not be undone or saved with the scene
+                var settings = GetRenderSettingsMethod?.Invoke(null, null) as UnityEngine.Object
+                    ?? throw new InvalidOperationException("This Unity version does not expose RenderSettings.GetRenderSettings, so nothing was changed. " +
+                        "Set the values with script-execute (RenderSettings.* and Undo.RecordObject) instead.");
                 Undo.IncrementCurrentGroup();
                 var group = Undo.GetCurrentGroup();
-                if (settings != null)
-                    Undo.RecordObject(settings, "Matrix lighting environment");
+                Undo.RecordObject(settings, "Matrix lighting environment");
 
                 if (clearSky) RenderSettings.skybox = null;
                 else if (sky != null) RenderSettings.skybox = sky;
@@ -136,8 +138,7 @@ namespace Feeder.MCP.Editor.API
                 if (clearSun) RenderSettings.sun = null;
                 else if (sunLight != null) RenderSettings.sun = sunLight;
 
-                if (settings != null)
-                    EditorUtility.SetDirty(settings);
+                EditorUtility.SetDirty(settings);
                 EditorSceneManager.MarkSceneDirty(scene);
                 Undo.SetCurrentGroupName("Matrix lighting environment set");
                 Undo.CollapseUndoOperations(group);

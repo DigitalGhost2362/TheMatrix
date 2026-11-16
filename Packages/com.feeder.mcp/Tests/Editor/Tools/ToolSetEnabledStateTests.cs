@@ -12,7 +12,7 @@ namespace Feeder.MCP.Editor.Tests.Tools
 {
     public sealed class ToolSetEnabledStateTests
     {
-        const string Target = Tool_Script.ScriptReadToolId;
+        const string Target = Tool_Editor.EditorUndoToolId;
 
         // the host drops tool-change events inside its 100 ms throttle, so the restore waits it out
         const int ThrottleWindowMs = 150;

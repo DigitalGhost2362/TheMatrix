@@ -60,6 +60,21 @@ namespace Feeder.MCP.Editor.Tests.Tools
         }
 
         [Test]
+        public void Bake_Status_WhenIdle_ReportsIdle_AndRejectsUnknownAction()
+        {
+            Assert.IsFalse(Lightmapping.isRunning, "a bake is running in the Editor; run this test later");
+            StringAssert.Contains("state=idle", tool.Bake());
+            Assert.Throws<ArgumentException>(() => tool.Bake("explode"));
+        }
+
+        [Test]
+        public void Bake_Start_RefusesAnUnsavedScene()
+        {
+            Assert.IsFalse(Lightmapping.isRunning, "a bake is running in the Editor; run this test later");
+            Assert.Throws<InvalidOperationException>(() => tool.Bake("start"));
+        }
+
+        [Test]
         public void EnvironmentSet_ChangesOnlyPassedValues_AndGetReportsThem()
         {
             var fogBefore = RenderSettings.fog;
@@ -114,21 +129,6 @@ namespace Feeder.MCP.Editor.Tests.Tools
             Assert.IsTrue(RenderSettings.fog);
             Undo.PerformUndo();
             Assert.IsFalse(RenderSettings.fog);
-        }
-
-        [Test]
-        public void Bake_Status_WhenIdle_ReportsIdle_AndRejectsUnknownAction()
-        {
-            Assert.IsFalse(Lightmapping.isRunning, "a bake is running in the Editor; run this test later");
-            StringAssert.Contains("state=idle", tool.Bake());
-            Assert.Throws<ArgumentException>(() => tool.Bake("explode"));
-        }
-
-        [Test]
-        public void Bake_Start_RefusesAnUnsavedScene()
-        {
-            Assert.IsFalse(Lightmapping.isRunning, "a bake is running in the Editor; run this test later");
-            Assert.Throws<InvalidOperationException>(() => tool.Bake("start"));
         }
     }
 }

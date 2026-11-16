@@ -16,7 +16,8 @@ namespace Feeder.MCP.Editor.API
         [AiTool
         (
             AssetsPrefabOpenToolId,
-            Title = "Assets / Prefab / Open"
+            Title = "Assets / Prefab / Open",
+            Enabled = false
         )]
         [AiSkillDescription("Open the prefab edit stage for a prefab instance or prefab asset GameObject. " +
             "Modifications inside the edit stage propagate to all instances. " +
@@ -43,18 +44,22 @@ namespace Feeder.MCP.Editor.API
             GameObjectRef gameObjectRef
         )
         {
-            if (gameObjectRef?.IsValid(out var validationError) == false)
-                throw new ArgumentException(validationError, nameof(gameObjectRef));
+            if (gameObjectRef == null)
+                throw MxGuard.Fail("'gameObjectRef' is required: a prefab instance in the scene or a prefab asset, e.g. {\"path\":\"Hero\"}.");
+            if (!gameObjectRef.IsValid(out var validationError))
+                throw MxGuard.Fail(validationError ?? "'gameObjectRef' is not valid.");
 
             MainThread.Instance.Run(() =>
             {
                 var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
-                var gameObject = gameObjectRef.FindGameObject();
+                var gameObject = gameObjectRef.FindGameObject()
+                    ?? throw MxGuard.Fail("GameObject not found. Find it with rql-query first and pass its path or instance id.");
 
-                if (gameObject == null)
-                    throw new Exception("GameObject not found. Provide a reference to existed GameObject.");
-
-                var prefabAssetPath = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(gameObject);
+                var prefabAssetPath = gameObject.IsAsset()
+                    ? AssetDatabase.GetAssetPath(gameObject)
+                    : PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(gameObject);
+                if (string.IsNullOrEmpty(prefabAssetPath))
+                    throw MxGuard.Fail($"'{gameObject.name}' is not a prefab instance or prefab asset.");
 
                 prefabStage = gameObject.IsAsset()
                     ? UnityEditor.SceneManagement.PrefabStageUtility.OpenPrefab(prefabAssetPath)

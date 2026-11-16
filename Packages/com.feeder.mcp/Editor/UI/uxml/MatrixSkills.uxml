@@ -32,6 +32,7 @@
                     <ui:Label name="sk-tier" class="sk-foot__tier sk-mono" />
                 </ui:VisualElement>
                 <ui:VisualElement class="sk-foot__actions">
+                    <ui:Button name="sk-usage-refresh" text="Refresh usage" class="sk-btn" tooltip="Read the tool usage file again (Library/MatrixUsage)." />
                     <ui:Button name="sk-core" text="Core only" class="sk-btn" />
                     <ui:Button name="sk-all" text="Enable all" class="sk-btn" />
                 </ui:VisualElement>

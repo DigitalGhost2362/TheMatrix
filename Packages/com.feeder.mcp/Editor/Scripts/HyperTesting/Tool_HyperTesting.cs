@@ -14,7 +14,8 @@ namespace Feeder.MCP.Editor.API
         [AiTool
         (
             HyperTestingToolId,
-            Title = "Hyper Testing / Clone Pool (Experimental)"
+            Title = "Hyper Testing / Clone Pool (Experimental)",
+            Enabled = false
         )]
         [AiSkillDescription("EXPERIMENTAL. Manage the Hyper Testing clone pool for parallel play testing: status, up, refresh, down, ram. " +
             "Works only after the user enabled Hyper Testing Mode by hand; agents can never enable it. Read the matrix-hyper-testing-guide skill first.")]

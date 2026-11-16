@@ -22,6 +22,9 @@ namespace Feeder.MCP
 
             public static List<McpFeature> DefaultTools => new();
 
+            // only tools whose skill teaches more than the MCP description get a SKILL.md
+            public static List<string> DefaultSkillTools => new() { "script-execute", "rql-query" };
+
             /// <summary>
             /// Backing field for the local server URL. Serialized as "host" in JSON.
             /// <see cref="Host"/> is the same value under the name the connection layer reads.
@@ -98,6 +101,7 @@ namespace Feeder.MCP
                 KeepServerRunning = !isCi;
                 GenerateSkillFiles = false;
                 SkillsPath = ".claude/skills"; // default skills location for Claude Code
+                SkillTools = DefaultSkillTools;
                 SkillAutoGenerate = new() { ["claude-code"] = true, ["deepseek"] = true };
                 AgentAutoConfigure = new() { ["claude-code"] = true, ["deepseek"] = true };
                 TransportMethod = TransportMethod.streamableHttp;

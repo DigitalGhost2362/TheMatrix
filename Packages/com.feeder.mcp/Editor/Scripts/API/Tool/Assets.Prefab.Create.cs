@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.ComponentModel;
+using System.IO;
 using Feeder.ToolHost;
 using Feeder.Reflect.Utils;
 using Feeder.MCP.Editor.Utils;
@@ -16,98 +17,47 @@ namespace Feeder.MCP.Editor.API
         [AiTool
         (
             AssetsPrefabCreateToolId,
-            Title = "Assets / Prefab / Create"
+            Title = "Assets / Prefab / Create",
+            Enabled = false
         )]
-        [AiSkillDescription("Create a Prefab (or Prefab Variant) at a project asset path. " +
-            "Source can be a scene GameObject (`gameObjectRef`) or an existing prefab asset (`sourcePrefabAssetPath`). " +
-            "Creates intermediate folders if missing. Use '" + Tool_Rql.QueryToolId +
-            "' to locate the source GameObject first.")]
-        [AiSkillBody("Create a prefab from a GameObject in the current active scene. " +
-            "The prefab will be saved in the project assets at the specified path. " +
-            "Creates folders recursively if they do not exist. " +
-            "If the source GameObject is already a prefab instance and 'connectGameObjectToPrefab' is true, a Prefab Variant is created automatically. " +
-            "To create a Prefab Variant from an existing prefab asset, provide 'sourcePrefabAssetPath' instead of 'gameObjectRef'. " +
-            "Use '" + Tool_Rql.QueryToolId + "' tool to find the target GameObject first.\n\n" +
-            "## Inputs (mutually exclusive sources)\n\n" +
-            "- `prefabAssetPath` — required. Must start with `Assets/` and end with `.prefab`.\n" +
-            "- `gameObjectRef` — scene GameObject to convert (or to seed a Prefab Variant from when it is already a prefab instance).\n" +
-            "- `sourcePrefabAssetPath` — existing prefab asset to seed a Prefab Variant from. Cannot be combined with `gameObjectRef`.\n" +
-            "- `connectGameObjectToPrefab` (default `true`) — when sourcing from a scene GameObject, connect the scene object to the new prefab asset (becoming a prefab instance). Ignored for `sourcePrefabAssetPath` (always creates a variant).\n\n" +
-            "## Behavior\n\n" +
-            "Creates intermediate folders along `prefabAssetPath` if they don't already exist. Returns an `AssetObjectRef` " +
-            "pointing at the new prefab asset.")]
-        [Description("Create a prefab from a GameObject in the current active scene. " +
-            "The prefab will be saved in the project assets at the specified path. " +
-            "Creates folders recursively if they do not exist. " +
-            "If the source GameObject is already a prefab instance and 'connectGameObjectToPrefab' is true, a Prefab Variant is created automatically. " +
-            "To create a Prefab Variant from an existing prefab asset, provide 'sourcePrefabAssetPath' instead of 'gameObjectRef'. " +
-            "Use '" + Tool_Rql.QueryToolId + "' tool to find the target GameObject first.")]
+        [AiSkillDescription("Create a Prefab from a scene GameObject, or a Prefab Variant of an existing prefab, at a new path under Assets/.")]
+        [AiSkillBody("Sources (pass exactly one):\n\n" +
+            "- `gameObjectRef` - a scene GameObject. With `connectGameObjectToPrefab` (default `true`) it becomes an instance of the new prefab; " +
+            "when it already is a prefab instance the result is a Prefab Variant.\n" +
+            "- `sourcePrefabAssetPath` - an existing prefab; the result is always a Prefab Variant of it.\n\n" +
+            "`prefabAssetPath` is a new path under `Assets/` ending in `.prefab`; missing folders are created, an existing file is never overwritten.")]
+        [Description("Create a Prefab (or Prefab Variant) at a new path under Assets/ from a scene GameObject or an existing prefab.")]
         public AssetObjectRef Create
         (
-            [Description("Prefab asset path. Should be in the format 'Assets/Path/To/Prefab.prefab'.")]
+            [Description("New prefab path, e.g. 'Assets/Prefabs/Hero.prefab'.")]
             string prefabAssetPath,
-            [Description("Reference to a scene GameObject to create the prefab from. " +
-                "If the GameObject is already a prefab instance, a Prefab Variant is created when 'connectGameObjectToPrefab' is true. " +
-                "Optional if 'sourcePrefabAssetPath' is provided.")]
+            [Description("Scene GameObject to create the prefab from. Optional when 'sourcePrefabAssetPath' is given.")]
             GameObjectRef? gameObjectRef = null,
-            [Description("Path to an existing prefab asset to create a Prefab Variant from (e.g. 'Assets/Prefabs/Base.prefab'). " +
-                "When provided, a temporary instance is created, saved as a Prefab Variant, and cleaned up. " +
-                "Optional if 'gameObjectRef' is provided.")]
+            [Description("Existing prefab to make a Prefab Variant of. Optional when 'gameObjectRef' is given.")]
             string? sourcePrefabAssetPath = null,
-            [Description("If true, the scene GameObject will be connected to the new prefab (becoming a prefab instance). " +
-                "If the source is already a prefab instance, this creates a Prefab Variant. " +
-                "If false, the prefab asset is created but the scene GameObject remains unchanged. " +
-                "Ignored when 'sourcePrefabAssetPath' is used (always creates a variant).")]
+            [Description("Connect the scene GameObject to the new prefab (default true). Ignored with 'sourcePrefabAssetPath'.")]
             bool connectGameObjectToPrefab = true
         )
         {
+            var path = MxGuard.AssetPath(prefabAssetPath, ".prefab");
+            if ((gameObjectRef == null) == string.IsNullOrEmpty(sourcePrefabAssetPath))
+                throw MxGuard.Fail("Pass exactly one source: 'gameObjectRef' (a scene object) or 'sourcePrefabAssetPath' (an existing prefab).");
+
             return MainThread.Instance.Run(() =>
             {
-                if (string.IsNullOrEmpty(prefabAssetPath))
-                    throw new ArgumentException(Error.PrefabPathIsEmpty(), nameof(prefabAssetPath));
-
-                if (!prefabAssetPath.StartsWith("Assets/"))
-                    throw new ArgumentException(Error.PrefabPathIsInvalid(prefabAssetPath), nameof(prefabAssetPath));
-
-                if (!prefabAssetPath.EndsWith(".prefab"))
-                    throw new ArgumentException(Error.PrefabPathIsInvalid(prefabAssetPath), nameof(prefabAssetPath));
-
-                if (gameObjectRef != null && !string.IsNullOrEmpty(sourcePrefabAssetPath))
-                    throw new ArgumentException("Provide either 'gameObjectRef' or 'sourcePrefabAssetPath', not both.", nameof(sourcePrefabAssetPath));
-
-                // Create parent folders recursively if they do not exist
-                var lastSlash = prefabAssetPath.LastIndexOf('/');
-                var directoryPath = lastSlash > 0 ? prefabAssetPath.Substring(0, lastSlash) : null;
-                if (directoryPath != null && !AssetDatabase.IsValidFolder(directoryPath))
-                {
-                    var segments = prefabAssetPath.Split('/');
-                    var currentPath = segments[0]; // "Assets"
-                    for (int i = 1; i < segments.Length - 1; i++)
-                    {
-                        var nextPath = currentPath + "/" + segments[i];
-                        if (!AssetDatabase.IsValidFolder(nextPath))
-                            AssetDatabase.CreateFolder(currentPath, segments[i]);
-                        currentPath = nextPath;
-                    }
-                }
-
-                UnityEngine.GameObject prefabGo;
-
+                MxGuard.NotExisting(path);
+                UnityEngine.GameObject? prefabGo;
                 if (!string.IsNullOrEmpty(sourcePrefabAssetPath))
                 {
-                    // Create a Prefab Variant from an existing prefab asset
-                    var sourcePrefab = AssetDatabase.LoadAssetAtPath<UnityEngine.GameObject>(sourcePrefabAssetPath);
-                    if (sourcePrefab == null)
-                        throw new ArgumentException(Error.NotFoundPrefabAtPath(sourcePrefabAssetPath!), nameof(sourcePrefabAssetPath));
-
-                    var tempInstance = PrefabUtility.InstantiatePrefab(sourcePrefab) as UnityEngine.GameObject;
-                    if (tempInstance == null)
-                        throw new InvalidOperationException($"Failed to instantiate prefab from '{sourcePrefabAssetPath}'.");
-
+                    var sourcePath = MxGuard.ReadableAssetPath(sourcePrefabAssetPath, ".prefab");
+                    var sourcePrefab = AssetDatabase.LoadAssetAtPath<UnityEngine.GameObject>(sourcePath)
+                        ?? throw MxGuard.Fail(Error.NotFoundPrefabAtPath(sourcePath));
+                    Mx.EnsureFolder(Path.GetDirectoryName(path)!.Replace('\\', '/'));
+                    var tempInstance = (UnityEngine.GameObject)PrefabUtility.InstantiatePrefab(sourcePrefab);
                     try
                     {
-                        // SaveAsPrefabAssetAndConnect on a prefab instance creates a Prefab Variant
-                        prefabGo = PrefabUtility.SaveAsPrefabAssetAndConnect(tempInstance, prefabAssetPath, InteractionMode.UserAction, out _);
+                        // saving an instance of a prefab writes a Prefab Variant
+                        prefabGo = PrefabUtility.SaveAsPrefabAssetAndConnect(tempInstance, path, InteractionMode.UserAction, out _);
                     }
                     finally
                     {
@@ -116,27 +66,18 @@ namespace Feeder.MCP.Editor.API
                 }
                 else
                 {
-                    // Create from a scene GameObject
-                    if (gameObjectRef == null)
-                        throw new ArgumentException("Either 'gameObjectRef' or 'sourcePrefabAssetPath' must be provided.", nameof(gameObjectRef));
-
-                    var go = gameObjectRef.FindGameObject(out var error);
-                    if (go == null)
-                        throw new ArgumentException(error, nameof(gameObjectRef));
-
+                    var go = gameObjectRef!.FindGameObject(out var error) ?? throw MxGuard.Fail(error ?? "The GameObject was not found.");
+                    Mx.EnsureFolder(Path.GetDirectoryName(path)!.Replace('\\', '/'));
                     prefabGo = connectGameObjectToPrefab
-                        ? PrefabUtility.SaveAsPrefabAssetAndConnect(go, prefabAssetPath, InteractionMode.UserAction, out _)
-                        : PrefabUtility.SaveAsPrefabAsset(go, prefabAssetPath);
-
+                        ? PrefabUtility.SaveAsPrefabAssetAndConnect(go, path, InteractionMode.UserAction, out _)
+                        : PrefabUtility.SaveAsPrefabAsset(go, path);
                     if (connectGameObjectToPrefab && prefabGo != null)
                         EditorUtility.SetDirty(go);
                 }
 
                 if (prefabGo == null)
-                    throw new Exception(Error.NotFoundPrefabAtPath(prefabAssetPath));
-
+                    throw new InvalidOperationException($"Unity failed to save the prefab at '{path}'. See the Console for the reason.");
                 EditorUtils.RepaintAllEditorWindows();
-
                 return new AssetObjectRef(prefabGo);
             });
         }

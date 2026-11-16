@@ -4,6 +4,7 @@ using System;
 using System.IO;
 using System.Linq;
 using Feeder.MCP.Editor.API;
+using Feeder.ToolHost;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -15,7 +16,7 @@ namespace Feeder.MCP.Editor.Tests.Tools
         const string Root = "Assets/_MxTestG2";
         const string Asset = Root + "/Sub/Data.asset";
 
-        readonly Tool_ScriptableObject tool = new Tool_ScriptableObject();
+        readonly Tool_Serialized tool = new Tool_Serialized();
         const string TypeName = "Feeder.MCP.Editor.Tests.Tools.MatrixTestData";
 
         [TearDown]
@@ -32,9 +33,9 @@ namespace Feeder.MCP.Editor.Tests.Tools
         static MatrixTestData Load() => AssetDatabase.LoadAssetAtPath<MatrixTestData>(Asset);
 
         [Test]
-        public void Create_MakesTheAssetWithFolders_AndFillsPrivateFields()
+        public void Set_CreatesTheAssetWithFolders_AndFillsPrivateFields()
         {
-            var result = tool.Create("MatrixTestData", Asset, new[] { "hidden=7", "kind=Beta", "offset=1,2,3", "tint=#FF0000" });
+            var result = tool.Set(Asset, new[] { "hidden=7", "kind=Beta", "offset=1,2,3", "tint=#FF0000" }, "MatrixTestData");
 
             Assert.AreEqual(0, result.Failed);
             Assert.AreEqual(TypeName, result.Type);
@@ -47,20 +48,20 @@ namespace Feeder.MCP.Editor.Tests.Tools
         }
 
         [Test]
-        public void Create_NeverOverwritesAndChecksTheType()
+        public void Set_NeverOverwritesAnotherTypeAndChecksTheType()
         {
-            tool.Create(TypeName, Asset);
+            tool.Set(Asset, null, TypeName);
 
-            Assert.Throws<ArgumentException>(() => tool.Create(TypeName, Asset));
-            Assert.Throws<ArgumentException>(() => tool.Create("NoSuchScriptableObjectType", Root + "/Other.asset"));
-            Assert.Throws<ArgumentException>(() => tool.Create(TypeName, "Packages/x/Other.asset"));
-            Assert.Throws<ArgumentException>(() => tool.Create(TypeName, Root + "/Other.txt"));
+            Assert.Throws<ArgumentException>(() => tool.Set(Asset, null, "Texture2D"));
+            Assert.Throws<ArgumentException>(() => tool.Set(Root + "/Other.asset", null, "NoSuchScriptableObjectType"));
+            Assert.Throws<ToolCallerException>(() => tool.Set("Packages/x/Other.asset", null, TypeName));
+            Assert.Throws<ArgumentException>(() => tool.Set(Root + "/Other.txt", null, TypeName));
         }
 
         [Test]
         public void Set_ResizesArraysAndFillsElements()
         {
-            tool.Create(TypeName, Asset);
+            tool.Set(Asset, null, TypeName);
 
             var result = tool.Set(Asset, new[]
             {
@@ -78,13 +79,13 @@ namespace Feeder.MCP.Editor.Tests.Tools
             Assert.AreEqual(2, data.Entries.Count);
             Assert.AreEqual("Sword", data.Entries[0].label);
             Assert.AreEqual(5, data.Entries[0].amount);
-            Assert.AreEqual("Matrix scriptableobject set", Undo.GetCurrentGroupName());
+            Assert.AreEqual("Matrix serialized set", Undo.GetCurrentGroupName());
         }
 
         [Test]
         public void Set_ShrinksAnArray_AndClearsAReference()
         {
-            tool.Create(TypeName, Asset, new[] { "names.Array.size=4" });
+            tool.Set(Asset, new[] { "names.Array.size=4" }, TypeName);
 
             tool.Set(Asset, new[] { "names.Array.size=1", "link=null" });
 
@@ -96,7 +97,7 @@ namespace Feeder.MCP.Editor.Tests.Tools
         [Test]
         public void Set_ReportsBadEntriesWithoutStoppingTheOthers()
         {
-            tool.Create(TypeName, Asset);
+            tool.Set(Asset, null, TypeName);
 
             var result = tool.Set(Asset, new[] { "hidden=oops", "kind=Gamma", "missing=1", "hidden=9" });
 
@@ -108,14 +109,14 @@ namespace Feeder.MCP.Editor.Tests.Tools
         [Test]
         public void Set_RefusesPackagesAndMissingAssets()
         {
-            Assert.Throws<ArgumentException>(() => tool.Set("Packages/com.feeder.mcp/package.json", new[] { "a=1" }));
+            Assert.Throws<ToolCallerException>(() => tool.Set("Packages/com.feeder.mcp/package.json", new[] { "a=1" }));
             Assert.Throws<ArgumentException>(() => tool.Set(Root + "/None.asset", new[] { "a=1" }));
         }
 
         [Test]
         public void Get_ListsPrivateFieldsAndArraySizes()
         {
-            tool.Create(TypeName, Asset, new[] { "hidden=4", "names.Array.size=2" });
+            tool.Set(Asset, new[] { "hidden=4", "names.Array.size=2" }, TypeName);
 
             var all = tool.Get(Asset);
             var hidden = all.Properties.Single(p => p.Path == "hidden");

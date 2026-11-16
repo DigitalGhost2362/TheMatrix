@@ -20,7 +20,22 @@ namespace Feeder.MCP.Editor.API
             public int Performed { get; set; }
             public List<string> Groups { get; set; } = new List<string>();
             public string NextUndo { get; set; } = string.Empty;
+            public string NextRedo { get; set; } = string.Empty;
             public string? Note { get; set; }
+        }
+
+        static readonly System.Reflection.MethodInfo? GetRecords = typeof(UnityEditor.Undo).GetMethod("GetRecords",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic,
+            null, new[] { typeof(List<string>), typeof(List<string>) }, null);
+
+        // Unity exposes the redo stack only internally; the first record is the group the next redo restores
+        internal static string NextRedoName()
+        {
+            if (GetRecords == null)
+                return string.Empty;
+            var redo = new List<string>();
+            GetRecords.Invoke(null, new object[] { new List<string>(), redo });
+            return redo.Count > 0 ? redo[0] : string.Empty;
         }
 
         [AiTool
@@ -29,6 +44,15 @@ namespace Feeder.MCP.Editor.API
             Title = "Editor / Undo",
             Enabled = false
         )]
+        [AiSkillDescription("Undo or redo the last Editor undo groups (like Edit > Undo / Redo) and name each group. " +
+            "Pairs with rql-mutate and scene edits that record Undo.")]
+        [AiSkillBody("## Inputs\n\n" +
+            "- `action` - `undo` or `redo`.\n" +
+            "- `steps` (default 1, max 50) - how many groups.\n\n" +
+            "## Limits\n\n" +
+            "Only changes in the undo stack are reverted. Files already written to disk (saved scenes, saved assets, " +
+            "ProjectSettings) keep their saved content even when the in-memory change is undone; save again after an undo if needed. " +
+            "In a shared editor an undo or redo can touch another person's change: check `NextUndo` / `NextRedo` from the previous answer first.")]
         [Description("Undoes or redoes the last Editor undo groups, like Edit > Undo / Redo, and returns the name of each group. " +
             "Only changes recorded in the undo stack are reverted (not disk writes or saved assets). " +
             "Editor-changing: it can undo another person's work, so it follows the editor lock.")]
@@ -76,6 +100,7 @@ namespace Feeder.MCP.Editor.API
                     result.Performed++;
                 }
                 result.NextUndo = UnityEditor.Undo.GetCurrentGroupName();
+                result.NextRedo = NextRedoName();
                 if (result.Performed < count)
                     result.Note = $"Nothing more to {kind}.";
                 return result;

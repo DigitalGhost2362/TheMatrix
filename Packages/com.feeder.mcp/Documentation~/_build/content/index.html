@@ -120,7 +120,7 @@ Enemy_Brute     Rigidbody.mass  4 -&gt; 8
         </div>
         <div class="tr" data-t="3" hidden>
           <p class="u">Show me the scene and tell me what looks off.</p>
-          <div class="tc"><p class="tc-h"><b>Feeder-MCP - screenshot-scene-view</b> (MCP)(width: 1280, height: 720)</p>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - screenshot-editor-window</b> (MCP)(window: "Scene")</p>
 <div class="tc-r"><img src="assets/img/demo-view.jpg" alt="A screenshot of a showroom scene with mannequins on shelves and arched windows" width="900" height="434" loading="lazy"></div></div>
           <p class="a">The left wall is lit but the right side is close to black: no light and no reflection probe reach it. Want me to add a fill light there?</p>
         </div>
@@ -130,9 +130,10 @@ Enemy_Brute     Rigidbody.mass  4 -&gt; 8
 <pre class="tc-r">42 passed, 1 failed
 SaveDataTests.Load_OldVersion_Migrates
   Expected: 3  But was: 2</pre></div>
-          <div class="tc"><p class="tc-h"><b>Feeder-MCP - script-read</b> (MCP)(path: "Assets/Scripts/Save/SaveMigrator.cs")</p></div>
-          <div class="tc"><p class="tc-h"><b>Feeder-MCP - script-update-or-create</b> (MCP)(path: "Assets/Scripts/Save/SaveMigrator.cs", ...)</p>
-<pre class="tc-r">updated, compiled with 0 errors</pre></div>
+          <div class="tc"><p class="tc-h"><b>Read</b>(Assets/Scripts/Save/SaveMigrator.cs)</p></div>
+          <div class="tc"><p class="tc-h"><b>Edit</b>(Assets/Scripts/Save/SaveMigrator.cs)</p></div>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - assets-refresh</b> (MCP)</p>
+<pre class="tc-r">compiled with 0 errors</pre></div>
           <div class="tc"><p class="tc-h"><b>Feeder-MCP - tests-run</b> (MCP)(testMode: "EditMode")</p>
 <pre class="tc-r">43 passed</pre></div>
           <p class="a">Fixed: the migrator stopped at version 2 and never ran the step to 3. All 43 tests pass.</p>
@@ -185,7 +186,7 @@ SaveDataTests.Load_OldVersion_Migrates
         <p data-w="2" class="c"># Tools &gt; Feeder &gt; Matrix Bridge &gt; Getting Started   Run</p>
         <p data-w="2">Editor settings: Auto Refresh off, Run In Background on</p>
         <p data-w="2">Git: added 2 line(s) to .gitignore</p>
-        <p data-w="2">Tools: 8 core tools on, about 4.5k tokens a request</p>
+        <p data-w="2">Tools: 11 core tools on, about 5.3k tokens a request</p>
         <p data-w="2" class="ok">Bridge  ONLINE  localhost:25213</p>
         <p data-w="3" class="c">$ cd MyGame &amp;&amp; claude</p>
         <p data-w="3">&gt; /mcp</p>

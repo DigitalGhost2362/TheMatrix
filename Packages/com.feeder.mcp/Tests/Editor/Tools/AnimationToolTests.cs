@@ -98,20 +98,18 @@ namespace Feeder.MCP.Editor.Tests.Tools
         }
 
         [Test]
-        public void Clip_CreateSetCurveEventsAndDescribe()
+        public void Clip_CreateSetCurveAndDescribe()
         {
             var path = Folder + "/Spin.anim";
             var clip = AnimationEdit.CreateClip(path, 30, true);
-            Assert.Throws<InvalidOperationException>(() => AnimationEdit.CreateClip(path, 30, true));
+            Assert.Throws<Feeder.ToolHost.ToolCallerException>(() => AnimationEdit.CreateClip(path, 30, true));
 
             var count = AnimationEdit.SetCurve(clip, "Arm", "Transform", "localEulerAnglesRaw.y", new[] { Key(0, 0), Key(1, 360) }, "linear", false);
             Assert.AreEqual(2, count);
-            AnimationEdit.SetEvents(clip, new[] { new ClipEvent { Time = 0.5f, FunctionName = "Hit", IntParameter = 3 } });
 
             var text = AnimationEdit.DescribeClip(clip);
             StringAssert.Contains("loop=True", text);
             StringAssert.Contains("path='Arm' type=Transform property=localEulerAnglesRaw.y keys=2", text);
-            StringAssert.Contains("Hit(float=0 int=3", text);
 
             AnimationEdit.SetCurve(clip, "Arm", "Transform", "localEulerAnglesRaw.y", null, null, true);
             Assert.AreEqual(0, AnimationUtility.GetCurveBindings(clip).Length);

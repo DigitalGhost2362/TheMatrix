@@ -49,6 +49,18 @@ namespace Feeder.MCP
             return this;
         }
 
+        // project tools start off and need descriptions; checked here so every config apply enforces it
+        protected override void ApplyConfigToToolHost(Feeder.ToolHost.IToolHost mcpPlugin)
+        {
+            base.ApplyConfigToToolHost(mcpPlugin);
+            var manager = mcpPlugin.McpManager.ToolManager;
+            if (manager == null)
+                return;
+            var overridden = unityConnectionConfig.EnabledToolsOverride != null;
+            Feeder.MCP.Editor.MxProjectTool.Enforce(manager,
+                name => overridden || System.Linq.Enumerable.Any(unityConnectionConfig.Tools, t => t.Name == name));
+        }
+
         public void DisposeToolHostInstance()
         {
             var oldInstance = _plugin.TakeInstance();

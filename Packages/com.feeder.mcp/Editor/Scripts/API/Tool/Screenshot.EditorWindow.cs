@@ -28,13 +28,13 @@ namespace Feeder.MCP.Editor.API
             Enabled = false
         )]
         [AiSkillDescription("Capture any open Unity Editor window (Inspector, Console, a custom tool window, a floating window) " +
-            "as the Editor draws it. Pick it by title or type name; default is the focused window. Scaled to `maxResolution` (default 1024; 0 = full size).")]
+            "as the Editor draws it; the way to capture the Scene View as the user sees it (`window=SceneView`). Pick it by title or type name; default is the focused window. Scaled to `maxResolution` (default 1024; 0 = full size).")]
         [AiSkillBody("Captures an open Editor window from the screen and returns it as an image.\n\n" +
             "## Inputs\n\n" +
             "- `window` - window title (`titleContent.text`, e.g. `Inspector`) or type name (e.g. `InspectorWindow`), case-insensitive. " +
             "Empty = the focused window. A title that only contains the text matches when nothing matches exactly.\n" +
             "- `maxResolution` (default 1024) - longest side of the returned image; `0` returns the full size.\n" +
-            "- `savePath` - optional. Also writes the full-size PNG there. Relative paths start at the project root; " +
+            "- `savePath` - optional. Also writes the full-size PNG there. Relative paths start at the project root and paths outside it are rejected; a file must end with `.png` and an existing file under `Assets/` or `Packages/` is never overwritten; " +
             "a path without an extension is a folder and the file is named after the window title.\n\n" +
             "## Behavior\n\n" +
             "Focuses the window (a docked tab is brought to front), repaints it and reads its own back buffer " +
@@ -48,7 +48,7 @@ namespace Feeder.MCP.Editor.API
             string? window = null,
             [Description("Longest side of the returned image in pixels. Default: 1024. 0 = full size (still capped at 3840).")]
             int maxResolution = 1024,
-            [Description("Optional file or folder to also save the full-size PNG to. Relative paths start at the project root.")]
+            [Description("Optional file or folder inside the project root to also save the full-size PNG to. Relative paths start at the project root.")]
             string? savePath = null
         )
         {
@@ -198,8 +198,7 @@ namespace Feeder.MCP.Editor.API
 
         internal static string ResolveCapturePath(string path, EditorWindow window)
         {
-            var full = Path.IsPathRooted(path) ? path : Path.Combine(MatrixPluginEditor.ProjectRootPath, path);
-            return Path.HasExtension(full) ? Path.GetFullPath(full) : Path.GetFullPath(Path.Combine(full, CaptureSlug(window.titleContent.text) + ".png"));
+            return MxGuard.PngFile(Path.HasExtension(path) ? path : Path.Combine(path, CaptureSlug(window.titleContent.text) + ".png"));
         }
 
         internal static string SaveCapture(Texture2D texture, string path)

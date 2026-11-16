@@ -26,54 +26,71 @@ namespace Feeder.MCP.Editor.API
         const string Png = Feeder.ToolHost.Common.Consts.MimeType.ImagePng;
 
         [AiTool(ApplyToolId, Title = "VFX / Apply spec", Enabled = false)]
-        [AiSkillDescription("Create or patch a ParticleSystem VFX prefab from a compact JSON spec (emitters addressed by name, only changed fields). Saves a history version and returns text stats, optionally a time-lapse contact sheet.")]
-        [AiSkillBody("# VFX / Apply spec\n\nCreates the prefab when missing, otherwise patches it: emitters are matched by `name`, missing ones are created, `{\"name\":\"X\",\"remove\":true}` deletes. `replace=true` rebuilds every emitter from the spec. Every call stores a history version (see `vfx-history`).\n\n`preview`: `stats` (default, text only, cheapest), `sheet` (adds the contact sheet image), `none`.\n\nFull spec reference and the iteration loop live in the `" + Skill_Vfx.SkillId + "` skill.")]
-        [Description("Create or patch a VFX prefab from a compact JSON spec. Returns version + text stats (preview=stats), or also a contact sheet (preview=sheet)." + SeeSkill)]
+        [AiSkillDescription("Create or patch a ParticleSystem VFX from a compact JSON spec (emitters addressed by name, only changed fields), on a prefab asset (`path`) or a scene object (`target`). A prefab save stores a history version and returns text stats, optionally a time-lapse contact sheet.")]
+        [AiSkillBody("# VFX / Apply spec\n\nPass exactly one of `path` or `target`.\n\n`path` (prefab asset): creates the prefab when missing, otherwise patches it: emitters are matched by `name`, missing ones are created, `{\"name\":\"X\",\"remove\":true}` deletes. `replace=true` rebuilds every emitter from the spec. Every call stores a history version (see `vfx-history`). `preview`: `stats` (default, text only, cheapest), `sheet` (adds the contact sheet image), `none`. If the save succeeds but the preview fails, the answer is a success that reports the preview error.\n\n`target` (scene object by hierarchy path, unique name or instance id): applies the same spec to the live object (a ParticleSystem is added when missing). One Undo step, the scene (or open prefab stage) is marked dirty and not saved, no history version and no preview. Removing emitters (`remove` or `replace=true`) is not covered by Undo.\n\nFull spec reference and the iteration loop live in the `" + Skill_Vfx.SkillId + "` skill.")]
+        [Description("Create or patch a VFX from a compact JSON spec on a prefab (path) or a scene object (target). Prefab: version + text stats (preview=stats), or a contact sheet (preview=sheet)." + SeeSkill)]
         public ResponseCallTool Apply
         (
-            [Description("Prefab path, e.g. Assets/VFX/HitSpark.prefab. Created if missing.")]
-            string path,
             [Description("JSON: {\"defaults\":{...},\"root\":{...},\"emitters\":[{\"name\":\"Core\",\"material\":\"vfx_glow/add\",\"main\":{...},\"emission\":{...},...}]}. Only changed fields.")]
             string spec,
+            [Description(PathHelp + " Created if missing.")]
+            string? path = null,
+            [Description(TargetHelp + " Undoable, does not save.")]
+            string? target = null,
             [Description("true = rebuild all emitters from spec; false = patch by name.")]
             bool replace = false,
-            [Description("Short note stored with this history version.")]
+            [Description("Prefab only: short note stored with this history version.")]
             string? note = null,
-            [Description("stats | sheet | none")]
+            [Description("Prefab only: stats | sheet | none")]
             string preview = "stats"
+        )
+        {
+            return MainThread.Instance.Run(() =>
+            {
+                string text;
+                try
+                {
+                    RequireOne(path, target);
+                    if (!string.IsNullOrWhiteSpace(target)) return ResponseCallTool.Success(ApplyScene(target!, spec, replace));
+                    text = VfxService.Apply(path!, spec, replace, note).Summary(path!);
+                }
+                catch (Exception ex)
+                {
+                    return ResponseCallTool.Error(ex.Message);
+                }
+                if (preview == "none") return ResponseCallTool.Success(text);
+                try
+                {
+                    var result = VfxService.Preview(path!, new VfxPreview.Options { Image = preview == "sheet" });
+                    text += "\n" + result.Stats;
+                    return result.Png != null ? ResponseCallTool.Image(result.Png, Png, text) : ResponseCallTool.Success(text);
+                }
+                catch (Exception ex)
+                {
+                    return ResponseCallTool.Success(text + "\npreview failed: " + ex.Message);
+                }
+            });
+        }
+
+        [AiTool(ReadToolId, Title = "VFX / Read spec", ReadOnlyHint = true, IdempotentHint = true, Enabled = false)]
+        [AiSkillDescription("Read a VFX prefab asset (`path`) or a scene object (`target`) as compact JSON: only values that differ from the baseline emitter. Use it to see manual Inspector edits before patching.")]
+        [AiSkillBody("# VFX / Read spec\n\nReturns the same format `vfx-apply` accepts, minified, with defaults omitted. Rotations are in degrees. Pass exactly one of `path` (prefab asset) or `target` (scene object by hierarchy path, unique name or instance id). Read before patching an effect a human may have touched.")]
+        [Description("Read a VFX prefab (path) or scene object (target) as compact JSON (non-default values only, same format vfx-apply accepts)." + SeeSkill)]
+        public ResponseCallTool Read
+        (
+            [Description(PathHelp)]
+            string? path = null,
+            [Description(TargetHelp)]
+            string? target = null
         )
         {
             return MainThread.Instance.Run(() =>
             {
                 try
                 {
-                    var outcome = VfxService.Apply(path, spec, replace, note);
-                    var text = outcome.Summary(path);
-                    if (preview == "none") return ResponseCallTool.Success(text);
-                    var result = VfxService.Preview(path, new VfxPreview.Options { Image = preview == "sheet" });
-                    text += "\n" + result.Stats;
-                    return result.Png != null ? ResponseCallTool.Image(result.Png, Png, text) : ResponseCallTool.Success(text);
+                    RequireOne(path, target);
+                    return ResponseCallTool.Success(!string.IsNullOrWhiteSpace(target) ? ReadScene(target!) : VfxService.Read(path!));
                 }
-                catch (Exception ex)
-                {
-                    return ResponseCallTool.Error(ex.Message);
-                }
-            });
-        }
-
-        [AiTool(ReadToolId, Title = "VFX / Read spec", ReadOnlyHint = true, IdempotentHint = true, Enabled = false)]
-        [AiSkillDescription("Read a VFX prefab as compact JSON: only values that differ from the baseline emitter. Use it to see manual Inspector edits before patching.")]
-        [AiSkillBody("# VFX / Read spec\n\nReturns the same format `vfx-apply` accepts, minified, with defaults omitted. Rotations are in degrees. Read before patching an effect a human may have touched.")]
-        [Description("Read a VFX prefab as compact JSON (non-default values only, same format vfx-apply accepts)." + SeeSkill)]
-        public ResponseCallTool Read
-        (
-            [Description("Prefab path.")]
-            string path
-        )
-        {
-            return MainThread.Instance.Run(() =>
-            {
-                try { return ResponseCallTool.Success(VfxService.Read(path)); }
                 catch (Exception ex) { return ResponseCallTool.Error(ex.Message); }
             });
         }

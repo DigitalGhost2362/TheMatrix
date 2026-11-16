@@ -20,7 +20,8 @@ namespace Feeder.MCP.Editor.API
             AssetsFindBuiltInToolId,
             Title = "Assets / Find (Built-in)",
             ReadOnlyHint = true,
-            IdempotentHint = true
+            IdempotentHint = true,
+            Enabled = false
         )]
         [AiSkillDescription("Search the built-in assets of the Unity Editor (located at " +
             ExtensionsRuntimeObject.UnityEditorBuiltInResourcesPath + "). " +

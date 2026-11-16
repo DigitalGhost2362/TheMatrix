@@ -12,11 +12,14 @@ namespace Feeder.MCP.Editor.API
     public partial class Tool_Assets
     {
         public const string AssetsRefreshToolId = "assets-refresh";
+        const int CompileStartChecks = 10;
+        const int CompileStartCheckMs = 50;
         [AiTool
         (
             AssetsRefreshToolId,
             Title = "Assets / Refresh",
-            IdempotentHint = true
+            IdempotentHint = true,
+            Enabled = true
         )]
         [AiSkillDescription("Refresh the Unity AssetDatabase. " +
             "Use after files were added or updated outside of the Unity API, or to force script recompilation " +
@@ -29,7 +32,7 @@ namespace Feeder.MCP.Editor.API
             "- `requestId` — required for processing-mode responses; the tool returns `Processing` immediately and " +
             "delivers a follow-up completion when compilation finishes.\n\n" +
             "## Behavior\n\n" +
-            "Runs `AssetDatabase.Refresh(options)`. If `EditorApplication.isCompiling` is true after the refresh, " +
+            "Runs `AssetDatabase.Refresh(options)`. In play mode it returns at once: Unity holds script changes until play mode ends. Otherwise it watches for up to half a second for a compile to start. If one starts, " +
             "schedules a post-compilation notification and returns a `Processing` response. If compilation already " +
             "failed (`EditorUtility.scriptCompilationFailed`), returns `Success` with the compilation error details. " +
             "Otherwise returns a plain `Success`.")]
@@ -47,9 +50,18 @@ namespace Feeder.MCP.Editor.API
             if (requestId == null || string.IsNullOrWhiteSpace(requestId))
                 return ResponseCallTool.Error("Original request with valid RequestID must be provided.");
 
-            return await MainThread.Instance.RunAsync<ResponseCallTool>(() =>
+            var refresh = await MainThread.Instance.RunAsync(async () =>
             {
                 AssetDatabase.Refresh(options ?? ImportAssetOptions.ForceSynchronousImport);
+
+                // Unity holds the compile until play mode ends, so waiting for it would never return
+                if (MxGuard.IsPlaying())
+                    return ResponseCallTool.Success("AssetDatabase refreshed. Script changes are held until play mode ends: " +
+                        "exit play mode (editor-application-set-state isPlaying=false), then refresh again to compile them.").SetRequestID(requestId);
+
+                // Unity may start the compile a few ticks after Refresh returns
+                for (var i = 0; i < CompileStartChecks && !EditorApplication.isCompiling; i++)
+                    await Task.Delay(CompileStartCheckMs);
 
                 if (EditorApplication.isCompiling)
                 {
@@ -65,6 +77,7 @@ namespace Feeder.MCP.Editor.API
 
                 return ResponseCallTool.Success("AssetDatabase refreshed successfully.").SetRequestID(requestId);
             });
+            return await refresh;
         }
     }
 }

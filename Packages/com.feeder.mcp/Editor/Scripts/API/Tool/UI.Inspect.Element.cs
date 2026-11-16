@@ -13,7 +13,8 @@ namespace Feeder.MCP.Editor.API
         (
             UiInspectElementToolId,
             Title = "UI / Inspect Element",
-            ReadOnlyHint = true
+            ReadOnlyHint = true,
+            Enabled = false
         )]
         [AiSkillDescription("Full DevTools-style detail of one visual element in an open EditorWindow: rects, measured " +
             "text size, resolved styles (flex, size, margin/padding, overflow, whiteSpace, fontSize…), detected layout " +
@@ -34,7 +35,7 @@ namespace Feeder.MCP.Editor.API
             "elementQuery accepts '#name', '.class', or an index path like '0.2.1' from 'ui-inspect-tree'.")]
         public string InspectElement
         (
-            [Description("EditorWindow class name, full type name, or tab title. Use 'ui-inspect-windows' to list them.")]
+            [Description("EditorWindow class name, full type name, or tab title. Use 'ui-inspect-tree' with an empty windowName to list them.")]
             string windowName,
             [Description("Element to inspect: '#elementName', '.className', or hierarchy index path like '0.2.1'. Empty inspects the window root.")]
             string? elementQuery = null

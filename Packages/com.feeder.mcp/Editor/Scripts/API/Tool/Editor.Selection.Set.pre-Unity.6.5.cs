@@ -24,7 +24,7 @@ namespace Feeder.MCP.Editor.API
         [AiSkillBody(SetSkill.Body)]
         [Description("Set the current Selection in the Unity Editor to the provided objects. " +
             "Use '" + Tool_Rql.QueryToolId + "' tool to get the current selection first.")]
-        public SelectionData Set(ObjectRef[] select)
+        public SelectionData Set([Description("Objects to select (scene objects or assets); empty clears the selection.")] ObjectRef[] select)
         {
             return MainThread.Instance.Run(() =>
             {

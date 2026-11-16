@@ -48,6 +48,94 @@ namespace Feeder.MCP.Editor.Tests.Tools
             AssetDatabase.DeleteAsset(Folder);
         }
 
+        static void WriteUxml(string path, string content)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, content);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+        }
+
+        static void IgnoreIfUnsupported(ResponseCallTool response)
+        {
+            if (response.Status != ResponseStatus.Success && (response.GetMessage() ?? string.Empty).Contains("[unsupported]"))
+                Assert.Ignore(response.GetMessage());
+        }
+
+        [Test]
+        public void Render_Uxml_ReturnsImage_AndLeavesNoTemporaryDocuments()
+        {
+            var uxml = Folder + "/Hud.uxml";
+            WriteUxml(uxml, "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\"><ui:Label text=\"Matrix\" style=\"font-size: 40px; color: white;\" /></ui:UXML>");
+            var before = Resources.FindObjectsOfTypeAll<UIDocument>().Length;
+            var panelsBefore = Resources.FindObjectsOfTypeAll<PanelSettings>().Length;
+
+            var response = tool.Render(uxml, 320, 200, maxResolution: 0);
+
+            IgnoreIfUnsupported(response);
+            Assert.AreEqual(ResponseStatus.Success, response.Status);
+            Assert.IsTrue(response.Content.Any(c => c.Type == "image"));
+            Assert.AreEqual(before, Resources.FindObjectsOfTypeAll<UIDocument>().Length);
+            Assert.AreEqual(panelsBefore, Resources.FindObjectsOfTypeAll<PanelSettings>().Length);
+        }
+
+        [Test]
+        public void Render_ColoredElement_IsNotAFlatColor()
+        {
+            var uxml = Folder + "/Color.uxml";
+            WriteUxml(uxml, "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\"><ui:VisualElement style=\"position: absolute; left: 0; top: 0; width: 50%; height: 50%; background-color: rgb(255, 0, 0);\" /></ui:UXML>");
+
+            var response = tool.Render(uxml, 128, 128, maxResolution: 0);
+
+            IgnoreIfUnsupported(response);
+            Assert.AreEqual(ResponseStatus.Success, response.Status, response.GetMessage());
+            var image = response.Content.First(c => c.Type == "image");
+            var tex = new Texture2D(2, 2);
+            try
+            {
+                Assert.IsTrue(tex.LoadImage(Convert.FromBase64String(image.Data!)));
+                var pixels = tex.GetPixels32();
+                Assert.IsTrue(pixels.Any(p => p.r != pixels[0].r || p.g != pixels[0].g || p.b != pixels[0].b), "the rendered image is a single flat color");
+                // Texture2D rows run bottom to top, so an upright image has the top-left element in the upper rows
+                var top = tex.GetPixel(tex.width / 8, tex.height * 7 / 8);
+                var bottom = tex.GetPixel(tex.width / 8, tex.height / 8);
+                Assert.Greater(top.r, 0.8f, "the red element is not at the top-left (image upside down?)");
+                Assert.Less(top.g, 0.2f);
+                Assert.Less(bottom.r, 0.6f, "the bottom-left corner is red (image upside down?)");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(tex);
+            }
+        }
+
+        [Test]
+        public void Render_SceneDocument_RestoresItsPanelSettings()
+        {
+            var uxml = Folder + "/Hud.uxml";
+            WriteUxml(uxml, "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\"><ui:Label text=\"Matrix\" /></ui:UXML>");
+            var panel = Folder + "/Panel.asset";
+            AssetDatabase.CreateAsset(Tool_UiToolkit.NewPanelSettings(), panel);
+            var doc = new GameObject("MxTestUi").AddComponent<UIDocument>();
+            doc.panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(panel);
+            doc.visualTreeAsset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(uxml);
+            var settings = doc.panelSettings;
+
+            var response = tool.Render("MxTestUi", 128, 128, maxResolution: 0);
+
+            IgnoreIfUnsupported(response);
+            Assert.AreEqual(ResponseStatus.Success, response.Status);
+            Assert.AreSame(settings, doc.panelSettings);
+            Assert.IsNull(settings.targetTexture);
+        }
+
+        [Test]
+        public void Render_BadInput_Throws()
+        {
+            Assert.Throws<ArgumentException>(() => tool.Render("NoSuchObject"));
+            Assert.Throws<ArgumentException>(() => tool.Render("Assets/none.uxml"));
+            Assert.Throws<ArgumentException>(() => tool.Render("Assets/x.uxml", 4, 4));
+        }
+
         [Test]
         public void Validate_Uxml_RejectsBrokenXml_AndWrongRoot()
         {
@@ -70,14 +158,6 @@ namespace Feeder.MCP.Editor.Tests.Tools
             Assert.AreEqual("a-X-c", Tool_UiToolkit.Replace("a-b-c", "b", "X"));
             Assert.Throws<ArgumentException>(() => Tool_UiToolkit.Replace("a-b-b", "b", "X"));
             Assert.Throws<ArgumentException>(() => Tool_UiToolkit.Replace("abc", "z", "X"));
-        }
-
-        [Test]
-        public void RequireAssetPath_RejectsOutsideAssets_AndWrongExtension()
-        {
-            Assert.Throws<ArgumentException>(() => Tool_UiToolkit.RequireAssetPath("C:/x/a.uxml", ".uxml"));
-            Assert.Throws<ArgumentException>(() => Tool_UiToolkit.RequireAssetPath("Assets/../a.uxml", ".uxml"));
-            Assert.Throws<ArgumentException>(() => Tool_UiToolkit.RequireAssetPath("Assets/a.txt", ".uxml", ".uss"));
         }
 
         [Test]
@@ -135,85 +215,6 @@ namespace Feeder.MCP.Editor.Tests.Tools
         {
             Assert.Throws<ArgumentException>(() => tool.AttachDocument("MxTestUi", Folder + "/none.uxml"));
             Assert.IsNull(GameObject.Find("MxTestUi"));
-        }
-
-        static void IgnoreIfUnsupported(ResponseCallTool response)
-        {
-            if (response.Status != ResponseStatus.Success && (response.GetMessage() ?? string.Empty).Contains("[unsupported]"))
-                Assert.Ignore(response.GetMessage());
-        }
-
-        [Test]
-        public void Render_Uxml_ReturnsImage_AndLeavesNoTemporaryDocuments()
-        {
-            var uxml = Folder + "/Hud.uxml";
-            tool.UiToolkitWrite(uxml, "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\"><ui:Label text=\"Matrix\" style=\"font-size: 40px; color: white;\" /></ui:UXML>");
-            var before = Resources.FindObjectsOfTypeAll<UIDocument>().Length;
-            var panelsBefore = Resources.FindObjectsOfTypeAll<PanelSettings>().Length;
-
-            var response = tool.Render(uxml, 320, 200, maxResolution: 0);
-
-            IgnoreIfUnsupported(response);
-            Assert.AreEqual(ResponseStatus.Success, response.Status);
-            Assert.IsTrue(response.Content.Any(c => c.Type == "image"));
-            Assert.AreEqual(before, Resources.FindObjectsOfTypeAll<UIDocument>().Length);
-            Assert.AreEqual(panelsBefore, Resources.FindObjectsOfTypeAll<PanelSettings>().Length);
-        }
-
-        [Test]
-        public void Render_ColoredElement_IsNotAFlatColor()
-        {
-            var uxml = Folder + "/Color.uxml";
-            tool.UiToolkitWrite(uxml, "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\"><ui:VisualElement style=\"position: absolute; left: 0; top: 0; width: 50%; height: 50%; background-color: rgb(255, 0, 0);\" /></ui:UXML>");
-
-            var response = tool.Render(uxml, 128, 128, maxResolution: 0);
-
-            IgnoreIfUnsupported(response);
-            Assert.AreEqual(ResponseStatus.Success, response.Status, response.GetMessage());
-            var image = response.Content.First(c => c.Type == "image");
-            var tex = new Texture2D(2, 2);
-            try
-            {
-                Assert.IsTrue(tex.LoadImage(Convert.FromBase64String(image.Data!)));
-                var pixels = tex.GetPixels32();
-                Assert.IsTrue(pixels.Any(p => p.r != pixels[0].r || p.g != pixels[0].g || p.b != pixels[0].b), "the rendered image is a single flat color");
-                // Texture2D rows run bottom to top, so an upright image has the top-left element in the upper rows
-                var top = tex.GetPixel(tex.width / 8, tex.height * 7 / 8);
-                var bottom = tex.GetPixel(tex.width / 8, tex.height / 8);
-                Assert.Greater(top.r, 0.8f, "the red element is not at the top-left (image upside down?)");
-                Assert.Less(top.g, 0.2f);
-                Assert.Less(bottom.r, 0.6f, "the bottom-left corner is red (image upside down?)");
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(tex);
-            }
-        }
-
-        [Test]
-        public void Render_SceneDocument_RestoresItsPanelSettings()
-        {
-            var uxml = Folder + "/Hud.uxml";
-            tool.UiToolkitWrite(uxml);
-            var panel = Folder + "/Panel.asset";
-            tool.AttachDocument("MxTestUi", uxml, panel);
-            var doc = GameObject.Find("MxTestUi").GetComponent<UIDocument>();
-            var settings = doc.panelSettings;
-
-            var response = tool.Render("MxTestUi", 128, 128, maxResolution: 0);
-
-            IgnoreIfUnsupported(response);
-            Assert.AreEqual(ResponseStatus.Success, response.Status);
-            Assert.AreSame(settings, doc.panelSettings);
-            Assert.IsNull(settings.targetTexture);
-        }
-
-        [Test]
-        public void Render_BadInput_Throws()
-        {
-            Assert.Throws<ArgumentException>(() => tool.Render("NoSuchObject"));
-            Assert.Throws<ArgumentException>(() => tool.Render("Assets/none.uxml"));
-            Assert.Throws<ArgumentException>(() => tool.Render("Assets/x.uxml", 4, 4));
         }
     }
 }

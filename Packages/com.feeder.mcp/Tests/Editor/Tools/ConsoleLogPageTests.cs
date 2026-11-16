@@ -76,18 +76,50 @@ namespace Feeder.MCP.Editor.Tests.Tools
         }
 
         [Test]
-        public void GetLogsPage_CursorReturnsOnlyNewerLogs()
+        public void AfterACursor_EveryNewerLogIsRead_SoTheOldestAreNotDropped()
+        {
+            Assert.AreEqual(6, Tool_Console.ScanLimit(0, false, 5));
+            Assert.AreEqual(int.MaxValue, Tool_Console.ScanLimit(1, false, 5));
+            Assert.AreEqual(int.MaxValue, Tool_Console.ScanLimit(1, true, 5));
+
+            // more newer logs than the old 10000 cap: the first page still starts right after the cursor
+            const int count = 10050;
+            const long cursor = 1000;
+            var folder = "Temp/_MxTestLogPage";
+            if (System.IO.Directory.Exists(folder))
+                System.IO.Directory.Delete(folder, true);
+            var storage = new FileLogStorage(null, folder, "page.log");
+            try
+            {
+                storage.Append(Logs(count, cursor + 1));
+                storage.Flush();
+                var logs = storage.Query(Tool_Console.ScanLimit(cursor, false, 50), filter: entry => (entry.Seq ?? 0) > cursor);
+                var page = Tool_Console.Page(logs, 50, cursor, false);
+
+                Assert.AreEqual("m0", page.Entries[0].Message);
+                Assert.AreEqual("m49", page.Entries[49].Message);
+                Assert.IsTrue(page.Truncated);
+            }
+            finally
+            {
+                storage.Dispose();
+                System.IO.Directory.Delete(folder, true);
+            }
+        }
+
+        [Test]
+        public void GetLogs_CursorReturnsOnlyNewerLogs()
         {
             Assume.That(MatrixPluginEditor.HasInstance && MatrixPluginEditor.Instance.LogCollector != null, "Matrix Bridge is not active.");
             var tool = new Tool_Console();
             var marker = Guid.NewGuid().ToString("N");
 
             Debug.Log($"page-before {marker}");
-            var first = tool.GetLogsPage(maxEntries: 5, include: marker);
+            var first = tool.GetLogs(maxEntries: 5, include: marker);
             Assert.AreEqual(1, first.Entries.Length);
 
             Debug.Log($"page-after {marker}");
-            var next = tool.GetLogsPage(maxEntries: 5, afterCursor: first.NextCursor, include: marker);
+            var next = tool.GetLogs(maxEntries: 5, afterCursor: first.NextCursor, include: marker);
 
             Assert.AreEqual(1, next.Entries.Length);
             StringAssert.Contains("page-after", next.Entries[0].Message);

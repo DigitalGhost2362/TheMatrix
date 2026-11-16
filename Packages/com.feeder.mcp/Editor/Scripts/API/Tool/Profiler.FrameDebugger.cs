@@ -25,8 +25,8 @@ namespace Feeder.MCP.Editor.API
 
         [AiTool(FrameDebuggerToolId, Title = "Profiler / Frame debugger", Enabled = false)]
         [AiSkillDescription("Capture the rendering events (draw calls, clears, blits) of the current frame with the Frame Debugger: action=enable, events (index, type and name), disable, status.")]
-        [AiSkillBody("# Profiler / Frame debugger\n\nTypical loop: `action=enable` (freezes the Game View on the current frame, a Game View window must be open), wait a moment for the Editor to repaint (the Editor window must have focus, otherwise nothing is captured: check `status` and enable again if the count stays 0), `action=events` to list every event with its index, type and name (`detail=true` is not available and answers `[unsupported]`: the per-event data call is native and unsafe to reach from here), then `action=disable` so the Game View runs again. `events` accepts `from` and `count` to page through large frames. `status` reports whether it is enabled and the event count. While enabled the Game View does not update, so always disable it when done.")]
-        [Description("Frame Debugger: action=enable | events (from, count) | disable | status. Disable it when finished.")]
+        [AiSkillBody("# Profiler / Frame debugger\n\nTypical loop: `action=enable` (freezes the Game View on the current frame, a Game View window must be open), wait a moment for the Editor to repaint (the Editor window must have focus, otherwise nothing is captured: check `status` and enable again if the count stays 0), `action=events` to list every event with its index, type and name (`detail=true` is not available and answers `[unsupported]`: the per-event data call is native and unsafe to reach from here), then `action=disable` so the Game View runs again. `events` accepts `from` and `count` to page through large frames. `status` reports whether it is enabled and the event count. The Game View freezes while the Frame Debugger is on, so always disable it when done (it is switched off automatically on a domain reload).")]
+        [Description("Frame Debugger: action=enable | events (from, count) | disable | status. The Game View freezes while it is on; disable it when finished.")]
         public ResponseCallTool FrameDebugger
         (
             [Description("enable | events | disable | status")]
@@ -65,6 +65,17 @@ namespace Feeder.MCP.Editor.API
                 catch (NotSupportedException ex) { return ResponseCallTool.Error("[unsupported] " + ex.Message); }
                 catch (Exception ex) { return ResponseCallTool.Error(ex.InnerException?.Message ?? ex.Message); }
             });
+        }
+
+        [InitializeOnLoadMethod]
+        static void DisableOnReload()
+        {
+            try
+            {
+                if (FrameDebuggerType != null && IsOn(FrameDebuggerType))
+                    Call(FrameDebuggerType, "SetEnabled", false, Call(FrameDebuggerType, "GetRemotePlayerGUID"));
+            }
+            catch (Exception) { }
         }
 
         static ResponseCallTool Events(Type type, int from, int count, bool detail)

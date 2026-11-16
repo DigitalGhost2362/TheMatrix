@@ -3,9 +3,9 @@ using System.ComponentModel;
 using System.Linq;
 using Feeder.ToolHost;
 using Feeder.Reflect.Utils;
-using Feeder.MCP.Editor.Utils;
 using Feeder.MCP.Data;
-using Feeder.MCP.Runtime.Extensions;
+using Feeder.MCP.Editor.Utils;
+using UnityEditor.SceneManagement;
 
 namespace Feeder.MCP.Editor.API
 {
@@ -16,57 +16,24 @@ namespace Feeder.MCP.Editor.API
         (
             SceneSetActiveToolId,
             Title = "Scene / Set Active",
-            IdempotentHint = true
+            IdempotentHint = true,
+            Enabled = false
         )]
-        [AiSkillDescription("Mark an opened scene as the Editor's active scene (the one new GameObjects are " +
-            "added to and that's used as the default for many operations). " +
-            "Use '" + Tool_Rql.QueryToolId + "' to enumerate opened scenes first.")]
-        [AiSkillBody("Set the specified opened scene as the active scene. " +
-            "Use '" + Tool_Rql.QueryToolId + "' tool to get the list of all opened scenes.\n\n" +
-            "## Inputs\n\n" +
-            "- `sceneRef` — `AssetObjectRef` pointing at a `SceneAsset`. The scene must already be opened.\n\n" +
-            "## Behavior\n\n" +
-            "Resolves the `SceneAsset`, finds the matching opened scene (by name then by path), and calls " +
-            "`EditorSceneManager.SetActiveScene`. No-op if the scene is already active. Returns the post-call " +
-            "snapshot of opened scenes.")]
-        [Description("Set the specified opened scene as the active scene. " +
-            "Use '" + Tool_Rql.QueryToolId + "' tool to get the list of all opened scenes.")]
-        public SceneDataShallow[] SetActive(AssetObjectRef sceneRef)
+        [AiSkillDescription("Make an open scene the active one (new GameObjects go there).")]
+        [Description("Make an open scene active, by path or by name. Returns the open scenes.")]
+        public SceneDataShallow[] SetActive
+        (
+            [Description("Path of the open scene (preferred), or its name when only one open scene has it.")]
+            string scene
+        )
         {
             return MainThread.Instance.Run(() =>
             {
-                var sceneAsset = sceneRef.FindAssetObject<UnityEditor.SceneAsset>()
-                    ?? throw new System.ArgumentException($"Requested scene is not valid or not found.");
-
-                var scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(sceneAsset.name);
-                if (scene.IsValid() == false)
-                {
-                    var scenePath = sceneAsset.GetAssetPath();
-                    if (string.IsNullOrEmpty(scenePath))
-                        throw new System.Exception(Error.ScenePathIsEmpty());
-
-                    scene = UnityEngine.SceneManagement.SceneManager.GetSceneByPath(scenePath);
-                    if (scene.IsValid() == false)
-                        throw new System.Exception($"Scene at '{scenePath}' is not opened.");
-                }
-
-                // If the scene is already active, just return opened scenes
-                if (UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene() == scene)
-                {
-                    return OpenedScenes
-                        .Select(scene => scene.ToSceneDataShallow())
-                        .ToArray();
-                }
-
-                var success = UnityEditor.SceneManagement.EditorSceneManager.SetActiveScene(scene);
-                if (!success)
-                    throw new System.Exception($"Failed to set active scene to '{scene.name}'.");
-
+                var target = FindOpenScene(scene);
+                if (EditorSceneManager.GetActiveScene() != target && !EditorSceneManager.SetActiveScene(target))
+                    throw new System.InvalidOperationException($"Unity refused to make '{target.path}' active; is it loaded?");
                 EditorUtils.RepaintAllEditorWindows();
-
-                return OpenedScenes
-                    .Select(scene => scene.ToSceneDataShallow())
-                    .ToArray();
+                return OpenedScenes.Select(open => open.ToSceneDataShallow()).ToArray();
             });
         }
     }

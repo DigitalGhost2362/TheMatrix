@@ -27,7 +27,7 @@ namespace Feeder.MCP.Editor.API
         [Description("Returns available information about 'UnityEditor.EditorApplication'. " +
             "Use it to get information about the current state of the Unity Editor application. " +
             "Such as: playmode, paused state, compilation state, etc.")]
-        public EditorStatsData? GetApplicationState(string? nothing = null)
+        public EditorStatsData? GetApplicationState([Description("Unused; leave empty.")] string? nothing = null)
         {
             return MainThread.Instance.Run(() =>
             {

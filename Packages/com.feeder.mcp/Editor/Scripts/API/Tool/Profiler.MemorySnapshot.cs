@@ -19,23 +19,28 @@ namespace Feeder.MCP.Editor.API
 {
     public partial class Tool_Profiler
     {
-        public const string ProfilerMemorySnapshotToolId = "profiler-memory-snapshot";
-        public const string ProfilerMemoryCompareToolId = "profiler-memory-compare";
+        public const string ProfilerMemoryToolId = "profiler-memory";
 
         internal const string SnapshotFolder = "Library/MatrixMemory";
 
-        [AiTool(ProfilerMemorySnapshotToolId, Title = "Profiler / Memory snapshot", Enabled = false)]
-        [AiSkillDescription("Take, list or delete named memory snapshots. A light snapshot (default) stores the memory counters and the loaded UnityEngine.Object count and size per type as JSON, ready for profiler-memory-compare; mode=full also writes a native .snap file for the Memory Profiler package.")]
-        [AiSkillBody("# Profiler / Memory snapshot\n\n`action=take` stores `Library/MatrixMemory/<name>.json` with the Profiler memory counters plus, per object type, how many instances are loaded and their runtime size. Take one before and one after a scene load, a Play session or a suspected leak, then call `profiler-memory-compare`. `mode=full` additionally asks Unity for a native snapshot (`<name>.snap`, written asynchronously a moment later; open it in the Memory Profiler window). `action=list` shows the stored names, `action=delete` removes one. Names are letters, digits, `-`, `_`, `.`.")]
-        [Description("Memory snapshots: action=take (name, mode=light|full) | list | delete (name). Compare two with profiler-memory-compare.")]
-        public ResponseCallTool MemorySnapshot
+        [AiTool(ProfilerMemoryToolId, Title = "Profiler / Memory", Enabled = false)]
+        [AiSkillDescription("Named memory snapshots: take, list, delete, or compare two. A light snapshot (default) stores the memory counters and the loaded UnityEngine.Object count and size per type as JSON; mode=full also writes a native .snap file for the Memory Profiler package.")]
+        [AiSkillBody("# Profiler / Memory\n\n`action=take` stores `Library/MatrixMemory/<name>.json` with the Profiler memory counters plus, per object type (keyed by full type name), how many instances are loaded and their runtime size. Take one before and one after a scene load, a Play session or a suspected leak, then `action=compare name=<earlier> against=<later>`. `mode=full` additionally asks Unity for a native snapshot (`<name>.snap`, written asynchronously a moment later; open it in the Memory Profiler window). `action=list` shows the stored names, `action=delete` removes one. Names are letters, digits, `-`, `_`, `.`.\n\n`compare` prints the counter deltas (`n/a` when a snapshot lacks a counter) and the object types sorted by size change: `type  countA->countB (+n)  sizeA->sizeB MB (+x)`. Leaks show up as types whose count keeps growing between snapshots taken after the same action. `against=current` (default) takes a throw-away snapshot of the live state (nothing stored). `top` limits the rows, `minDeltaKB` hides tiny changes.")]
+        [Description("Memory snapshots: action=take (name, mode=light|full) | list | delete (name) | compare (name, against, top, minDeltaKB).")]
+        public ResponseCallTool Memory
         (
-            [Description("take | list | delete")]
+            [Description("take | list | delete | compare")]
             string action = "take",
-            [Description("Snapshot name, e.g. before-load. Default: a timestamp.")]
+            [Description("Snapshot name, e.g. before-load. take: default is a timestamp. compare: the earlier snapshot.")]
             string? name = null,
-            [Description("light = counters + per-type object table (JSON); full = also a native .snap file.")]
-            string mode = "light"
+            [Description("take: light = counters + per-type object table (JSON); full = also a native .snap file.")]
+            string mode = "light",
+            [Description("compare: later snapshot name, or 'current' for the live state.")]
+            string against = "current",
+            [Description("compare: max rows of the type table (1-200).")]
+            int top = 25,
+            [Description("compare: hide types whose size changed less than this many KB and whose count did not change.")]
+            float minDeltaKB = 0f
         )
         {
             return MainThread.Instance.Run(() =>
@@ -79,37 +84,14 @@ namespace Feeder.MCP.Editor.API
                             }
                             return ResponseCallTool.Success(text);
                         }
+                        case "compare":
+                        {
+                            if (string.IsNullOrWhiteSpace(name)) return ResponseCallTool.Error("name is required");
+                            return ResponseCallTool.Success(Diff(name!, Load(name!), against, Load(against), Mathf.Clamp(top, 1, 200), minDeltaKB));
+                        }
                         default:
-                            return ResponseCallTool.Error($"unknown action '{action}'. Valid: take|list|delete");
+                            return ResponseCallTool.Error($"unknown action '{action}'. Valid: take|list|delete|compare");
                     }
-                }
-                catch (Exception ex) { return ResponseCallTool.Error(ex.Message); }
-            });
-        }
-
-        [AiTool(ProfilerMemoryCompareToolId, Title = "Profiler / Memory compare", ReadOnlyHint = true, IdempotentHint = true, Enabled = false)]
-        [AiSkillDescription("Compare two light memory snapshots (profiler-memory-snapshot): counter deltas and the object types whose count or size grew or shrank most. Use 'current' as one side to compare against the live state.")]
-        [AiSkillBody("# Profiler / Memory compare\n\nPrints the memory counter deltas and a table of object types sorted by size change: `type  countA->countB (+n)  sizeA->sizeB MB (+x)`. Leaks show up as types whose count keeps growing between snapshots taken after the same action. `b=current` takes a throw-away light snapshot of the live state (nothing stored). `top` limits the rows, `minDeltaKB` hides tiny changes.")]
-        [Description("Diff two memory snapshots (names from profiler-memory-snapshot, or 'current'): counters + per-type count/size deltas.")]
-        public ResponseCallTool MemoryCompare
-        (
-            [Description("Earlier snapshot name.")]
-            string a,
-            [Description("Later snapshot name, or 'current' for the live state.")]
-            string b = "current",
-            [Description("Max rows of the type table.")]
-            int top = 25,
-            [Description("Hide types whose size changed less than this many KB and whose count did not change.")]
-            float minDeltaKB = 0f
-        )
-        {
-            return MainThread.Instance.Run(() =>
-            {
-                try
-                {
-                    var left = Load(a);
-                    var right = Load(b);
-                    return ResponseCallTool.Success(Diff(a, left, b, right, Mathf.Clamp(top, 1, 200), minDeltaKB));
                 }
                 catch (Exception ex) { return ResponseCallTool.Error(ex.Message); }
             });
@@ -147,7 +129,7 @@ namespace Feeder.MCP.Editor.API
             foreach (var obj in all)
             {
                 if (obj == null) continue;
-                var key = obj.GetType().Name;
+                var key = obj.GetType().FullName ?? obj.GetType().Name;
                 var size = UnityProfiler.GetRuntimeMemorySizeLong(obj);
                 types.TryGetValue(key, out var entry);
                 types[key] = (entry.Count + 1, entry.Bytes + size);
@@ -182,8 +164,8 @@ namespace Feeder.MCP.Editor.API
             sb.Append("objects ").Append(Delta(Num(a["objects"]), Num(b["objects"]), "0")).Append("  objectsMB ").AppendLine(Delta(Num(a["objectsMB"]), Num(b["objectsMB"]), "0.0"));
             var ca = (JsonObject)a["counters"]!;
             var cb = (JsonObject)b["counters"]!;
-            foreach (var kv in ca)
-                sb.Append(kv.Key).Append(' ').Append(Delta(Num(kv.Value), Num(cb[kv.Key] ?? kv.Value), "0.0")).Append("  ");
+            foreach (var key in ca.Select(k => k.Key).Union(cb.Select(k => k.Key)))
+                sb.Append(key).Append(' ').Append(ca[key] == null || cb[key] == null ? "n/a" : Delta(Num(ca[key]), Num(cb[key]), "0.0")).Append("  ");
             sb.AppendLine();
 
             var ta = (JsonObject)a["types"]!;

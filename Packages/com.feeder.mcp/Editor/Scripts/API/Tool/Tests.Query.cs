@@ -17,8 +17,6 @@ namespace Feeder.MCP.Editor.API
     public static partial class Tool_Tests
     {
         public const string TestsResultToolId = "tests-result";
-        public const string TestsListToolId = "tests-list";
-        public const string TestsClearToolId = "tests-clear";
 
         [AiTool
         (
@@ -26,7 +24,7 @@ namespace Feeder.MCP.Editor.API
             Title = "Tests / Result",
             ReadOnlyHint = true,
             IdempotentHint = true,
-            Enabled = true
+            Enabled = false
         )]
         [AiSkillDescription("Status and result of the last 'tests-run' (job id, state, summary, failures). " +
             "Poll it after 'tests-run' with async=true, or fetch a result the client timed out on. " +
@@ -45,17 +43,7 @@ namespace Feeder.MCP.Editor.API
                 FormatResult(TestRunStore.Read(), jobId, includePassingTests, !string.IsNullOrEmpty(TestResultCollector.TestCallRequestID)));
         }
 
-        [AiTool
-        (
-            TestsListToolId,
-            Title = "Tests / List",
-            ReadOnlyHint = true,
-            IdempotentHint = true,
-            Enabled = false
-        )]
-        [AiSkillDescription("List the Unity tests of a mode, filtered by assembly, namespace, class or name text, with a per-assembly count.")]
-        [Description("List the Unity tests of a mode, filtered by assembly, namespace, class or name text. Returns the total, a per-assembly count and the test names (up to limit).")]
-        public static async Task<string> List
+        internal static async Task<string> List
         (
             [Description("'" + nameof(TestMode.EditMode) + "' or '" + nameof(TestMode.PlayMode) + "'. Default: '" + nameof(TestMode.EditMode) + "'")]
             TestMode testMode = TestMode.EditMode,
@@ -101,17 +89,7 @@ namespace Feeder.MCP.Editor.API
             }).Unwrap();
         }
 
-        [AiTool
-        (
-            TestsClearToolId,
-            Title = "Tests / Clear",
-            DestructiveHint = true,
-            Enabled = false
-        )]
-        [AiSkillDescription("Free a stuck tests-run slot (a run that never reported back) so 'tests-run' can start again.")]
-        [Description("Free a stuck 'tests-run' slot: drops the deferred run and the in-progress marker so a new run can start. " +
-            "It does not stop a run that is really executing inside the Unity Test Runner.")]
-        public static string Clear()
+        internal static string Clear()
         {
             return MainThread.Instance.Run(() =>
             {
@@ -171,7 +149,7 @@ namespace Feeder.MCP.Editor.API
                 if (slotHeld)
                     sb.Append($" retry_after_ms={TestRunGuard.RetryAfterMs(record.state == TestRunStore.Running)}");
                 else
-                    sb.Append(" note=\"no run owns the slot any more; call tests-clear or start a new tests-run\"");
+                    sb.Append(" note=\"no run owns the slot any more; call tests-run action=clear or start a new run\"");
                 return sb.ToString();
             }
 

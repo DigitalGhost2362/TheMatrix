@@ -101,6 +101,8 @@ public sealed class ServerTools(
         if (refusal is not null)
         {
             logger.LogInformation("{Tool} refused for session {SessionId}: editor lock", request.Name, caller.Key);
+            if (Usage.ToolUsageLog.Current is { } refusedScope)
+                refusedScope.Status = "refused";
             return refusal;
         }
         CallToolResult result;
@@ -165,6 +167,11 @@ public sealed class ServerTools(
 
         // 3. disabled or unknown tools are refused by Unity itself (FMP_TOOL_NOT_FOUND)
         logger.LogInformation("tool-call {Tool} for session {SessionId}", name, sessionId);
+        if (Usage.ToolUsageLog.Current is { } scope)
+        {
+            scope.Tool = name;
+            scope.Via = ToolCallName;
+        }
         CallToolResult result;
         try
         {

@@ -23,6 +23,7 @@ namespace Feeder.MCP.Editor.API
             UiInspectPickToolId,
             Title = "UI / Inspect Pick",
             ReadOnlyHint = false,
+            Enabled = false,
             IdempotentHint = false
         )]
         [AiSkillDescription("Interactive element picker, like the web DevTools inspect cursor: activates pick mode on an " +
@@ -43,7 +44,7 @@ namespace Feeder.MCP.Editor.API
             "Ask the user to click the misrendered element after calling this.")]
         public ResponseCallTool InspectPick
         (
-            [Description("EditorWindow class name, full type name, or tab title. Use 'ui-inspect-windows' to list them.")]
+            [Description("EditorWindow class name, full type name, or tab title. Use 'ui-inspect-tree' with an empty windowName to list them.")]
             string windowName,
             [Description("Seconds before pick mode auto-cancels. Default 60, max 600.")]
             int timeoutSeconds = 60,

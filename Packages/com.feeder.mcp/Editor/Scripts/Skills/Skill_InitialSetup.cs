@@ -29,7 +29,7 @@ This project has the standalone `com.feeder.mcp` package installed. The package 
 
 ## Generate Skills
 
-Wiring a client that supports skills also generates its skill files, and they are refreshed on every editor load. Skills are written only for enabled tools, so a tool that is off has no skill. Turn a tool on with `tool-set-enabled-state` (list them with `unity-tool-list`), then run `unity-skill-generate` to refresh the skill files.
+Wiring a client that supports skills also generates its skill files, and they are refreshed on every editor load. Skills are written only for enabled tools, so a tool that is off has no skill. Turn a tool on or off with `tool-set-enabled-state` (list them with `unity-tool-list`) or in the Skills window. To add a tool of your own for this project, use the `matrix-tool-create` skill.
 
 ## Troubleshooting
 

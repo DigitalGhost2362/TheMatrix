@@ -6,6 +6,7 @@ using Feeder.Matrix.Health;
 using Feeder.Matrix.Protocol;
 using Feeder.Matrix.Tools;
 using Feeder.Matrix.Unity;
+using Feeder.Matrix.Usage;
 using Microsoft.AspNetCore.Http.Connections;
 using ModelContextProtocol.Protocol;
 using Serilog;
@@ -63,6 +64,9 @@ try
     builder.Services.AddHostedService<EditorLockMonitor>();
     builder.Services.AddSingleton<ServerTools>();
     builder.Services.AddSingleton<MatrixResources>();
+    builder.Services.AddSingleton<AgentInstructions>();
+    builder.Services.AddSingleton<ToolUsageLog>();
+    builder.Services.AddHostedService(services => services.GetRequiredService<ToolUsageLog>());
 
     builder.Services
         .AddSignalR(options => options.MaximumReceiveMessageSize = matrixOptions.MaxRequestBodyBytes)
@@ -74,9 +78,16 @@ try
             options.ServerInfo = new Implementation { Name = "feeder-mcp-server", Version = MatrixVersion.Value };
             // the Unity tool set changes at runtime (tools switched on or off, editor linked or gone)
             options.Capabilities = new ServerCapabilities { Tools = new ToolsCapability { ListChanged = true } };
+            options.ServerInstructions = AgentInstructions.Default;
         })
         .WithHttpTransport(options =>
         {
+            // per session, so the linked project's own instructions file applies without a server restart
+            options.ConfigureSessionOptions = (context, serverOptions, _) =>
+            {
+                serverOptions.ServerInstructions = context.RequestServices.GetRequiredService<AgentInstructions>().Current();
+                return Task.CompletedTask;
+            };
             // Wrap each MCP session so connected AI clients are mirrored to Unity (FMP McpClientsChanged).
 #pragma warning disable MCPEXP002 // RunSessionHandler is experimental in the MCP SDK; revisit on SDK upgrades.
             options.RunSessionHandler = (context, server, ct) =>
@@ -102,9 +113,30 @@ try
             var caller = context.Services!.GetRequiredService<AgentDirectory>().Resolve(context.Server.SessionId, toolUseId);
             // a handler runs in the execution context of its HTTP request, so this is the request of this very call
             var aborted = context.Services!.GetRequiredService<IHttpContextAccessor>().HttpContext?.RequestAborted ?? CancellationToken.None;
-            if (serverTools.Handles(context.Params?.Name))
-                return await serverTools.CallAsync(context.Params!, caller, backend, ct, aborted);
-            return await serverTools.CallUnityAsync(context.Params!, caller, backend, ct, aborted);
+            var usage = context.Services!.GetRequiredService<ToolUsageLog>();
+            var scope = usage.Begin(context.Params?.Name ?? string.Empty);
+            var started = System.Diagnostics.Stopwatch.StartNew();
+            CallToolResult? result = null;
+            var status = "error";
+            try
+            {
+                result = serverTools.Handles(context.Params?.Name)
+                    ? await serverTools.CallAsync(context.Params!, caller, backend, ct, aborted)
+                    : await serverTools.CallUnityAsync(context.Params!, caller, backend, ct, aborted);
+                status = result.IsError == true ? "error" : "ok";
+                return result;
+            }
+            catch (OperationCanceledException)
+            {
+                status = "timeout";
+                throw;
+            }
+            finally
+            {
+                var client = context.Services!.GetRequiredService<McpClientTracker>().ClientOf(context.Server.SessionId)?.Name ?? "unknown";
+                usage.Record(scope, client, caller.IsSubagent ? (caller.AgentType.Length > 0 ? caller.AgentType : "subagent") : "main",
+                    started.Elapsed, status, ToolUsageLog.SizeOf(context.Params?.Arguments), ToolUsageLog.SizeOf(result));
+            }
         })
         .WithListPromptsHandler((_, _) => ValueTask.FromResult(new ListPromptsResult()))
         .WithGetPromptHandler((context, _) =>
@@ -221,7 +253,7 @@ static GetPromptResult throwPromptNotFound(string? name)
 
 public static class MatrixVersion
 {
-    public const string Value = "0.9.0";
+    public const string Value = "0.9.1";
 }
 
 // Exposes the entry point to WebApplicationFactory-based integration tests.

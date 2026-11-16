@@ -57,10 +57,10 @@ namespace Feeder.MCP.Editor.Tests.Tools
         public void SceneApply_PatchesLiveObjectAndUndoRemovesNewEmitter()
         {
             var tool = new Tool_Vfx();
-            var apply = tool.SceneApply("G1T_Fx", "{\"emitters\":[{\"name\":\"G1T_Core\",\"main\":{\"duration\":2}}]}");
+            var apply = tool.Apply("{\"emitters\":[{\"name\":\"G1T_Core\",\"main\":{\"duration\":2}}]}", target: "G1T_Fx");
             Assert.AreEqual(ResponseStatus.Success, apply.Status, Text(apply));
             Assert.IsNotNull(_fx!.transform.Find("G1T_Core"));
-            StringAssert.Contains("G1T_Core", Text(tool.SceneRead("G1T_Fx")));
+            StringAssert.Contains("G1T_Core", Text(tool.Read(target: "G1T_Fx")));
             Undo.PerformUndo();
             Assert.IsNull(_fx.transform.Find("G1T_Core"));
         }
@@ -68,52 +68,45 @@ namespace Feeder.MCP.Editor.Tests.Tools
         [Test]
         public void SceneApply_UnknownTargetIsAnError()
         {
-            Assert.AreEqual(ResponseStatus.Error, new Tool_Vfx().SceneApply("G1T_Nowhere", "{}").Status);
-        }
-
-        [Test]
-        public void Control_SimulateEmitsAndStopClears()
-        {
-            var tool = new Tool_Vfx();
-            var ps = _fx!.GetComponent<ParticleSystem>();
-            var main = ps.main;
-            main.playOnAwake = false;
-            var sim = tool.Control("G1T_Fx", "simulate", 1f);
-            Assert.AreEqual(ResponseStatus.Success, sim.Status, Text(sim));
-            StringAssert.Contains("alive=", Text(sim));
-            Assert.Greater(ps.particleCount, 0);
-            tool.Control("G1T_Fx", "stop");
-            Assert.AreEqual(0, ps.particleCount);
-            Assert.AreEqual(ResponseStatus.Error, tool.Control("G1T_Fx", "dance").Status);
+            Assert.AreEqual(ResponseStatus.Error, new Tool_Vfx().Apply("{}", target: "G1T_Nowhere").Status);
         }
 
         [Test]
         public void MemorySnapshot_TakeCompareAndDelete()
         {
             var tool = new Tool_Profiler();
-            Assert.AreEqual(ResponseStatus.Success, tool.MemorySnapshot("take", "g1t_a").Status);
+            Assert.AreEqual(ResponseStatus.Success, tool.Memory("take", "g1t_a").Status);
             var extra = new Texture2D(256, 256);
             try
             {
-                Assert.AreEqual(ResponseStatus.Success, tool.MemorySnapshot("take", "g1t_b").Status);
-                var diff = tool.MemoryCompare("g1t_a", "g1t_b");
+                Assert.AreEqual(ResponseStatus.Success, tool.Memory("take", "g1t_b").Status);
+                var diff = tool.Memory("compare", "g1t_a", against: "g1t_b");
                 Assert.AreEqual(ResponseStatus.Success, diff.Status, Text(diff));
                 StringAssert.Contains("Texture2D", Text(diff));
-                StringAssert.Contains("g1t_a", Text(tool.MemorySnapshot("list")));
+                StringAssert.Contains("g1t_a", Text(tool.Memory("list")));
             }
             finally
             {
                 Object.DestroyImmediate(extra);
             }
-            Assert.AreEqual(ResponseStatus.Success, tool.MemoryCompare("g1t_a").Status);
-            Assert.AreEqual(ResponseStatus.Success, tool.MemorySnapshot("delete", "g1t_a").Status);
-            Assert.AreEqual(ResponseStatus.Error, tool.MemoryCompare("g1t_a", "g1t_b").Status);
+            Assert.AreEqual(ResponseStatus.Success, tool.Memory("compare", "g1t_a").Status);
+            Assert.AreEqual(ResponseStatus.Success, tool.Memory("delete", "g1t_a").Status);
+            Assert.AreEqual(ResponseStatus.Error, tool.Memory("compare", "g1t_a", against: "g1t_b").Status);
         }
 
         [Test]
         public void MemorySnapshot_RejectsPathLikeNames()
         {
-            Assert.AreEqual(ResponseStatus.Error, new Tool_Profiler().MemorySnapshot("take", "../evil").Status);
+            Assert.AreEqual(ResponseStatus.Error, new Tool_Profiler().Memory("take", "../evil").Status);
+        }
+
+        [Test]
+        public void ProfilerStats_ReportsAllSections()
+        {
+            var text = Text(new Tool_Profiler().Stats());
+            StringAssert.Contains("profiler enabled=", text);
+            StringAssert.Contains("memoryMB", text);
+            StringAssert.Contains("drawCalls=", text);
         }
 
         [Test]

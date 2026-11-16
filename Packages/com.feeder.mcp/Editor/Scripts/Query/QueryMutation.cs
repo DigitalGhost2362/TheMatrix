@@ -482,7 +482,7 @@ namespace Feeder.MCP.Editor.Query
                 switch (target)
                 {
                     case Object obj when EditorUtility.IsPersistent(obj):
-                        errors.Add($"{MutationSession.Label(target)}: is an asset; delete assets with assets-delete");
+                        errors.Add($"{MutationSession.Label(target)}: is an asset; delete assets with assets-delete, or Mx.TrashAsset(path) in script-execute");
                         break;
                     case Transform:
                         errors.Add($"{MutationSession.Label(target)}: a Transform cannot be removed; destroy its GameObject instead");
