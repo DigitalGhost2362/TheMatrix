@@ -27,6 +27,9 @@ All notable changes to this package are documented here.
 - Playtest save guard (`protect-prefs: on`, default): PlayerPrefs and `persistentDataPath` are snapshotted before the
   run, the changes are listed under `Side effects` in the report and put back once play mode has ended.
 - Playtest `fail-on-console-errors: true` (default): a run with console errors reports `FAIL (console errors: n)`.
+- Playtest `call` steps: a called check that throws, or an argument that does not convert, fails the step with the
+  method name and the inner message; nothing goes to the console. A real runner crash logs one tagged line that the
+  run does not count as a game error.
 - `matrix-tool-create` skill: how to add a tool of your own for one project (an Editor `.cs` file with
   `[AiToolType]` / `[AiTool]`), for a `script-execute` job that keeps coming back. It replaces the
   `unity-skill-create` tool.

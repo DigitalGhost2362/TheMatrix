@@ -210,8 +210,9 @@ namespace Feeder.MCP.Editor.Playtest
             try { _run.Step(); }
             catch (Exception e)
             {
-                _run.Fail($"runner error: {e.Message}");
-                Debug.LogException(e);
+                // tagged, so the run does not also count its own crash as a game console error
+                _run.Fail($"runner error: {e.GetType().Name}: {e.Message}");
+                Debug.LogError($"{LogTag} runner error: {e}");
             }
         }
 
@@ -582,8 +583,22 @@ namespace Feeder.MCP.Editor.Playtest
                         return true;
                     }
                     case "call":
-                        _rows[_index].Note = Call(step.Args);
-                        return true;
+                        // a called check that throws is a failed step of the flow, not a runner crash: no console entry
+                        try
+                        {
+                            _rows[_index].Note = Call(step.Args);
+                            return true;
+                        }
+                        catch (TargetInvocationException e) when (e.InnerException != null)
+                        {
+                            Fail($"{step.Args[0]}: {e.InnerException.GetType().Name}: {e.InnerException.Message}");
+                            return false;
+                        }
+                        catch (Exception e) when (e is ArgumentException or FormatException or InvalidCastException or OverflowException)
+                        {
+                            Fail($"{step.Args[0]}: {e.Message}");
+                            return false;
+                        }
                     case "timescale":
                         Time.timeScale = ParseFloat(step.Args[0]);
                         return true;
