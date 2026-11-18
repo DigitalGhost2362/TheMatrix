@@ -6,6 +6,16 @@ All notable changes to this package are documented here.
 
 ### Added
 
+- `playtest` tool (off by default) and `matrix-playtest` skill: a playtest is data in the project's
+  `Docs/Playtest.md` (setup, a `Clear screen` list and named flows of `click`, `expect-active`, `shot`, `call`, `run`
+  and other steps), and one call plays a flow in play mode. A click waits until its uGUI target is active, interactable
+  and not covered, then clicks at once; a covered target fails with the path of what lies over it. The answer is a
+  step table with times and console errors; shots and `report.md` go to `Docs/Playtest_Runs/`. The run enters play
+  mode in the file's `start-scene` when needed and survives the domain reload of entering play mode.
+- Playtest cursor: drawn with UI Toolkit over the Game view window, so nothing enters the scene and captures stay
+  clean. It flies to each target and plays a click animation, then stays on screen at rest until play mode ends.
+  `PlaytestCursorTheme` assets (`Create > Matrix > Playtest Cursor Theme`) change the sprites, grid, timing and colors;
+  `IPlaytestCursorLayer` classes add layers, and `cursor-layers:` or `disabledLayers` turn them off.
 - `matrix-tool-create` skill: how to add a tool of your own for one project (an Editor `.cs` file with
   `[AiToolType]` / `[AiTool]`), for a `script-execute` job that keeps coming back. It replaces the
   `unity-skill-create` tool.
