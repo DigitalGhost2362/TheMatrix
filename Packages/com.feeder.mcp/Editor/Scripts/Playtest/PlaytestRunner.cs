@@ -17,7 +17,8 @@ namespace Feeder.MCP.Editor.Playtest
 {
     // runs one flow of the project's Playtest.md in play mode; the job sits in SessionState so it survives the domain
     // reload of entering play mode, and the steps tick in Application.onBeforeRender, inside the player loop, where
-    // Screen and the EventSystem describe the Game view
+    // Screen and the EventSystem describe the Game view. After the flow, play mode ends first, then the saves are
+    // compared and restored and the contact sheet is built, so writes the game makes on quit are caught too.
     [InitializeOnLoad]
     internal static class PlaytestRunner
     {
@@ -25,6 +26,7 @@ namespace Feeder.MCP.Editor.Playtest
         const string LastKey = "Feeder_Matrix_Playtest_Last";
         const string LogTag = "[Matrix Playtest]";
         const double EnterPlayGiveUpSeconds = 120;
+        const double ExitPlayGiveUpSeconds = 60;
 
         static Job? _job;
         static Run? _run;
@@ -69,11 +71,15 @@ namespace Feeder.MCP.Editor.Playtest
                 Cursor = cursor ?? playtest.GetBool("cursor", true),
                 Stay = stay,
                 StartTicks = DateTime.UtcNow.Ticks,
+                Protect = playtest.GetBool("protect-prefs", true),
+                Folder = Path.Combine(Path.GetDirectoryName(playtest.Path)!, "Playtest_Runs", $"{DateTime.Now:yyyyMMdd-HHmmss}-{flow}"),
             };
+            if (!EditorApplication.isPlaying && EditorUtility.scriptCompilationFailed)
+                throw new InvalidOperationException("The project has compilation errors; fix them before a playtest.");
+            if (job.Protect)
+                PlaytestSaveGuard.Snapshot();
             if (!EditorApplication.isPlaying)
             {
-                if (EditorUtility.scriptCompilationFailed)
-                    throw new InvalidOperationException("The project has compilation errors; fix them before a playtest.");
                 var startScene = playtest.Get("start-scene", string.Empty);
                 if (startScene.Length > 0)
                 {
@@ -102,7 +108,9 @@ namespace Feeder.MCP.Editor.Playtest
             if (_run != null)
                 return _run.Progress();
             if (_job != null)
-                return $"Playtest '{_job.Flow}' is waiting for play mode.";
+                return _job.Pending
+                    ? $"Playtest '{_job.Flow}' finished; restoring saves and building the contact sheet once play mode has ended."
+                    : $"Playtest '{_job.Flow}' is waiting for play mode.";
             var last = SessionState.GetString(LastKey, string.Empty);
             return last.Length > 0 ? last : "No playtest has run in this Editor session.";
         }
@@ -116,6 +124,8 @@ namespace Feeder.MCP.Editor.Playtest
             }
             if (_job == null)
                 return "No playtest is running.";
+            if (_job.Pending)
+                return Complete();
             return Deliver("Playtest stopped before play mode started.", false);
         }
 
@@ -128,6 +138,14 @@ namespace Feeder.MCP.Editor.Playtest
             if (_job == null)
             {
                 EditorApplication.update -= Pump;
+                return;
+            }
+            var elapsed = new TimeSpan(DateTime.UtcNow.Ticks - _job.StartTicks).TotalSeconds;
+            if (_job.Pending)
+            {
+                var playOver = !EditorApplication.isPlaying && !EditorApplication.isPlayingOrWillChangePlaymode && !EditorApplication.isCompiling;
+                if (playOver || !_job.EnteredPlay || _job.Stay || elapsed > _job.FinishedSeconds + ExitPlayGiveUpSeconds)
+                    Complete();
                 return;
             }
             if (_run != null)
@@ -147,7 +165,6 @@ namespace Feeder.MCP.Editor.Playtest
                 Begin(_job);
                 return;
             }
-            var elapsed = new TimeSpan(DateTime.UtcNow.Ticks - _job.StartTicks).TotalSeconds;
             if (settled && !EditorApplication.isPlaying && !EditorApplication.isPlayingOrWillChangePlaymode && elapsed > 1)
                 Deliver(EditorUtility.scriptCompilationFailed
                     ? "Unity refused to enter play mode: the project has compilation errors."
@@ -204,14 +221,65 @@ namespace Feeder.MCP.Editor.Playtest
                 _run?.AddConsoleError(message);
         }
 
+        // the flow is over: report written, then play mode ends and Complete runs in edit mode
         static string Finish()
         {
             var run = _run!;
             _run = null;
             Application.onBeforeRender -= Tick;
             Application.logMessageReceived -= OnLog;
-            var report = run.Close();
-            return Deliver(report, run.Passed);
+            run.Close();
+            var job = _job!;
+            job.Pending = true;
+            job.Passed = run.Passed;
+            job.FinishedSeconds = new TimeSpan(DateTime.UtcNow.Ticks - job.StartTicks).TotalSeconds;
+            Save();
+            if (job.EnteredPlay && !job.Stay && EditorApplication.isPlaying)
+            {
+                EditorEvents.NextTick(() => EditorApplication.isPlaying = false);
+                return $"Playtest '{job.Flow}' finished; the report follows once play mode has ended.";
+            }
+            return Complete();
+        }
+
+        static string Complete()
+        {
+            var job = _job!;
+            var reportPath = Path.Combine(job.Folder, "report.md");
+            var text = new StringBuilder(File.Exists(reportPath) ? File.ReadAllText(reportPath) : $"Playtest '{job.Flow}': report missing.\n");
+            try
+            {
+                text.Append(job.Protect
+                    ? PlaytestSaveGuard.Compare(restore: !EditorApplication.isPlaying)
+                    : "\n## Side effects\n\nNot checked: `protect-prefs: off`.\n");
+            }
+            catch (Exception e)
+            {
+                text.Append($"\n## Side effects\n\nCheck failed: {e.Message}\n");
+            }
+            try
+            {
+                var title = text.ToString().Split('\n')[0].TrimEnd('.') + $" ({DateTime.Now:yyyy-MM-dd HH:mm})";
+                var sheets = PlaytestCapture.BuildSheets(job.Folder, title);
+                text.Append(sheets.Count == 0 ? "\nContact sheet: none (no shots in this flow).\n" : "\n");
+                foreach (var sheet in sheets)
+                    text.Append($"Contact sheet: {Relative(sheet)}\n![]({sheet.Replace('\\', '/')})\n");
+            }
+            catch (Exception e)
+            {
+                text.Append($"\nContact sheet failed: {e.Message}\n");
+            }
+            try
+            {
+                Directory.CreateDirectory(job.Folder);
+                File.WriteAllText(reportPath, text.ToString());
+                text.Append($"Report: {Relative(reportPath)}\n");
+            }
+            catch (Exception e)
+            {
+                text.Append($"Report not written: {e.Message}\n");
+            }
+            return Deliver(text.ToString(), job.Passed);
         }
 
         // play mode ended without the Pump seeing it (another package's handler threw first)
@@ -247,11 +315,14 @@ namespace Feeder.MCP.Editor.Playtest
 
         static void Save() => SessionState.SetString(JobKey, _job?.Serialize() ?? string.Empty);
 
+        static string Relative(string path) => path.Replace('\\', '/').Replace(ProjectRoot.Replace('\\', '/') + "/", string.Empty);
+
         #endregion
 
         sealed class Job
         {
             const char Sep = '\u001f';
+            const int Parts = 14;
 
             public string RequestId = string.Empty;
             public string File = string.Empty;
@@ -263,15 +334,24 @@ namespace Feeder.MCP.Editor.Playtest
             public long StartTicks;
             // "-" means none was set; empty means nothing to restore
             public string PreviousStartScene = string.Empty;
+            public bool Protect;
+            public string Folder = string.Empty;
+            // the flow is over and only the edit-mode part is left
+            public bool Pending;
+            public bool Passed;
+            public double FinishedSeconds;
 
             public string Serialize() => string.Join(Sep.ToString(), RequestId, File, Flow,
-                Speed.ToString(CultureInfo.InvariantCulture), Cursor ? "1" : "0", Stay ? "1" : "0", EnteredPlay ? "1" : "0",
-                StartTicks.ToString(CultureInfo.InvariantCulture), PreviousStartScene);
+                Speed.ToString(CultureInfo.InvariantCulture), Flag(Cursor), Flag(Stay), Flag(EnteredPlay),
+                StartTicks.ToString(CultureInfo.InvariantCulture), PreviousStartScene, Flag(Protect), Folder, Flag(Pending), Flag(Passed),
+                FinishedSeconds.ToString(CultureInfo.InvariantCulture));
+
+            static string Flag(bool value) => value ? "1" : "0";
 
             public static Job? Parse(string raw)
             {
                 var parts = raw.Split(Sep);
-                if (parts.Length != 9)
+                if (parts.Length != Parts)
                     return null;
                 return new Job
                 {
@@ -284,6 +364,11 @@ namespace Feeder.MCP.Editor.Playtest
                     EnteredPlay = parts[6] == "1",
                     StartTicks = long.Parse(parts[7], CultureInfo.InvariantCulture),
                     PreviousStartScene = parts[8],
+                    Protect = parts[9] == "1",
+                    Folder = parts[10],
+                    Pending = parts[11] == "1",
+                    Passed = parts[12] == "1",
+                    FinishedSeconds = double.Parse(parts[13], CultureInfo.InvariantCulture),
                 };
             }
         }
@@ -298,10 +383,11 @@ namespace Feeder.MCP.Editor.Playtest
 
         sealed class Run
         {
-            enum Phase { Start, Seek, Move, Hit }
+            enum Phase { Start, Seek, Move, Hit, Settle }
 
             const int MaxConsoleErrors = 5;
             const double ShowBlockerAfter = 0.4;
+            const int StableFrames = 3;
 
             readonly Job _job;
             readonly List<PlaytestStep> _steps;
@@ -309,11 +395,15 @@ namespace Feeder.MCP.Editor.Playtest
             readonly PlaytestCursorTheme _theme;
             readonly PlaytestCursorState _cursor = PlaytestCursorOverlay.State;
             readonly bool _useCursor;
-            readonly string _folder;
+            readonly bool _autoshot;
+            readonly bool _failOnConsoleErrors;
+            readonly float _settleMax;
             readonly float _timeout;
             readonly float _timeScale = Time.timeScale;
             readonly List<string> _hidden = new List<string>();
             readonly List<string> _consoleErrors = new List<string>();
+            readonly List<PlaytestTile> _tiles = new List<PlaytestTile>();
+            readonly HashSet<string> _stepFrames = new HashSet<string>();
             readonly double _started;
             readonly bool _maximized;
             int _consoleErrorCount;
@@ -327,6 +417,9 @@ namespace Feeder.MCP.Editor.Playtest
             double _moveStart;
             double _moveSeconds;
             double _clickStart = -1;
+            double _settleStart;
+            long _lastSignature;
+            int _stable;
             string _failure = string.Empty;
 
             public Run(Job job, PlaytestFile file, List<PlaytestStep> steps)
@@ -335,7 +428,9 @@ namespace Feeder.MCP.Editor.Playtest
                 _steps = steps;
                 _rows = steps.Select(s => new Row { Step = s.Raw }).ToList();
                 _timeout = file.GetFloat("timeout", 5f);
-                _folder = Path.Combine(Path.GetDirectoryName(job.File)!, "Playtest_Runs", $"{DateTime.Now:yyyyMMdd-HHmmss}-{job.Flow}");
+                _settleMax = file.GetFloat("shot-settle", 2f);
+                _autoshot = file.Get("autoshot", "off").Equals("clicks", StringComparison.OrdinalIgnoreCase);
+                _failOnConsoleErrors = file.GetBool("fail-on-console-errors", true);
                 _started = Now;
                 PlaytestScene.Reset();
                 var view = PlaytestCursorOverlay.GameViews().FirstOrDefault();
@@ -359,7 +454,7 @@ namespace Feeder.MCP.Editor.Playtest
             static double Now => Time.realtimeSinceStartupAsDouble;
 
             public bool Done { get; private set; }
-            public bool Passed => _failure.Length == 0 && Done;
+            public bool Passed => _failure.Length == 0 && Done && !(_failOnConsoleErrors && _consoleErrorCount > 0);
 
             public void AddConsoleError(string message)
             {
@@ -403,6 +498,7 @@ namespace Feeder.MCP.Editor.Playtest
                         _phase = Phase.Seek;
                         _stepStart = now;
                         _frames = 0;
+                        _stepFrames.Clear();
                         _cursor.Caption = $"{_index + 1}/{_steps.Count}  {_steps[_index].Raw}";
                         _cursor.Blocked = string.Empty;
                     }
@@ -438,6 +534,17 @@ namespace Feeder.MCP.Editor.Playtest
                             Fail(go == null ? "not found" : active ? "still active" : "not active");
                         return false;
                     }
+                    case "expect-visible":
+                    case "expect-hidden":
+                    {
+                        var go = PlaytestScene.Find(step.Args[0]);
+                        var why = go == null ? "not found" : PlaytestScene.Hidden(go);
+                        if ((why == null) == (step.Verb == "expect-visible"))
+                            return true;
+                        if (waited > Timeout(step, 1))
+                            Fail(why ?? "still visible");
+                        return false;
+                    }
                     case "wait":
                         return waited >= ParseFloat(step.Args[0]);
                     case "hide":
@@ -463,11 +570,17 @@ namespace Feeder.MCP.Editor.Playtest
                         return true;
                     }
                     case "shot":
-                        // two frames, so what the previous step opened is on screen
-                        if (++_frames < 3)
+                    {
+                        // at least two frames, so what the previous step opened is drawn, then until the UI stops moving
+                        if (_frames++ == 0)
+                            BeginSettle(now);
+                        if (_frames < 3)
                             return false;
-                        Shot(step.Args[0]);
+                        if (!Settled(now, step.Args.Length > 1 ? ParseFloat(step.Args[1]) : _settleMax, out var settle))
+                            return false;
+                        Shot(step.Args[0], settle);
                         return true;
+                    }
                     case "call":
                         _rows[_index].Note = Call(step.Args);
                         return true;
@@ -490,10 +603,11 @@ namespace Feeder.MCP.Editor.Playtest
                         if (blocker == null)
                         {
                             _cursor.Blocked = string.Empty;
+                            AutoFrame("before", step);
                             if (!_useCursor)
                             {
                                 PlaytestScene.Click(_target!, _targetScreen);
-                                return true;
+                                return AfterClick(now);
                             }
                             PlaytestScene.Blocker(_target!, out _, out rect);
                             _cursor.Target = PlaytestCursorOverlay.Normalize(rect);
@@ -525,6 +639,7 @@ namespace Feeder.MCP.Editor.Playtest
                         _cursor.Position = Vector2.Lerp(_moveFrom, to, Ease((float)k));
                         if (k < 1.0)
                             return false;
+                        AutoFrame("over", step);
                         _clickStart = now;
                         _phase = Phase.Hit;
                         return false;
@@ -539,12 +654,58 @@ namespace Feeder.MCP.Editor.Playtest
                             _phase = Phase.Seek;
                             return false;
                         }
+                        _cursor.ClickFrame = ClickFrame(now);
+                        AutoFrame("press", step);
                         PlaytestScene.Click(_target!, _targetScreen);
+                        return AfterClick(now);
+                    }
+                    case Phase.Settle:
+                    {
+                        if (!Settled(now, _settleMax, out _))
+                            return false;
+                        AutoFrame("result", step);
                         return true;
                     }
                     default:
                         throw new ArgumentOutOfRangeException(nameof(_phase), _phase, null);
                 }
+            }
+
+            // with autoshot the step waits for the screen it opened, for the result frame
+            bool AfterClick(double now)
+            {
+                if (!_autoshot)
+                    return true;
+                BeginSettle(now);
+                _phase = Phase.Settle;
+                return false;
+            }
+
+            void BeginSettle(double now)
+            {
+                _settleStart = now;
+                _stable = 0;
+                _lastSignature = long.MinValue;
+            }
+
+            bool Settled(double now, float max, out string note)
+            {
+                note = string.Empty;
+                if (max <= 0)
+                    return true;
+                var signature = PlaytestScene.UiSignature();
+                _stable = signature == _lastSignature && PlaytestScene.FiniteTweensPlaying() == 0 ? _stable + 1 : 0;
+                _lastSignature = signature;
+                var waited = now - _settleStart;
+                if (_stable >= StableFrames && waited >= 0.1)
+                {
+                    note = $"settled {waited:0.00} s";
+                    return true;
+                }
+                if (waited < max)
+                    return false;
+                note = $"still moving after {max:0.#} s";
+                return true;
             }
 
             float Timeout(PlaytestStep step, int argIndex) => step.Args.Length > argIndex ? ParseFloat(step.Args[argIndex]) : _timeout;
@@ -568,18 +729,39 @@ namespace Feeder.MCP.Editor.Playtest
 
             static float ParseFloat(string value) => float.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture);
 
-            void Shot(string name)
+            string StepPrefix => (_index + 1).ToString("000", CultureInfo.InvariantCulture);
+
+            Color32[]? Capture(out int width, out int height, out string error) =>
+                PlaytestCapture.Frame(_useCursor ? _cursor : null, _useCursor ? _theme : null, out width, out height, out error);
+
+            void Shot(string name, string settle)
             {
-                var png = Tool_Screenshot.CaptureGameView(0, out _, out _, out var error);
-                if (png == null)
+                var pixels = Capture(out var width, out var height, out var error);
+                if (pixels == null)
                 {
                     _rows[_index].Note = "no capture: " + error;
                     return;
                 }
-                Directory.CreateDirectory(_folder);
-                var path = Path.Combine(_folder, name + ".png");
-                File.WriteAllBytes(path, png);
-                _rows[_index].Note = Relative(path);
+                // the step number keeps a flow that runs twice from overwriting its first shot
+                var path = Path.Combine(_job.Folder, $"{StepPrefix}_{name}.png");
+                PlaytestCapture.SavePng(path, pixels, width, height);
+                _tiles.Add(new PlaytestTile { Step = _index + 1, Label = $"#{_index + 1}  {name}", Path = path });
+                _rows[_index].Note = Relative(path) + (settle.Length > 0 ? $" ({settle})" : string.Empty);
+            }
+
+            // autoshot: clicks; one row per click: before, cursor over the target, press, result
+            void AutoFrame(string label, PlaytestStep step)
+            {
+                if (!_autoshot || !_stepFrames.Add(label) || (!_useCursor && label is "over" or "press"))
+                    return;
+                var pixels = Capture(out var width, out var height, out _);
+                if (pixels == null)
+                    return;
+                var path = Path.Combine(_job.Folder, "frames", $"{StepPrefix}_{label}.png");
+                PlaytestCapture.SaveTile(path, pixels, width, height);
+                var target = step.Args[0].TrimEnd('/');
+                target = target.Substring(target.LastIndexOf('/') + 1);
+                _tiles.Add(new PlaytestTile { Step = _index + 1, Label = $"#{_index + 1} {label}  {target}", Path = path, NewRow = label == "before" });
             }
 
             static string Call(string[] args)
@@ -616,7 +798,8 @@ namespace Feeder.MCP.Editor.Playtest
                 catch (ReflectionTypeLoadException e) { return e.Types.Where(t => t != null)!; }
             }
 
-            public string Close()
+            // writes report.md and the frame list; the side effects and the contact sheet are added after play mode
+            public void Close()
             {
                 // the cursor stays on screen, idle, until play mode ends
                 _cursor.ClickFrame = -1;
@@ -632,36 +815,33 @@ namespace Feeder.MCP.Editor.Playtest
                 }
                 var seconds = Now - _started;
                 var okCount = _rows.Count(r => r.Result is "ok" or "absent");
+                var verdict = Passed ? "PASS" : _failure.Length == 0 ? $"FAIL (console errors: {_consoleErrorCount})" : "FAIL";
                 var text = new StringBuilder();
-                text.Append($"Playtest '{_job.Flow}' {(Passed ? "PASS" : "FAIL")}: {okCount}/{_rows.Count} steps in {seconds:0.00} s (speed {_job.Speed:0.##}, cursor {(_useCursor ? "on" : "off")}).\n");
-                if (!Passed)
-                    text.Append("Failed at ").Append(_failure.Length > 0 ? _failure : "an unknown step").Append('\n');
+                text.Append($"Playtest '{_job.Flow}' {verdict}: {okCount}/{_rows.Count} steps in {seconds:0.00} s, {_consoleErrorCount} console errors (speed {_job.Speed:0.##}, cursor {(_useCursor ? "on" : "off")}).\n");
+                if (_failure.Length > 0)
+                    text.Append("Failed at ").Append(_failure).Append('\n');
                 text.Append("\n| # | step | result | ms | note |\n|---|---|---|---|---|\n");
                 for (var i = 0; i < _rows.Count; i++)
                 {
                     var row = _rows[i];
                     text.Append($"| {i + 1} | `{row.Step.Replace("|", "/")}` | {row.Result} | {(row.Result == "skip" ? "" : row.Ms.ToString("0"))} | {row.Note.Replace("|", "/")} |\n");
                 }
-                text.Append($"\nConsole errors during the run: {_consoleErrorCount}\n");
+                text.Append($"\nConsole errors during the run: {_consoleErrorCount}{(_failOnConsoleErrors && _consoleErrorCount > 0 ? " (the run fails on them; fail-on-console-errors: off to allow)" : string.Empty)}\n");
                 foreach (var error in _consoleErrors)
                     text.Append("- ").Append(error).Append('\n');
                 if (_hidden.Count > 0)
                     text.Append($"Hidden for the run: {string.Join(", ", _hidden)}\n");
                 try
                 {
-                    Directory.CreateDirectory(_folder);
-                    var path = Path.Combine(_folder, "report.md");
-                    File.WriteAllText(path, text.ToString());
-                    text.Append($"Report: {Relative(path)}\n");
+                    Directory.CreateDirectory(_job.Folder);
+                    File.WriteAllText(Path.Combine(_job.Folder, "report.md"), text.ToString());
+                    PlaytestCapture.WriteManifest(_job.Folder, _tiles);
                 }
                 catch (Exception e)
                 {
-                    text.Append($"Report not written: {e.Message}\n");
+                    Debug.LogWarning($"{LogTag} report not written: {e.Message}");
                 }
-                return text.ToString();
             }
-
-            static string Relative(string path) => path.Replace('\\', '/').Replace(ProjectRoot.Replace('\\', '/') + "/", string.Empty);
         }
     }
 }

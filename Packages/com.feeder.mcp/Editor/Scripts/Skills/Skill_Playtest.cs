@@ -9,7 +9,7 @@ namespace Feeder.MCP.Editor.API
         public const string SkillId = "matrix-playtest";
 
         [AiSkill(SkillId,
-@"Play-test the game with the 'playtest' tool: one call runs a flow from the project's Docs/Playtest.md in play mode, clicks uGUI buttons through a visible cursor as soon as each one shows, and answers with a step table. Covers writing Playtest.md when it is missing or out of date, running and reading a flow, fixing the file versus reporting a game bug, and changing the cursor. Use whenever the user asks for a playtest or play test, to test a UI flow, or to change the playtest cursor.")]
+@"Play-test the game with the 'playtest' tool, start to finish without asking: one call runs a flow from the project's Docs/Playtest.md in play mode, clicks uGUI buttons through a visible cursor, waits for panels to settle before shots, fails on console errors, puts PlayerPrefs and save files back, and answers with a step table and a contact sheet. Covers finding the UI, writing or fixing Playtest.md, keeping rewards and purchases out of flows, reading a result and changing the cursor. Use whenever the user asks for a playtest or play test, to test a UI flow, or to change the playtest cursor.")]
         public static string Markdown => @"
 # Playtest
 
@@ -17,13 +17,23 @@ The runner is written once, in the package. A playtest is data: the steps of a f
 `Docs/Playtest.md`, and one `playtest` call plays them. Never write a `script-execute` that clicks buttons
 for a playtest; when a step cannot be expressed, say which verb is missing.
 
+## Rules of the run
+
+- The user asking for a playtest is the yes for every step of it: write or fix `Playtest.md`, enable the tool,
+  enter play mode, run, fix the file and run again. Do not ask in between; report at the end.
+- Each problem gets at most two fixes of the file (section 4); then report it as it is.
+- Stop only for a real block: another person's session is in play mode (`matrix-shared-editor`), compile errors
+  you did not cause, or a flow that cannot avoid destroying data that is not the agent's.
+
 ## 0. Tool and Editor
 
-- `playtest` is off by default: `tool-set-enabled-state` with `playtest` on, then call it through `tool-call`
-  until the client lists it.
+- `playtest` is off by default: `tool-set-enabled-state` with `{""Name"":""playtest"",""Enabled"":true}`, then call it
+  through `tool-call` (`{""name"":""playtest"",""arguments"":{...}}`) until the client lists it.
 - Follow `matrix-shared-editor`: `editor-lock-acquire` before the first run, `editor-lock-release` when done.
-- The run enters play mode itself, starting in the file's `start-scene` (the open scenes stay as they are),
-  and leaves play mode at the end unless `stay=true`. It refuses while the project has compile errors.
+- The run enters play mode itself, starting in the file's `start-scene` (the open scenes stay as they are), and
+  leaves play mode at the end unless `stay=true`. It refuses while the project has compile errors.
+- `Tools > Feeder > Matrix Bridge > Getting Started` installs this skill with the others, and a package update that
+  changes a skill text rewrites the skill files on the next Editor load.
 
 ## 1. Is the file there and current?
 
@@ -37,39 +47,107 @@ Call `playtest` with `action=list`. It prints the flows or the parse errors.
 - The UI changed since the last `## Changelog` line of the file:
   `git log --since=<that date> --name-only -- Assets` touches `.prefab`, `.unity` or panel / popup / UI scripts
   that a flow goes through.
-- The user says the screens changed, or a previous run failed with `not found`, `inactive` or a timeout on a
-  step whose screen was redesigned.
+- A previous run failed with `not found`, `inactive`, `hidden` or a timeout on a step whose screen was redesigned.
 
-### Writing or updating it
+### 1.1 Find the UI
 
-1. Find the screens: the start scene (the first enabled scene of the build settings, or the one the user
-   names), the Canvas roots, and every `Button` / `Toggle` on the way. `rql-query` lists them with their path
-   and label without opening anything; read the click handlers to learn what each button opens or unlocks.
-2. One flow per thing a player does (`open-settings`, `buy-item`, `claim-daily`), each starting from the state
+Enter play mode in the start scene (or run a short flow with `stay=true`) and list every `Selectable` with its
+path, label and whether a player can really see it:
+
+```csharp
+string Seg(Transform t)
+{
+    if (t.parent == null) return t.name;
+    int same = 0, index = 0;
+    foreach (Transform s in t.parent) { if (s.name != t.name) continue; if (s == t) index = same; same++; }
+    return same > 1 ? $""{t.name}[{index}]"" : t.name;
+}
+var rows = new System.Collections.Generic.List<string>();
+foreach (var s in UnityEngine.Object.FindObjectsByType<UnityEngine.UI.Selectable>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+{
+    var go = s.gameObject;
+    string state = null;
+    var alpha = 1f;
+    if (!go.activeInHierarchy) state = ""inactive"";
+    for (var t = go.transform; t != null && state == null; t = t.parent)
+    {
+        var canvas = t.GetComponent<Canvas>();
+        var group = t.GetComponent<CanvasGroup>();
+        if (canvas != null && !canvas.enabled) state = ""hidden: Canvas off on "" + t.name;
+        else if (group != null && group.enabled && (alpha *= group.alpha) <= 0.001f) state = ""hidden: alpha 0 on "" + t.name;
+    }
+    state ??= s.IsInteractable() ? ""shown"" : ""shown, not interactable"";
+    var path = Seg(go.transform);
+    for (var t = go.transform.parent; t != null; t = t.parent) path = Seg(t) + ""/"" + path;
+    var label = """";
+    foreach (var c in go.GetComponentsInChildren<Component>(true))
+    {
+        var p = c == null || c is UnityEngine.UI.Selectable ? null : c.GetType().GetProperty(""text"");
+        if (p != null && p.PropertyType == typeof(string)) { label = (string)p.GetValue(c); break; }
+    }
+    rows.Add($""/{path} | \""{label}\"" | {state}"");
+}
+rows.Sort(StringComparer.Ordinal);
+return string.Join(""\n"", rows);
+```
+
+Many UI frameworks hide a closed panel with `Canvas.enabled = false` and `CanvasGroup.alpha = 0` and keep its
+GameObject **active**. There `expect-active` / `expect-inactive` on the panel root prove nothing: use
+`expect-visible` / `expect-hidden`, or let the next `click` on the screen below prove the panel closed (it fails
+with `covered by` while the panel is still up).
+
+### 1.2 Keep real rewards out of the flows
+
+In the Editor there is usually no ad SDK, so a rewarded or interstitial ad counts as watched at once and **pays
+out for real**: free items, progress toward ""remove ads"", currency on returning home. Buying, opening a crate,
+""quick join"" (a new world or room) and closing a shop while trying an item on also change saved data.
+
+- Read the click handler of every button a flow would press. Leave out buttons that show an ad, buy, spend,
+  create save data at random, or equip; write in the file why each is left out.
+- Use fixed data: name one world / profile / slot in a `## Preparation` section (how it was made, its id), and
+  reach it the same way every run, not through a random or ""newest"" choice when that changes.
+- The runner snapshots PlayerPrefs (`HKCU\Software\Unity\UnityEditor\<company>\<product>` for play mode in the
+  Windows Editor; a built player uses another key) and the files in `Application.persistentDataPath` before the run,
+  lists what changed under `## Side effects` of the report, and puts both back once play mode has ended
+  (`protect-prefs: on`, the default). With `stay=true` it lists but cannot restore. A save folder over 256 MB is
+  listed but not restored: say so.
+
+### 1.3 Write the flows
+
+1. One flow per thing a player does (`open-settings`, `shop-tabs`, `enter-world`), each starting from the state
    the previous flow leaves or from a fresh start. A `full` flow chains them with `run`.
-3. Target by hierarchy path (`/Canvas/Shop/List/Item[3]/BtnBuy`; `[n]` is the n-th sibling of that name,
-   from 0). Use the button label in quotes (`""Buy""`) only when the path changes at runtime.
-4. Add no `wait` before a click: a click already waits until its target is active, interactable and on top.
-   Use `wait` only for a game rule (a timer that must expire).
-5. Add `expect-active` / `expect-inactive` after the steps whose result matters, and `shot` where the
-   user wants to see the screen.
-6. `## Clear screen` hides what lies over the game and is not under test: debug strips, FPS counters, ads test
-   banners, console overlays. A popup that players also get (daily reward, tutorial hand) is part of the game:
-   close it with a click step instead of hiding it.
-7. New file: add `<docs folder>/Playtest_Runs/` to the project's `.gitignore` (shots and reports of each run).
-8. Append one line to `## Changelog`: date, what changed, why. Ask the user only what the code cannot tell
-   (which item to buy, which account state to start from).
+2. Target by hierarchy path (`/Canvas/Shop/List/Item[3]/BtnBuy`; `[n]` is the n-th sibling of that name, from
+   0). Use the label in quotes (`""Buy""`) only when the path changes at runtime; a label prefers the button a
+   player can see.
+3. No `wait` before a click: a click already waits until its target is shown, interactable and on top. No `wait`
+   before a `shot` either: a shot waits until the UI stops moving. Use `wait` only for a game rule (a timer).
+4. `expect-visible` / `expect-hidden` after the steps whose result matters; `shot` on every new screen.
+5. `## Clear screen` hides what lies over the game and is not under test: debug strips, FPS counters, test ad
+   banners, console overlays. A popup players also get (daily reward, tutorial hand) is part of the game: close it
+   with a click.
+6. The run folder must stay out of git: `git check-ignore -v Docs/Playtest_Runs/x`. Not ignored: add
+   `Docs/Playtest_Runs/` to `.gitignore`, or to `.git/info/exclude` when `.gitignore` cannot change.
+7. Append one line to `## Changelog`: date, what changed, why.
 
 ### File format
 
 ```md
 # Playtest - <game>
 
+Notes for whoever writes flows here: how panels hide, which buttons are left out and why.
+
+## Preparation
+- The world ""Playtest Creative"" (made 2026-01-01 with WorldLibrary.Create(...)) must exist.
+
 ## Setup
 start-scene: Assets/Scenes/Boot.unity    # play mode starts here
 speed: 2                                 # cursor speed; 1 = calm demo, 4 = fast
 timeout: 5                               # seconds a step waits for its target
 cursor: on                               # off = fastest, no cursor
+autoshot: clicks                         # every click adds a row to the contact sheet: before, over, press, result
+shot-settle: 2                           # seconds a shot may wait for the UI to stop moving; 0 = two frames only
+fail-on-console-errors: true             # a console error fails the run
+protect-prefs: on                        # snapshot and restore PlayerPrefs and persistentDataPath
 cursor-theme: Assets/Editor/MyCursor.asset
 cursor-layers: sprite, outline, caption, blocked
 maximize: false
@@ -81,11 +159,10 @@ maximize: false
 ## Flow: open-settings
 What it proves, in one line.
 - click /Canvas/Home/BtnSettings
-- click ""Sound""
-- expect-active /Canvas/SettingsPanel
+- expect-visible /Canvas/SettingsPanel/Window
 - shot settings
-- click /Canvas/SettingsPanel/BtnClose
-- expect-inactive /Canvas/SettingsPanel
+- click /Canvas/SettingsPanel/Window/BtnClose
+- expect-hidden /Canvas/SettingsPanel/Window
 
 ## Flow: full
 - run open-settings
@@ -98,11 +175,12 @@ What it proves, in one line.
 
 | Verb | Does |
 |---|---|
-| `click <path or ""label""> [timeout]` | waits until visible, interactable and not covered, moves the cursor, clicks (enter, down, up, click) |
-| `expect-active <path> [timeout]` / `expect-inactive` | waits for the state, fails on timeout |
+| `click <path or ""label""> [timeout]` | waits until shown, interactable and not covered, moves the cursor, clicks (enter, down, up, click) |
+| `expect-visible <path> [timeout]` / `expect-hidden` | shown = active, every Canvas above it on, alpha above 0; fails on timeout |
+| `expect-active <path> [timeout]` / `expect-inactive` | GameObject active state only |
 | `wait <seconds>` | real time |
 | `hide <path>` / `hide-type <Component>` | deactivates for this run; `absent` when not there |
-| `shot <name>` | Game view PNG into the run folder, two frames after the previous step |
+| `shot <name> [settle seconds]` | Game view PNG with the cursor, once tweens, fades and panel moves have stopped; saved as `<step>_<name>.png` |
 | `call <Type.Method> [args]` | a static method: cheats and setup that are not under test |
 | `timescale <n>` | `Time.timeScale`, restored after the run |
 | `run <flow>` | inlines another flow |
@@ -113,35 +191,41 @@ other text is free. Clear screen runs before every flow.
 ## 2. Run
 
 `playtest` with `action=run`, `flow=<name>`. Optional: `speed` (0 = the file's), `cursor=false` (fastest, when
-nobody watches), `stay=true` (keep play mode so the user sees the end state), `file` (another playtest file).
-The answer arrives when the flow ends. `action=status` shows the live step or the last report; `action=stop`
-ends a run.
-
-While the cursor is on it stays on the Game view, resting where it last clicked, until play mode ends.
+nobody watches), `stay=true` (keep play mode; saves are then listed, not restored), `file` (another playtest file).
+The answer arrives after play mode has ended and the saves are restored. `action=status` shows the live step;
+`action=stop` ends a run.
 
 ## 3. Read the result
 
-The answer is a table: one row per step with `ok`, `FAIL`, `absent` or `skip`, its time and a note, then the
-console errors of the run and the report path (`Docs/Playtest_Runs/<stamp>-<flow>/report.md`, with the shots).
-Open a shot only for a failed step or when the user asked to see a screen.
+The answer: a verdict line, one row per step (`ok`, `FAIL`, `absent`, `skip`, time, note), the console errors,
+`## Side effects`, the contact sheet path and the report path (`Docs/Playtest_Runs/<stamp>-<flow>/`).
+
+- **PASS needs zero console errors.** `FAIL (console errors: n)` with every step ok is a game bug: report the step
+  and the first error lines. Turn `fail-on-console-errors` off only when the user says those errors are known.
+- Side effects: any line there is a change the flow made to saved data. It was restored, but the flow should not
+  make it: find the button that caused it and take it out (1.2), unless the flow is about that change.
+- Show the contact sheet in your answer with the `![](<absolute path>/contact_sheet.png)` line the report gives,
+  and look at it: each shot must show its screen finished, not halfway through opening. A note `still moving
+  after 2 s` on a shot means something keeps animating: raise that shot's settle seconds, or accept it when the
+  motion is an endless loop.
 
 On FAIL decide what it is:
 
 | Note | Usually | Do |
 |---|---|---|
-| `not found` | path renamed or moved | find the new path, fix the flow, Changelog line, run again |
+| `not found` | path renamed or moved | find the new path (1.1), fix the flow, Changelog line, run again |
 | `covered by <path>` | a debug overlay, or a real popup | overlay: add it to Clear screen; popup players see: add a click that closes it |
-| `inactive` / timeout | the panel opens later now, or not at all | read the handler: slower by design -> raise that step's timeout; never opens -> game bug |
-| `not interactable` | a condition is not met | add the step that meets it (toggle, purchase), or report |
+| `hidden: Canvas off` / `hidden: alpha 0` | the panel did not open, or opens later | read the handler: slower by design -> raise that step's timeout; never opens -> game bug |
+| `inactive` / timeout | as above, for panels that deactivate | as above |
+| `not interactable` | a condition is not met | add the step that meets it (toggle, data in Preparation), or report |
 | console errors | game bug | report the step, the first error lines and the shot |
 
-Fix the file at most twice per request; then stop and report. Never change a flow so a real bug passes, and
-never change game code to make a flow pass unless the user asks.
+Never change a flow so a real bug passes, and never change game code to make a flow pass unless the user asks.
 
 ## 4. Report
 
-One line PASS/FAIL with steps and seconds, the failed step and why, what changed in Playtest.md, the
-report path. Release the editor lock.
+One line PASS/FAIL with steps, seconds and console errors; the failed step and why; the side effects; what
+changed in Playtest.md; the contact sheet shown inline; the report path. Release the editor lock.
 
 ## Faster play mode
 
@@ -191,7 +275,8 @@ public sealed class TrailCursorLayer : IPlaytestCursorLayer
 Keep `Refresh` cheap: it runs every frame of a run and twice a second at rest. UI Toolkit skips a style
 set to its current value, so a cursor at rest does not repaint the Game view.
 The cursor is UI Toolkit drawn over the Game view window: nothing is added to the scene, the game, raycasts or
-builds, and Game view captures do not contain it.
+builds. Shots and contact sheet frames get the sprite and the target outline painted in from the cursor state;
+custom layers are not painted into shots.
 ";
     }
 }

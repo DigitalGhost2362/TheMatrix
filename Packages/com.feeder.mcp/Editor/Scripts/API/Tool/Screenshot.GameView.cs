@@ -118,6 +118,28 @@ namespace Feeder.MCP.Editor.API
 
         internal static byte[]? CaptureGameView(int maxResolution, out int width, out int height, out string error)
         {
+            var pixels = ReadGameView(maxResolution, out width, out height, out error);
+            return pixels == null ? null : EncodePng(pixels, width, height);
+        }
+
+        internal static byte[] EncodePng(Color32[] pixels, int width, int height)
+        {
+            var tex = new Texture2D(width, height, TextureFormat.RGB24, false);
+            try
+            {
+                tex.SetPixels32(pixels);
+                tex.Apply();
+                return tex.EncodeToPNG();
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(tex);
+            }
+        }
+
+        // the Game view image as pixels, bottom row first
+        internal static Color32[]? ReadGameView(int maxResolution, out int width, out int height, out string error)
+        {
             error = string.Empty;
             width = height = 0;
 
@@ -169,17 +191,13 @@ namespace Feeder.MCP.Editor.API
                 tex = new Texture2D(width, height, TextureFormat.RGB24, false);
                 tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
 
-                if (SystemInfo.graphicsUVStartsAtTop)
-                {
-                    var pixels = tex.GetPixels32();
-                    var flipped = new Color32[pixels.Length];
-                    for (var y = 0; y < height; y++)
-                        Array.Copy(pixels, y * width, flipped, (height - 1 - y) * width, width);
-                    tex.SetPixels32(flipped);
-                }
-
-                tex.Apply();
-                return tex.EncodeToPNG();
+                var pixels = tex.GetPixels32();
+                if (!SystemInfo.graphicsUVStartsAtTop)
+                    return pixels;
+                var flipped = new Color32[pixels.Length];
+                for (var y = 0; y < height; y++)
+                    Array.Copy(pixels, y * width, flipped, (height - 1 - y) * width, width);
+                return flipped;
             }
             finally
             {

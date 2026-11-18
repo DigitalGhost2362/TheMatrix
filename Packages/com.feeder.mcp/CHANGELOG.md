@@ -16,6 +16,17 @@ All notable changes to this package are documented here.
   clean. It flies to each target and plays a click animation, then stays on screen at rest until play mode ends.
   `PlaytestCursorTheme` assets (`Create > Matrix > Playtest Cursor Theme`) change the sprites, grid, timing and colors;
   `IPlaytestCursorLayer` classes add layers, and `cursor-layers:` or `disabledLayers` turn them off.
+- Playtest contact sheet: every run writes `contact_sheet.png` next to `report.md` (more sheets for long runs), with a
+  `#step name` label per tile and the cursor and target outline painted in. `autoshot: clicks` adds a row per click:
+  before, cursor over the target, press and result.
+- Playtest shots wait until the UI has settled (no finite DOTween tween playing, no CanvasGroup alpha, Canvas toggle
+  or panel move for three frames; `shot-settle:` seconds, `shot <name> <seconds>`), and are saved as
+  `<step>_<name>.png` so a flow that runs twice keeps both.
+- Playtest `expect-visible` / `expect-hidden`: visible means active, every Canvas above it enabled and an alpha above 0.
+  A click waits while its target is hidden that way, and a label prefers the button a player can see.
+- Playtest save guard (`protect-prefs: on`, default): PlayerPrefs and `persistentDataPath` are snapshotted before the
+  run, the changes are listed under `Side effects` in the report and put back once play mode has ended.
+- Playtest `fail-on-console-errors: true` (default): a run with console errors reports `FAIL (console errors: n)`.
 - `matrix-tool-create` skill: how to add a tool of your own for one project (an Editor `.cs` file with
   `[AiToolType]` / `[AiTool]`), for a `script-execute` job that keeps coming back. It replaces the
   `unity-skill-create` tool.

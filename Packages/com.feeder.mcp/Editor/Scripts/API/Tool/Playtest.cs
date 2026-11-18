@@ -19,10 +19,10 @@ namespace Feeder.MCP.Editor.API
             Title = "Editor / Playtest",
             Enabled = false
         )]
-        [AiSkillDescription("Run a flow of the project's Docs/Playtest.md in play mode with one call: the runner hides what covers the screen, clicks uGUI buttons through a visible cursor as soon as each is reachable, checks panels, takes shots and answers with a step table.")]
+        [AiSkillDescription("Run a flow of the project's Docs/Playtest.md in play mode with one call: the runner hides what covers the screen, clicks uGUI buttons through a visible cursor as soon as each is reachable, checks panels, takes settled shots, fails on console errors, restores PlayerPrefs and save files, and answers with a step table and a contact sheet.")]
         [AiSkillBody(SkillBody)]
         [Description("Run a playtest flow from the project's Playtest.md. action = run | status | stop | list. " +
-            "run enters play mode when needed and answers when the flow ends, with a step table and a report path.")]
+            "run enters play mode when needed and answers after play mode ends, with a step table, the save side effects, a contact sheet and a report path.")]
         public ResponseCallTool Run
         (
             [Description("run | status | stop | list")]
@@ -74,7 +74,7 @@ namespace Feeder.MCP.Editor.API
         const string SkillBody = @"Runs one flow of the project's Docs/Playtest.md in play mode and answers with a step table.
 
 - `list`: flows of the file, or its parse errors.
-- `run` + `flow`: plays it; `speed`, `cursor=false`, `stay=true`, `file` are optional. The answer comes when the flow ends.
+- `run` + `flow`: plays it; `speed`, `cursor=false`, `stay=true`, `file` are optional. The answer comes after play mode ends and saves are restored; any console error fails the run; show the contact sheet line it gives.
 - `status`: the live step, or the last report. `stop`: ends a run.
 
 File format, verbs, reading failures and changing the cursor: skill `" + Skill_Playtest.SkillId + "`.";
