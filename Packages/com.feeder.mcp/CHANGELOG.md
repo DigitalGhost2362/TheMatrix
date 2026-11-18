@@ -70,6 +70,10 @@ All notable changes to this package are documented here.
 
 ### Changed
 
+- Play mode nobody holds the editor lock for (usually a person who forgot it on) no longer holds the queue: the next
+  agent gets the lock, `acquired` says "in play mode nobody claimed", and the `matrix-shared-editor` skill tells it to
+  exit play mode and go on. A play mode test run still holds the queue, and an agent that left play mode on keeps its
+  short grace to come back. The server itself never stops a person's play mode.
 - A dirty scene in an idle Editor no longer stops a session: the `matrix-shared-editor` skill and the server
   instructions now tell agents to save it and go on (Unity often marks a scene dirty by itself, for example a
   scrollbar driving a RectTransform when the Game view resizes). Discarding unsaved changes is still never allowed.

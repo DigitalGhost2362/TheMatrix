@@ -9,7 +9,7 @@ namespace Feeder.MCP.Editor.API
         public const string SkillId = "matrix-shared-editor";
 
         [AiSkill(SkillId,
-@"Protocol for a Unity Editor shared by several AI sessions and humans: which Matrix tools change the Editor, the editor lock (implicit claim freed after 30 idle seconds; explicit editor-lock-acquire only for a multi-step burst such as a play session), the human-in-play-mode check, and the TestCases handoff when the Editor is busy. Use BEFORE entering play mode, compiling, opening or saving a scene, wiping prefs, running tests, or when asked to run pending test cases.")]
+@"Protocol for a Unity Editor shared by several AI sessions and humans: which Matrix tools change the Editor, the editor lock (implicit claim freed after 30 idle seconds; explicit editor-lock-acquire only for a multi-step burst such as a play session), exiting play mode nobody claimed, and the TestCases handoff when the Editor is busy. Use BEFORE entering play mode, compiling, opening or saving a scene, wiping prefs, running tests, or when asked to run pending test cases.")]
         public static string Markdown => @"
 # Shared Editor
 
@@ -54,7 +54,7 @@ Above all a **play session**: enter play -> test -> exit. Acquire right before, 
 
 Outcomes:
 
-- **queued** -> acquire again with the ticket. **busy**, a human in play mode, or the user's wait limit -> Rule 3.
+- **queued** -> acquire again with the ticket. **busy** or the user's wait limit -> Rule 3.
 - **Refused ""held by ...""** or **release says ""already freed""** -> your claim was lost; stop Editor work, treat the
   burst's evidence as suspect, `editor-lock-status`, restart from a clean check.
 - **Lost the lock during play** -> acquire (the play owner goes first), exit play mode, rerun the session from the start.
@@ -64,14 +64,17 @@ Outcomes:
 
 - Check state with `editor-health` (always available, works during compile/reload): phase playing / paused /
   compiling. `editor-application-get-state` is not on by default.
-- After a fresh claim also `rql-query` `scenes`. Playing, paused or compiling that you did not cause -> a human is
-  using the Editor: release, hand off.
+- After a fresh claim also `rql-query` `scenes`. Compiling you did not cause -> wait for it.
+- Play mode nobody claimed (`acquired` says ""in play mode nobody claimed"", or playing / paused when you got the lock
+  without a holder) is play mode a person forgot on: exit it (`editor-application-set-state` `isPlaying=false`) and
+  carry on. Only a play mode test run holds the queue.
 - A dirty scene in an idle Editor (edit mode, not compiling) is not a reason to stop: Unity marks scenes dirty on
   its own (a layout or scrollbar driving a RectTransform when the Game view resizes). `scene-save` with `all`, then
   carry on. Only an untitled dirty scene cannot be saved: leave it open, work around it, hand off if the task needs it closed.
 - Never pass `ifDirty=discard` for work that is not yours.
-- Never stop, pause or exit someone else's play mode. Exception: `acquired` says ""in play mode left on by
-  <agent>"" - that agent is gone; exit it first. Never answer a modal dialog you did not open.
+- Never exit play mode while someone else holds the lock or a test run owns it. With the lock yours, exit play mode
+  left on by a person or by an agent (`acquired` says ""left on by <agent>"" - that agent is gone). Never answer a
+  modal dialog you did not open.
 - A mutating edit-mode `script-execute` starts with `if (EditorApplication.isPlayingOrWillChangePlaymode) return ""abort: play mode"";`
 - A file written to disk still reaches the Editor (focus refresh, Hot Reload); Matrix cannot refuse that.
 
@@ -80,7 +83,7 @@ Outcomes:
 For play-mode proof acquire the lock (queued -> retry with the ticket). Clean Editor: compile, read the console,
 play, collect evidence, release. If a result sends you back to code, release first, fix, claim again.
 
-## Rule 3 - Handoff (human in the Editor, wait limit exceeded, or verification cut short)
+## Rule 3 - Handoff (Editor busy, wait limit exceeded, or verification cut short)
 
 1. Create `TestCases/` at the project root if missing; `.gitignore` must ignore `/TestCases/`; never under `Assets/`.
 2. Write `TestCases/<yyyyMMdd-HHmm>-<slug>.md` from the template below, Status `pending`; one file per task,

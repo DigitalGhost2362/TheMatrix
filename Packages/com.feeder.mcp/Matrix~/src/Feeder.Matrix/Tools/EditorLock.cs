@@ -144,7 +144,6 @@ public sealed class EditorLock
         public bool Granted { get; set; }
         public bool Removed { get; set; }
         public bool Implicit { get; set; }
-        public bool PlayOk { get; init; }
     }
 
     sealed record FileLock(string Owner, string Task, string Acquired, long Heartbeat, bool Matrix, string Session, DateTimeOffset Created);
@@ -305,11 +304,10 @@ public sealed class EditorLock
             waiter = _queue.Find(w => w.Key == key);
             if (waiter is null)
             {
-                var playOk = implicitTool is not null && _lastDropped is { Implicit: true } dropped && dropped.Key == key;
                 // only the agent that left play mode on can clean it up, so it goes ahead of the queue
                 var playOwner = PlayLeftOn(link)?.Key == key;
                 // sessions that wait for another agent to finish hold nobody back
-                if (Unfinished(waitsFor).Count == 0 && (!_queue.Exists(w => Unfinished(w.After).Count == 0) || playOwner) && Blocker(link, now, key, playOk) is null)
+                if (Unfinished(waitsFor).Count == 0 && (!_queue.Exists(w => Unfinished(w.After).Count == 0) || playOwner) && Blocker(link, now, key) is null)
                 {
                     _lapsed.Remove(key);
                     Grant(caller, owner, task, link, now, fromQueue: false, implicitTool is not null);
@@ -320,7 +318,6 @@ public sealed class EditorLock
                 waiter = new Waiter
                 {
                     Implicit = implicitTool is not null,
-                    PlayOk = playOk,
                     Ticket = Guid.NewGuid().ToString("N")[..12],
                     Caller = caller,
                     Owner = owner,
@@ -453,7 +450,7 @@ public sealed class EditorLock
     }
 
     // caller holds _gate; why nobody can be granted the lock now, or null
-    string? Blocker(UnityLink? link, DateTimeOffset now, string? key = null, bool playOk = false)
+    string? Blocker(UnityLink? link, DateTimeOffset now, string? key = null)
     {
         if (_holder is { } other)
             return Describe(other, now);
@@ -477,13 +474,8 @@ public sealed class EditorLock
                 ? $"the editor is in play mode {left.Owner} (an agent) started and left on; it has {Age(back)} to come back and exit it, then the next in line gets the editor."
                 : null;
         }
-        if (TestsRunning(link))
-            return "the editor is in play mode for a test run; the queue waits until the run ends.";
-        if (link.Features.Contains(FmpCapabilities.AgentPlay))
-            return "the editor is in play mode a person started (no agent tool started it), so a person is playing; do not stop it. The queue waits until play mode ends.";
-        if (!playOk)
-            return "the editor is in play mode and nobody holds the lock, so a person is playing (or a session left play mode on); do not stop it. The queue waits until play mode ends.";
-        return null;
+        // play mode nobody claims (usually a person who forgot it on) does not hold the queue: the next agent exits it
+        return TestsRunning(link) ? "the editor is in play mode for a test run; the queue waits until the run ends." : null;
     }
 
     // play mode an agent's tool started, on a plugin that reports it
@@ -492,6 +484,11 @@ public sealed class EditorLock
            && link.Features.Contains(FmpCapabilities.AgentPlay);
 
     static bool TestsRunning(UnityLink? link) => ((link?.Heartbeat?.Phase ?? 0) & FmpPhases.RunningTests) != 0;
+
+    // play mode no agent tool started and no test run owns, on a plugin that reports who started it
+    static bool UnclaimedPlay(UnityLink? link)
+        => link is { Connected: true, EditorState: FmpEditorState.Playing or FmpEditorState.Paused }
+           && link.Features.Contains(FmpCapabilities.AgentPlay) && link.Heartbeat?.AgentPlay != true && !TestsRunning(link);
 
     // caller holds _gate; the agent that started play mode when nobody holds the lock now
     (string Key, string Owner)? PlayLeftOn(UnityLink? link) => _holder is null && AgentPlaying(link) ? _playOwner : null;
@@ -506,7 +503,7 @@ public sealed class EditorLock
         var owner = PlayLeftOn(link)?.Key;
         next ??= (owner is null ? null : _queue.Find(w => w.Pending is not null && w.Key == owner))
                  ?? _queue.Find(w => w.Pending is not null && Unfinished(w.After).Count == 0);
-        if (next is null || Blocker(link, now, next.Key, next.PlayOk) is not null)
+        if (next is null || Blocker(link, now, next.Key) is not null)
             return false;
         _queue.Remove(next);
         next.Granted = true;
@@ -1044,7 +1041,7 @@ public sealed class EditorLock
                 }).ToArray(),
                 QueuePaused = _paused,
                 QueueHeldByPlayMode = _queue.Count > 0 && _holder is null && PlayLeftOn(link) is null
-                    && link is { Connected: true, EditorState: FmpEditorState.Playing or FmpEditorState.Paused },
+                    && link is { Connected: true, EditorState: FmpEditorState.Playing or FmpEditorState.Paused } && TestsRunning(link),
                 PlayLeftBy = PlayLeftOn(link)?.Owner,
             };
         }
@@ -1482,6 +1479,8 @@ public sealed class EditorLock
     // caller holds _gate
     string EditorLine(UnityLink? link) => AgentPlaying(link) && _playOwner is { } left && left.Key != _holder?.Key
         ? $"Editor: in play mode left on by {left.Owner} (an agent); exit play mode first, before your own work."
+        : UnclaimedPlay(link)
+        ? "Editor: in play mode nobody claimed (a person likely left it on); exit it (editor-application-set-state isPlaying=false) before your own work."
         : link switch
     {
         null => "No Unity editor is linked right now.",

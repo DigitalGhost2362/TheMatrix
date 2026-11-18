@@ -182,7 +182,7 @@ public sealed record EditorLockState
     [Key(11)] public EditorLockWaiter[] Waiting { get; set; } = [];
     // a person paused the queue: nobody is granted the lock until it resumes
     [Key(12)] public bool QueuePaused { get; init; }
-    // the editor is in play mode with nobody holding the lock, so the queue waits for the person playing
+    // the editor is in a play mode test run with nobody holding the lock, so the queue waits for the run to end
     [Key(13)] public bool QueueHeldByPlayMode { get; init; }
     // the editor is in play mode an agent started and left on with nobody holding the lock; who left it
     [Key(14)] public string? PlayLeftBy { get; init; }

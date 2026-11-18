@@ -266,14 +266,14 @@ public sealed class EditorLockTests : IDisposable
     }
 
     [Fact]
-    public void Play_mode_with_no_holder_is_busy()
+    public void Play_mode_nobody_claimed_is_granted_with_an_exit_note()
     {
-        Link(FmpEditorState.Playing);
+        Link(FmpEditorState.Playing, agentPlay: true);
 
-        var busy = _lock.Acquire("sid-a", "claude", "play test");
+        var acquired = _lock.Acquire("sid-a", "claude", "play test");
 
-        Assert.True(busy.IsError);
-        Assert.Contains("play mode", Text(busy));
+        Assert.StartsWith("acquired", Text(acquired));
+        Assert.Contains("nobody claimed", Text(acquired));
     }
 
     [Fact]
@@ -571,35 +571,12 @@ public sealed class EditorLockTests : IDisposable
     }
 
     [Fact]
-    public async Task Queue_waits_while_a_person_plays_and_resumes_when_play_stops()
-    {
-        var link = Link(FmpEditorState.Playing);
-        var b = Wait("sid-b");
-
-        await _lock.TickAsync();
-        Assert.False(b.IsCompleted);
-        var state = _lock.Snapshot();
-        Assert.True(state.QueueHeldByPlayMode);
-        Assert.Equal(["codex"], Order(state));
-
-        link.EditorState = FmpEditorState.Ready;
-        await _lock.TickAsync();
-
-        Assert.StartsWith("acquired", Text(await Done(b)));
-        Assert.False(_lock.Snapshot().QueueHeldByPlayMode);
-    }
-
-    [Fact]
-    public async Task Slice_during_play_mode_answers_queued_with_the_reason()
+    public async Task Play_mode_a_person_left_on_does_not_hold_the_queue()
     {
         Link(FmpEditorState.Playing);
-        _options.EditorLockWaitSlice = TimeSpan.FromMilliseconds(100);
 
-        var queued = await Done(Wait("sid-b"));
-
-        Assert.NotEqual(true, queued.IsError);
-        Assert.Contains("play mode", Text(queued));
-        Assert.Contains("queued: position 1", Text(queued));
+        Assert.StartsWith("acquired", Text(await Done(Wait("sid-b"))));
+        Assert.False(_lock.Snapshot().QueueHeldByPlayMode);
     }
 
     [Fact]
@@ -820,22 +797,16 @@ public sealed class EditorLockTests : IDisposable
     }
 
     [Fact]
-    public async Task Human_in_play_mode_queues_the_tool_but_not_a_session_whose_implicit_claim_just_ended()
+    public async Task Play_mode_nobody_claims_lets_any_tool_run()
     {
         Link();
         await Gate("sid-a");
         _time.Advance(_options.EditorLockImplicitIdle + TimeSpan.FromSeconds(1));
         Link(FmpEditorState.Playing);
 
-        // sid-a started that play session itself
         Assert.Null(await Done(Gate("sid-a")));
-
-        // a stranger waits until play mode ends
-        _options.EditorLockWaitSlice = TimeSpan.FromMilliseconds(100);
         _lock.Release("sid-a");
-        var queued = (await Done(Gate("sid-b")))!;
-        Assert.True(queued.IsError);
-        Assert.Contains("play mode", Text(queued));
+        Assert.Null(await Done(Gate("sid-b")));
     }
 
     [Fact]
@@ -1038,34 +1009,19 @@ public sealed class EditorLockTests : IDisposable
     }
 
     [Fact]
-    public async Task Person_playing_holds_the_queue_even_with_a_new_plugin()
+    public async Task Person_playing_hands_the_editor_to_the_next_agent_to_exit()
     {
         var link = Link(agentPlay: true);
         Beat(link, FmpEditorState.Playing, agentPlay: false);
-        var b = Wait("sid-b");
 
-        _time.Advance(TimeSpan.FromMinutes(5));
-        await _lock.TickAsync();
+        var acquired = Text(await Done(Wait("sid-b")));
 
-        Assert.False(b.IsCompleted);
-        Assert.True(_lock.Snapshot().QueueHeldByPlayMode);
+        Assert.StartsWith("acquired", acquired);
+        Assert.Contains("nobody claimed", acquired);
+        Assert.False(_lock.Snapshot().QueueHeldByPlayMode);
         Assert.Null(_lock.Snapshot().PlayLeftBy);
+        // the server never stops it itself; the agent that got the lock exits it
         Assert.Empty(Stops(link));
-    }
-
-    [Fact]
-    public async Task Person_playing_does_not_let_a_session_whose_implicit_claim_just_ended_in()
-    {
-        var link = Link(agentPlay: true);
-        await Gate("sid-a");
-        _time.Advance(_options.EditorLockImplicitIdle + TimeSpan.FromSeconds(1));
-        Beat(link, FmpEditorState.Playing, agentPlay: false);
-        _options.EditorLockWaitSlice = TimeSpan.FromMilliseconds(100);
-
-        var queued = (await Done(Gate("sid-a")))!;
-
-        Assert.True(queued.IsError);
-        Assert.Contains("play mode", Text(queued));
     }
 
     [Fact]
