@@ -27,7 +27,7 @@ namespace Feeder.MCP.Editor.API
         [AiSkillDescription("Set the Game view to a fixed resolution for screenshots and layout checks, then put back the size that was selected before.")]
         [AiSkillBody("Sets the Game view resolution through `PlayModeWindow.SetCustomRenderingResolution` (a custom entry named `Matrix`).\n\n" +
             "- `width`, `height` - the resolution in pixels. The size selected before the first change is remembered until restored, across domain reloads.\n" +
-            "- Both `0` - selects that earlier entry again (for example Free Aspect) and forgets it.\n\n" +
+            "- Both `0` - selects that earlier entry again (for example Free Aspect), removes the `Matrix` entry and forgets it.\n\n" +
             "Answers the size before and after. Other sessions' screenshots see the new size, so restore when done.")]
         [Description("Sets the Game view resolution to width x height; both 0 puts back the size selected before the first change. Answers the old and new size.")]
         public ResponseCallTool Size
@@ -60,11 +60,12 @@ namespace Feeder.MCP.Editor.API
                     message = $"Nothing to restore; the Game view is {before}.";
                     return true;
                 }
+                var note = RemoveEntry(ref saved);
                 view.GetType().GetMethod("SizeSelectionCallback", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
                     .Invoke(view, new object?[] { saved, null });
                 SessionState.EraseInt(BeforeKey);
                 view.Repaint();
-                message = $"Game view restored: {before} -> {Resolution()}.";
+                message = $"Game view restored: {before} -> {Resolution()}.{note}";
                 return true;
             }
             if (width < 1 || height < 1)
@@ -78,6 +79,35 @@ namespace Feeder.MCP.Editor.API
             view.Repaint();
             message = $"Game view: {before} -> {Resolution()}. Call with width=0, height=0 to put back the earlier size.";
             return true;
+        }
+
+        // drops our custom entry so it does not stay in the size list; entries after it move up one, so the
+        // earlier selection is shifted too. GameViewSizes is internal (same members in 2022.3 and Unity 6).
+        static string RemoveEntry(ref int selected)
+        {
+            const BindingFlags Any = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
+            var sizesType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameViewSizes");
+            var sizes = sizesType?.GetProperty("instance", Any)?.GetValue(null);
+            var group = sizes == null ? null : sizesType!.GetProperty("currentGroup", Any)?.GetValue(sizes);
+            if (group == null)
+                return $" The '{EntryName}' size entry was kept: this Unity has no GameViewSizes.currentGroup.";
+            var groupType = group.GetType();
+            for (var i = (int)groupType.GetMethod("GetTotalCount")!.Invoke(group, null) - 1; i >= 0; i--)
+            {
+                if (!(bool)groupType.GetMethod("IsCustomSize")!.Invoke(group, new object[] { i }))
+                    break;
+                var size = groupType.GetMethod("GetGameViewSize")!.Invoke(group, new object[] { i });
+                if ((string)size.GetType().GetProperty("baseText")!.GetValue(size) != EntryName)
+                    continue;
+                if (selected == i)
+                    break;
+                groupType.GetMethod("RemoveCustomSize")!.Invoke(group, new object[] { i });
+                sizesType!.GetMethod("SaveToHDD")!.Invoke(sizes, null);
+                if (selected > i)
+                    selected--;
+                break;
+            }
+            return string.Empty;
         }
 
         internal static string Resolution()

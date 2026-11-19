@@ -1,6 +1,7 @@
 #nullable enable
 
 using System.Collections;
+using System.Reflection;
 using Feeder.MCP.Editor.API;
 using NUnit.Framework;
 using UnityEditor;
@@ -43,6 +44,42 @@ namespace Feeder.MCP.Editor.Tests.Tools
             }
             yield return null;
             Assert.AreEqual(before, Tool_GameView.Resolution());
+        }
+
+        static int MatrixEntries()
+        {
+            const BindingFlags Any = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
+            var sizesType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameViewSizes")!;
+            var group = sizesType.GetProperty("currentGroup", Any)!.GetValue(sizesType.GetProperty("instance", Any)!.GetValue(null))!;
+            var count = (int)group.GetType().GetMethod("GetTotalCount")!.Invoke(group, null);
+            var found = 0;
+            for (var i = 0; i < count; i++)
+            {
+                var size = group.GetType().GetMethod("GetGameViewSize")!.Invoke(group, new object[] { i });
+                if ((string)size.GetType().GetProperty("baseText")!.GetValue(size) == "Matrix")
+                    found++;
+            }
+            return found;
+        }
+
+        [Test]
+        public void Restore_RemovesTheMatrixEntry_AndPutsBackTheOldSize()
+        {
+            IgnoreWhenASessionHoldsASize();
+            var before = Tool_GameView.Resolution();
+            if (!Tool_GameView.Apply(1280, 720, out var message))
+                Assert.Ignore(message);
+            try
+            {
+                Assert.AreEqual("1280x720", Tool_GameView.Resolution());
+                Assert.AreEqual(1, MatrixEntries());
+            }
+            finally
+            {
+                Tool_GameView.Apply(0, 0, out message);
+            }
+            Assert.AreEqual(before, Tool_GameView.Resolution(), message);
+            Assert.AreEqual(0, MatrixEntries());
         }
 
         [Test]
