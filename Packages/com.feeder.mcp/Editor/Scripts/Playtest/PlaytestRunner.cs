@@ -323,11 +323,11 @@ namespace Feeder.MCP.Editor.Playtest
         #region Members
 
         // the type by full name first, then by short name
-        static Type FindType(string member, string verb, out string memberName)
+        static Type FindType(string member, string verb, string kind, out string memberName)
         {
             var dot = member.LastIndexOf('.');
             if (dot <= 0)
-                throw new ArgumentException($"{verb} '{member}': write Type.Member");
+                throw new ArgumentException($"{verb} '{member}': write Type.{kind}");
             var typeName = member.Substring(0, dot);
             memberName = member.Substring(dot + 1);
             return AppDomain.CurrentDomain.GetAssemblies()
@@ -341,7 +341,7 @@ namespace Feeder.MCP.Editor.Playtest
         internal static object? ReadMember(string member, string verb)
         {
             const BindingFlags Static = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
-            var type = FindType(member, verb, out var name);
+            var type = FindType(member, verb, "Member", out var name);
             var field = type.GetField(name, Static);
             if (field != null)
                 return field.GetValue(null);
@@ -843,7 +843,7 @@ namespace Feeder.MCP.Editor.Playtest
 
             static string Call(string[] args)
             {
-                var type = FindType(args[0], "call", out var methodName);
+                var type = FindType(args[0], "call", "Method", out var methodName);
                 var values = args.Skip(1).ToArray();
                 var method = type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
                     .FirstOrDefault(m => m.Name == methodName && m.GetParameters().Length == values.Length)
