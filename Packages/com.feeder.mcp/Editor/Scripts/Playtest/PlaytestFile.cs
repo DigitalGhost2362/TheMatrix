@@ -38,6 +38,7 @@ namespace Feeder.MCP.Editor.Playtest
             ["expect-visible"] = (1, 2),
             ["expect-hidden"] = (1, 2),
             ["wait"] = (1, 1),
+            ["wait-until"] = (2, 3),
             ["hide"] = (1, 1),
             ["hide-type"] = (1, 1),
             ["shot"] = (1, 2),

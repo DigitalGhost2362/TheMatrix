@@ -320,6 +320,50 @@ namespace Feeder.MCP.Editor.Playtest
 
         #endregion
 
+        #region Members
+
+        // the type by full name first, then by short name
+        static Type FindType(string member, string verb, out string memberName)
+        {
+            var dot = member.LastIndexOf('.');
+            if (dot <= 0)
+                throw new ArgumentException($"{verb} '{member}': write Type.Member");
+            var typeName = member.Substring(0, dot);
+            memberName = member.Substring(dot + 1);
+            return AppDomain.CurrentDomain.GetAssemblies()
+                .Select(a => a.GetType(typeName, false))
+                .FirstOrDefault(t => t != null)
+                ?? AppDomain.CurrentDomain.GetAssemblies().SelectMany(SafeTypes).FirstOrDefault(t => t.Name == typeName)
+                ?? throw new ArgumentException($"{verb}: no type '{typeName}'");
+        }
+
+        // a static field, property or parameterless method; a throwing getter or method surfaces as TargetInvocationException
+        internal static object? ReadMember(string member, string verb)
+        {
+            const BindingFlags Static = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            var type = FindType(member, verb, out var name);
+            var field = type.GetField(name, Static);
+            if (field != null)
+                return field.GetValue(null);
+            var property = type.GetProperty(name, Static);
+            if (property != null && property.GetIndexParameters().Length == 0)
+                return property.GetValue(null);
+            var method = type.GetMethod(name, Static, null, Type.EmptyTypes, null)
+                ?? throw new ArgumentException($"{verb}: no static field, property or parameterless method {member}");
+            return method.Invoke(null, null);
+        }
+
+        // what a wait compares: invariant text, "null" for null
+        internal static string MemberText(object? value) => value == null ? "null" : Convert.ToString(value, CultureInfo.InvariantCulture) ?? "null";
+
+        static IEnumerable<Type> SafeTypes(Assembly assembly)
+        {
+            try { return assembly.GetTypes(); }
+            catch (ReflectionTypeLoadException e) { return e.Types.Where(t => t != null)!; }
+        }
+
+        #endregion
+
         sealed class Job
         {
             const char Sep = '\u001f';
@@ -583,22 +627,21 @@ namespace Feeder.MCP.Editor.Playtest
                         return true;
                     }
                     case "call":
-                        // a called check that throws is a failed step of the flow, not a runner crash: no console entry
-                        try
+                        return Reflected(step, () =>
                         {
                             _rows[_index].Note = Call(step.Args);
                             return true;
-                        }
-                        catch (TargetInvocationException e) when (e.InnerException != null)
+                        });
+                    case "wait-until":
+                        return Reflected(step, () =>
                         {
-                            Fail($"{step.Args[0]}: {e.InnerException.GetType().Name}: {e.InnerException.Message}");
+                            var value = MemberText(ReadMember(step.Args[0], step.Verb));
+                            if (string.Equals(value, step.Args[1], StringComparison.OrdinalIgnoreCase))
+                                return true;
+                            if (waited > Timeout(step, 2))
+                                Fail($"still {value}");
                             return false;
-                        }
-                        catch (Exception e) when (e is ArgumentException or FormatException or InvalidCastException or OverflowException)
-                        {
-                            Fail($"{step.Args[0]}: {e.Message}");
-                            return false;
-                        }
+                        });
                     case "timescale":
                         Time.timeScale = ParseFloat(step.Args[0]);
                         return true;
@@ -779,22 +822,32 @@ namespace Feeder.MCP.Editor.Playtest
                 _tiles.Add(new PlaytestTile { Step = _index + 1, Label = $"#{_index + 1} {label}  {target}", Path = path, NewRow = label == "before" });
             }
 
+            // a called check or read that throws is a failed step of the flow, not a runner crash: no console entry
+            bool Reflected(PlaytestStep step, Func<bool> run)
+            {
+                try
+                {
+                    return run();
+                }
+                catch (TargetInvocationException e) when (e.InnerException != null)
+                {
+                    Fail($"{step.Args[0]}: {e.InnerException.GetType().Name}: {e.InnerException.Message}");
+                    return false;
+                }
+                catch (Exception e) when (e is ArgumentException or FormatException or InvalidCastException or OverflowException)
+                {
+                    Fail($"{step.Args[0]}: {e.Message}");
+                    return false;
+                }
+            }
+
             static string Call(string[] args)
             {
-                var dot = args[0].LastIndexOf('.');
-                if (dot <= 0)
-                    throw new ArgumentException($"call '{args[0]}': write Type.Method");
-                var typeName = args[0].Substring(0, dot);
-                var methodName = args[0].Substring(dot + 1);
-                var type = AppDomain.CurrentDomain.GetAssemblies()
-                    .Select(a => a.GetType(typeName, false))
-                    .FirstOrDefault(t => t != null)
-                    ?? AppDomain.CurrentDomain.GetAssemblies().SelectMany(SafeTypes).FirstOrDefault(t => t.Name == typeName)
-                    ?? throw new ArgumentException($"call: no type '{typeName}'");
+                var type = FindType(args[0], "call", out var methodName);
                 var values = args.Skip(1).ToArray();
                 var method = type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
                     .FirstOrDefault(m => m.Name == methodName && m.GetParameters().Length == values.Length)
-                    ?? throw new ArgumentException($"call: no static {typeName}.{methodName} with {values.Length} parameters");
+                    ?? throw new ArgumentException($"call: no static {args[0]} with {values.Length} parameters");
                 var parameters = method.GetParameters();
                 var converted = new object?[values.Length];
                 for (var i = 0; i < values.Length; i++)
@@ -805,12 +858,6 @@ namespace Feeder.MCP.Editor.Playtest
                 }
                 var result = method.Invoke(null, converted);
                 return result == null ? string.Empty : $"returned {result}";
-            }
-
-            static IEnumerable<Type> SafeTypes(Assembly assembly)
-            {
-                try { return assembly.GetTypes(); }
-                catch (ReflectionTypeLoadException e) { return e.Types.Where(t => t != null)!; }
             }
 
             // writes report.md and the frame list; the side effects and the contact sheet are added after play mode

@@ -120,7 +120,8 @@ out for real**: free items, progress toward ""remove ads"", currency on returnin
    0). Use the label in quotes (`""Buy""`) only when the path changes at runtime; a label prefers the button a
    player can see.
 3. No `wait` before a click: a click already waits until its target is shown, interactable and on top. No `wait`
-   before a `shot` either: a shot waits until the UI stops moving. Use `wait` only for a game rule (a timer).
+   before a `shot` either: a shot waits until the UI stops moving. For a game rule (a timer, a round end) use
+   `wait-until` when the game has a static it can read; `wait <seconds>` only when it has none.
 4. `expect-visible` / `expect-hidden` after the steps whose result matters; `shot` on every new screen.
 5. `## Clear screen` hides what lies over the game and is not under test: debug strips, FPS counters, test ad
    banners, console overlays. A popup players also get (daily reward, tutorial hand) is part of the game: close it
@@ -179,6 +180,7 @@ What it proves, in one line.
 | `expect-visible <path> [timeout]` / `expect-hidden` | shown = active, every Canvas above it on, alpha above 0; fails on timeout |
 | `expect-active <path> [timeout]` / `expect-inactive` | GameObject active state only |
 | `wait <seconds>` | real time |
+| `wait-until <Type.Member> <value> [timeout]` | until a static field, property or parameterless method reads `<value>` (invariant text, any case); fails with `still <value>` on timeout |
 | `hide <path>` / `hide-type <Component>` | deactivates for this run; `absent` when not there |
 | `shot <name> [settle seconds]` | Game view PNG with the cursor, once tweens, fades and panel moves have stopped; saved as `<step>_<name>.png` |
 | `call <Type.Method> [args]` | a static method: cheats and setup that are not under test |
