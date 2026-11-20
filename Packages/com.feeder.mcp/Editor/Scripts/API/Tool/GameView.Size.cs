@@ -1,6 +1,7 @@
 #nullable enable
 using System.ComponentModel;
 using System.Linq;
+using System.Reflection;
 using Feeder.Reflect.Utils;
 using Feeder.ToolHost;
 using Feeder.ToolHost.Common.Model;
@@ -55,20 +56,46 @@ namespace Feeder.MCP.Editor.API
                 message = "width and height must both be above 0.";
                 return false;
             }
-            var before = Resolution();
+            var before = Describe(view);
             PlayModeWindow.SetCustomRenderingResolution((uint)width, (uint)height, EntryName(width, height));
             view.Repaint();
-            message = $"Game view: {before} -> {Resolution()}, entry '{EntryName(width, height)}' kept in the size list.";
+            message = $"Game view: {before} -> {Describe(view)}, kept in the size list.";
             return true;
+        }
+
+        const BindingFlags Any = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
+
+        // the size the view renders at now; PlayModeWindow.GetRenderingResolution lags behind it until the view
+        // repaints, which an unfocused Unity may not do for a while
+        internal static Vector2Int TargetSize(EditorWindow view)
+        {
+            var size = (Vector2)view.GetType().GetProperty("targetRenderSize", Any)!.GetValue(view);
+            return new Vector2Int(Mathf.RoundToInt(size.x), Mathf.RoundToInt(size.y));
         }
 
         internal static string Resolution()
         {
-            PlayModeWindow.GetRenderingResolution(out var width, out var height);
-            return $"{width}x{height}";
+            var view = OpenGameView();
+            if (view == null)
+                return "unknown (no Game view)";
+            var size = TargetSize(view);
+            return $"{size.x}x{size.y}";
         }
 
-        static EditorWindow? OpenGameView()
+        // size plus the selected entry's name, so a fixed entry that renders at another size is not mistaken for a failure
+        static string Describe(EditorWindow view)
+        {
+            var sizesType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameViewSizes");
+            var sizes = sizesType?.GetProperty("instance", Any)?.GetValue(null);
+            var group = sizes == null ? null : sizesType!.GetProperty("currentGroup", Any)?.GetValue(sizes);
+            var index = (int)view.GetType().GetProperty("selectedSizeIndex", Any)!.GetValue(view);
+            var entry = group?.GetType().GetMethod("GetGameViewSize")?.Invoke(group, new object[] { index });
+            var name = entry?.GetType().GetProperty("baseText")?.GetValue(entry) as string;
+            var size = TargetSize(view);
+            return string.IsNullOrEmpty(name) ? $"{size.x}x{size.y}" : $"{size.x}x{size.y} ({name})";
+        }
+
+        internal static EditorWindow? OpenGameView()
         {
             var type = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView");
             return type == null ? null : Resources.FindObjectsOfTypeAll(type).OfType<EditorWindow>().FirstOrDefault();

@@ -14,7 +14,8 @@ namespace Feeder.MCP.Editor.Tests.Tools
         const BindingFlags Any = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
 
         // sizes no user list is likely to hold, so cleanup removes only what the test added
-        const int W1 = 1237, H1 = 701, W2 = 703, H2 = 1239;
+        const int W1 = 1237, H1 = 701, W2 = 703, H2 = 1239, W3 = 1171, H3 = 643;
+        const string Fixed = "MxTest Fixed";
 
         EditorWindow? view;
         int selectedBefore;
@@ -26,7 +27,7 @@ namespace Feeder.MCP.Editor.Tests.Tools
             view = views.Length > 0 ? (EditorWindow)views[0] : null;
             if (view == null)
                 Assert.Ignore("No Game view is open.");
-            if (Entries(Tool_GameView.EntryName(W1, H1)) + Entries(Tool_GameView.EntryName(W2, H2)) > 0)
+            if (Entries(Tool_GameView.EntryName(W1, H1)) + Entries(Tool_GameView.EntryName(W2, H2)) + Entries(Fixed) > 0)
                 Assert.Ignore("The size list already holds a test entry.");
             selectedBefore = (int)view.GetType().GetProperty("selectedSizeIndex", Any)!.GetValue(view);
         }
@@ -41,7 +42,7 @@ namespace Feeder.MCP.Editor.Tests.Tools
             for (var i = (int)groupType.GetMethod("GetTotalCount")!.Invoke(group, null) - 1; i >= 0; i--)
             {
                 var name = BaseText(group, i);
-                if (name != Tool_GameView.EntryName(W1, H1) && name != Tool_GameView.EntryName(W2, H2))
+                if (name != Tool_GameView.EntryName(W1, H1) && name != Tool_GameView.EntryName(W2, H2) && name != Fixed)
                     continue;
                 groupType.GetMethod("RemoveCustomSize")!.Invoke(group, new object[] { i });
                 if (selectedBefore > i)
@@ -87,6 +88,34 @@ namespace Feeder.MCP.Editor.Tests.Tools
 
             Assert.AreEqual(1, Entries(Tool_GameView.EntryName(W1, H1)));
             Assert.AreEqual(1, Entries(Tool_GameView.EntryName(W2, H2)));
+        }
+
+        string Rendered()
+        {
+            var size = (UnityEngine.Vector2)view!.GetType().GetProperty("targetRenderSize", Any)!.GetValue(view);
+            return $"{size.x:0}x{size.y:0}";
+        }
+
+        // a fixed entry other than Matrix: the answer once read a size that lagged behind the view
+        [Test]
+        public void Answer_NamesTheRenderedSizes_FromAFixedEntryThatIsNotMatrix()
+        {
+            var (_, group) = Group();
+            var editor = typeof(EditorWindow).Assembly;
+            var kind = System.Enum.Parse(editor.GetType("UnityEditor.GameViewSizeType")!, "FixedResolution");
+            group.GetType().GetMethod("AddCustomSize")!.Invoke(group, new[] { System.Activator.CreateInstance(editor.GetType("UnityEditor.GameViewSize")!, kind, W3, H3, Fixed) });
+            var index = (int)group.GetType().GetMethod("GetTotalCount")!.Invoke(group, null) - 1;
+            view!.GetType().GetMethod("SizeSelectionCallback", Any)!.Invoke(view, new object?[] { index, null });
+            Assert.AreEqual($"{W3}x{H3}", Rendered());
+
+            Assert.IsTrue(Tool_GameView.Apply(W1, H1, out var message), message);
+            StringAssert.Contains($"{W3}x{H3} ({Fixed}) -> {W1}x{H1} ({Tool_GameView.EntryName(W1, H1)})", message);
+            Assert.AreEqual($"{W1}x{H1}", Rendered());
+
+            Assert.IsTrue(Tool_GameView.Apply(W2, H2, out message), message);
+            StringAssert.Contains($"{W1}x{H1} ({Tool_GameView.EntryName(W1, H1)}) -> {W2}x{H2} ({Tool_GameView.EntryName(W2, H2)})", message);
+            Assert.AreEqual($"{W2}x{H2}", Rendered());
+            Assert.AreEqual(Rendered(), Tool_GameView.Resolution());
         }
 
         [UnityTest]
