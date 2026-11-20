@@ -14,6 +14,7 @@ namespace Feeder.MCP.Editor.API
         public const string AssetsRefreshToolId = "assets-refresh";
         const int CompileStartChecks = 10;
         const int CompileStartCheckMs = 50;
+        internal const string NothingToCompileAnswer = "[Success] AssetDatabase refreshed, nothing to compile.";
         [AiTool
         (
             AssetsRefreshToolId,
@@ -77,7 +78,8 @@ namespace Feeder.MCP.Editor.API
                     return ResponseCallTool.Success($"[Warning] AssetDatabase refreshed, but compilation errors exist:\n\n{errorDetails}").SetRequestID(requestId);
                 }
 
-                return ResponseCallTool.Success("AssetDatabase refreshed successfully.").SetRequestID(requestId);
+                // same marker as the post-compile answer: the description tells agents to stop at [Success]
+                return ResponseCallTool.Success(NothingToCompileAnswer).SetRequestID(requestId);
             });
             return await refresh;
         }
