@@ -148,6 +148,30 @@ namespace Feeder.MCP.Editor.Tests.Tools
         }
 
         [Test]
+        public void SmallMaxResolution_ShrinksTheReturnedImage_NotTheSavedFile()
+        {
+            if (Tool_Screenshot.CaptureGameView(0, out _, out _, out var visible) == null)
+                Assert.Ignore("The Game view cannot be captured (behind another tab?): " + visible);
+            Assert.IsTrue(Tool_GameView.Apply(W1, H1, out var message), message);
+            const string Folder = "Temp/MxTestShot";
+            try
+            {
+                var response = new Tool_Screenshot().ScreenshotGameView(null, 256, Folder + "/m3.png");
+
+                var png = System.IO.File.ReadAllBytes(Folder + "/m3.png");
+                int Big(int at) => (png[at] << 24) | (png[at + 1] << 16) | (png[at + 2] << 8) | png[at + 3];
+                Assert.AreEqual((W1, H1), (Big(16), Big(20)), "the saved file keeps the Game view size");
+                StringAssert.Contains($"({256}x{UnityEngine.Mathf.RoundToInt(H1 * 256f / W1)})", response.GetMessage());
+                StringAssert.Contains($"({W1}x{H1})", response.GetMessage());
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(Folder))
+                    System.IO.Directory.Delete(Folder, true);
+            }
+        }
+
+        [Test]
         public void ZeroOrNegative_IsRefused()
         {
             Assert.IsFalse(Tool_GameView.Apply(1280, 0, out var message));
