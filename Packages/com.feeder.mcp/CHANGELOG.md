@@ -6,7 +6,7 @@ All notable changes to this package are documented here.
 
 ### Added
 
-- `playtest` tool (off by default) and `matrix-playtest` skill: a playtest is data in the project's
+- `playtest` tool (off by default) and `matrix-playmode` skill (opened for any play-mode work): a playtest is data in the project's
   `Docs/Playtest.md` (setup, a `Clear screen` list and named flows of `click`, `expect-active`, `shot`, `call`, `run`
   and other steps), and one call plays a flow in play mode. A click waits until its uGUI target is active, interactable
   and not covered, then clicks at once; a covered target fails with the path of what lies over it. The answer is a

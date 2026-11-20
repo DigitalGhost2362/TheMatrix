@@ -6,14 +6,15 @@ namespace Feeder.MCP.Editor.API
     [AiSkillType]
     public static class Skill_Playtest
     {
-        public const string SkillId = "matrix-playtest";
+        public const string SkillId = "matrix-playmode";
 
         [AiSkill(SkillId,
-@"Play-test the game with the 'playtest' tool, start to finish without asking: one call runs a flow from the project's Docs/Playtest.md in play mode, clicks uGUI buttons through a visible cursor, waits for panels to settle before shots, fails on console errors, puts PlayerPrefs and save files back, and answers with a step table and a contact sheet. Covers finding the UI, writing or fixing Playtest.md, keeping rewards and purchases out of flows, reading a result and changing the cursor. Use whenever the user asks for a playtest or play test, to test a UI flow, or to change the playtest cursor.")]
+@"Use whenever you enter play mode to work: checking a change, a review or a playtest. Drive the game with the 'playtest' tool, start to finish without asking: one call runs a flow from the project's Docs/Playtest.md in play mode, clicks uGUI buttons through a visible cursor, waits for panels to settle before shots, fails on console errors, puts PlayerPrefs and save files back, and answers with a step table and a contact sheet. Covers finding the UI, writing or fixing Playtest.md, keeping rewards and purchases out of flows, reading a result and changing the cursor.")]
         public static string Markdown => @"
-# Playtest
+# Play mode
 
-The runner is written once, in the package. A playtest is data: the steps of a flow live in the project's
+Any work in play mode - checking a change, a review, a playtest the user asked for - goes through the playtest
+runner below. The runner is written once, in the package. A playtest is data: the steps of a flow live in the project's
 `Docs/Playtest.md`, and one `playtest` call plays them. Never write a `script-execute` that clicks buttons
 for a playtest; when a step cannot be expressed, say which verb is missing.
 
