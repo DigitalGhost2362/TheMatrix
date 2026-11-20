@@ -34,7 +34,7 @@ namespace Feeder.MCP.Editor.API
             "- `maxResolution` (default 1024) - longest side of the returned image; `0` returns the full size (capped at 3840).\n" +
             "- `savePath` (optional) - also writes the returned PNG there and names the path in the reply text. Relative paths start at the project root; paths outside the project root are rejected; missing folders are created; `.png` is appended when there is no extension, any other extension is rejected, and an existing file under `Assets/` or `Packages/` is never overwritten.\n\n" +
             "## Behavior\n\n" +
-            "Without `cameraRef`: locates `UnityEditor.GameView`, repaints it, reads its `m_RenderTexture` and flips the pixels on graphics APIs whose UV origin is top-left. Requires an open Game View. " +
+            "Without `cameraRef`: locates `UnityEditor.GameView`, repaints it, reads its `m_RenderTexture` and flips the pixels on graphics APIs whose UV origin is top-left. When that texture is not yet at the view's render size (Unity unfocused after a size change) the view is redrawn at once; if it still differs the tool answers an error instead of an old frame. Requires an open Game View. " +
             "With `cameraRef`: swaps a temporary `RenderTexture` onto the camera, calls `Camera.Render`, reads back and restores the camera's `targetTexture`.")]
         [Description("Captures the Game View (or the camera given by cameraRef) and returns it as an image; savePath also saves it inside the project.")]
         public ResponseCallTool ScreenshotGameView
@@ -161,6 +161,19 @@ namespace Feeder.MCP.Editor.API
 
             var rtField = gameViewType.GetField("m_RenderTexture", BindingFlags.NonPublic | BindingFlags.Instance);
             var sourceRt = rtField?.GetValue(gameView) as RenderTexture;
+            var target = Tool_GameView.TargetSize(gameView);
+            if (sourceRt != null && (sourceRt.width != target.x || sourceRt.height != target.y))
+            {
+                // an unfocused Unity may not repaint the Game view for a while, so its texture still holds a frame of the old size
+                var host = ParentField?.GetValue(gameView);
+                host?.GetType().GetMethod("RepaintImmediately", InstanceFlags, null, Type.EmptyTypes, null)?.Invoke(host, null);
+                sourceRt = rtField?.GetValue(gameView) as RenderTexture;
+                if (sourceRt != null && (sourceRt.width != target.x || sourceRt.height != target.y))
+                {
+                    error = $"Game view has not redrawn at the new size (it holds {sourceRt.width}x{sourceRt.height}, renders at {target.x}x{target.y}); click the Unity window or pass cameraRef.";
+                    return null;
+                }
+            }
             if (sourceRt == null || !sourceRt.IsCreated())
             {
                 error = "Game View render texture is not available. Ensure the Game View window is open and visible.";

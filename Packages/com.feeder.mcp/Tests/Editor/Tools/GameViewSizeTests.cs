@@ -131,6 +131,22 @@ namespace Feeder.MCP.Editor.Tests.Tools
             Assert.AreEqual((W1, H1), (width, height));
         }
 
+        // read in the same frame as the size change, before any repaint: an old frame must never come back silently
+        [Test]
+        public void CaptureRightAfterASizeChange_IsAtTheNewSize_OrSaysItHasNotRedrawn()
+        {
+            if (Tool_Screenshot.CaptureGameView(0, out _, out _, out var visible) == null)
+                Assert.Ignore("The Game view cannot be captured (behind another tab?): " + visible);
+            Assert.IsTrue(Tool_GameView.Apply(W2, H2, out var message), message);
+
+            var png = Tool_Screenshot.CaptureGameView(0, out var width, out var height, out var error);
+
+            if (png == null)
+                StringAssert.Contains("has not redrawn at the new size", error);
+            else
+                Assert.AreEqual((W2, H2), (width, height));
+        }
+
         [Test]
         public void ZeroOrNegative_IsRefused()
         {
