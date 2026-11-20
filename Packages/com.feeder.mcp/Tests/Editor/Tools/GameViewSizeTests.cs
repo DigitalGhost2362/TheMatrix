@@ -11,91 +11,103 @@ namespace Feeder.MCP.Editor.Tests.Tools
 {
     public sealed class GameViewSizeTests
     {
-        const string BeforeKey = "Feeder.MCP.GameViewSize.Before";
+        const BindingFlags Any = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
 
-        // a size a session set and has not restored yet belongs to that session
-        static void IgnoreWhenASessionHoldsASize()
+        // sizes no user list is likely to hold, so cleanup removes only what the test added
+        const int W1 = 1237, H1 = 701, W2 = 703, H2 = 1239;
+
+        EditorWindow? view;
+        int selectedBefore;
+
+        [SetUp]
+        public void SetUp()
         {
-            if (SessionState.GetInt(BeforeKey, -1) >= 0)
-                Assert.Ignore("A session changed the Game view size and has not restored it.");
+            var views = UnityEngine.Resources.FindObjectsOfTypeAll(typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView")!);
+            view = views.Length > 0 ? (EditorWindow)views[0] : null;
+            if (view == null)
+                Assert.Ignore("No Game view is open.");
+            if (Entries(Tool_GameView.EntryName(W1, H1)) + Entries(Tool_GameView.EntryName(W2, H2)) > 0)
+                Assert.Ignore("The size list already holds a test entry.");
+            selectedBefore = (int)view.GetType().GetProperty("selectedSizeIndex", Any)!.GetValue(view);
         }
 
-        [UnityTest]
-        public IEnumerator SetSize_ThenRestore_CapturesAtThatSize_AndPutsBackTheOldSize()
+        [TearDown]
+        public void TearDown()
         {
-            IgnoreWhenASessionHoldsASize();
-            if (Tool_Screenshot.CaptureGameView(0, out _, out _, out var visible) == null)
-                Assert.Ignore("The Game view cannot be captured (behind another tab?): " + visible);
-            var before = Tool_GameView.Resolution();
-            if (!Tool_GameView.Apply(1280, 720, out var message))
-                Assert.Ignore(message);
-            try
+            if (view == null)
+                return;
+            var (sizes, group) = Group();
+            var groupType = group.GetType();
+            for (var i = (int)groupType.GetMethod("GetTotalCount")!.Invoke(group, null) - 1; i >= 0; i--)
             {
-                yield return null;
-                yield return null;
-                var png = Tool_Screenshot.CaptureGameView(0, out var width, out var height, out var error);
-                Assert.IsNotNull(png, error);
-                Assert.AreEqual((1280, 720), (width, height));
-                Assert.AreEqual("1280x720", Tool_GameView.Resolution());
+                var name = BaseText(group, i);
+                if (name != Tool_GameView.EntryName(W1, H1) && name != Tool_GameView.EntryName(W2, H2))
+                    continue;
+                groupType.GetMethod("RemoveCustomSize")!.Invoke(group, new object[] { i });
+                if (selectedBefore > i)
+                    selectedBefore--;
             }
-            finally
-            {
-                Tool_GameView.Apply(0, 0, out _);
-            }
-            yield return null;
-            Assert.AreEqual(before, Tool_GameView.Resolution());
+            sizes.GetType().GetMethod("SaveToHDD")!.Invoke(sizes, null);
+            view.GetType().GetMethod("SizeSelectionCallback", Any)!.Invoke(view, new object?[] { selectedBefore, null });
+            view.Repaint();
         }
 
-        static int MatrixEntries()
+        static (object sizes, object group) Group()
         {
-            const BindingFlags Any = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
             var sizesType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameViewSizes")!;
-            var group = sizesType.GetProperty("currentGroup", Any)!.GetValue(sizesType.GetProperty("instance", Any)!.GetValue(null))!;
-            var count = (int)group.GetType().GetMethod("GetTotalCount")!.Invoke(group, null);
+            var sizes = sizesType.GetProperty("instance", Any)!.GetValue(null)!;
+            return (sizes, sizesType.GetProperty("currentGroup", Any)!.GetValue(sizes)!);
+        }
+
+        static string BaseText(object group, int index)
+        {
+            var size = group.GetType().GetMethod("GetGameViewSize")!.Invoke(group, new object[] { index });
+            return (string)size.GetType().GetProperty("baseText")!.GetValue(size);
+        }
+
+        static int Entries(string name)
+        {
+            var (_, group) = Group();
             var found = 0;
-            for (var i = 0; i < count; i++)
-            {
-                var size = group.GetType().GetMethod("GetGameViewSize")!.Invoke(group, new object[] { i });
-                if ((string)size.GetType().GetProperty("baseText")!.GetValue(size) == "Matrix")
+            for (var i = (int)group.GetType().GetMethod("GetTotalCount")!.Invoke(group, null) - 1; i >= 0; i--)
+                if (BaseText(group, i) == name)
                     found++;
-            }
             return found;
         }
 
         [Test]
-        public void Restore_RemovesTheMatrixEntry_AndPutsBackTheOldSize()
+        public void EachSize_KeepsItsOwnEntry_AndSettingItAgainAddsNoDuplicate()
         {
-            IgnoreWhenASessionHoldsASize();
-            var before = Tool_GameView.Resolution();
-            if (!Tool_GameView.Apply(1280, 720, out var message))
-                Assert.Ignore(message);
-            try
-            {
-                Assert.AreEqual("1280x720", Tool_GameView.Resolution());
-                Assert.AreEqual(1, MatrixEntries());
-            }
-            finally
-            {
-                Tool_GameView.Apply(0, 0, out message);
-            }
-            Assert.AreEqual(before, Tool_GameView.Resolution(), message);
-            Assert.AreEqual(0, MatrixEntries());
+            Assert.IsTrue(Tool_GameView.Apply(W1, H1, out var message), message);
+            Assert.AreEqual($"{W1}x{H1}", Tool_GameView.Resolution());
+            Assert.IsTrue(Tool_GameView.Apply(W2, H2, out message), message);
+            Assert.AreEqual($"{W2}x{H2}", Tool_GameView.Resolution());
+            Assert.IsTrue(Tool_GameView.Apply(W1, H1, out message), message);
+            Assert.AreEqual($"{W1}x{H1}", Tool_GameView.Resolution());
+
+            Assert.AreEqual(1, Entries(Tool_GameView.EntryName(W1, H1)));
+            Assert.AreEqual(1, Entries(Tool_GameView.EntryName(W2, H2)));
+        }
+
+        [UnityTest]
+        public IEnumerator SetSize_CapturesAtThatSize()
+        {
+            if (Tool_Screenshot.CaptureGameView(0, out _, out _, out var visible) == null)
+                Assert.Ignore("The Game view cannot be captured (behind another tab?): " + visible);
+            Assert.IsTrue(Tool_GameView.Apply(W1, H1, out var message), message);
+            yield return null;
+            yield return null;
+            var png = Tool_Screenshot.CaptureGameView(0, out var width, out var height, out var error);
+            Assert.IsNotNull(png, error);
+            Assert.AreEqual((W1, H1), (width, height));
         }
 
         [Test]
-        public void OneSideZero_IsRefused()
+        public void ZeroOrNegative_IsRefused()
         {
             Assert.IsFalse(Tool_GameView.Apply(1280, 0, out var message));
-            StringAssert.Contains("both", message);
-        }
-
-        [Test]
-        public void Restore_WithNothingSaved_ChangesNothing()
-        {
-            IgnoreWhenASessionHoldsASize();
-            var before = Tool_GameView.Resolution();
-            Assert.IsTrue(Tool_GameView.Apply(0, 0, out var message), message);
-            Assert.AreEqual(before, Tool_GameView.Resolution());
+            StringAssert.Contains("above 0", message);
+            Assert.IsFalse(Tool_GameView.Apply(0, 0, out _));
         }
     }
 }
