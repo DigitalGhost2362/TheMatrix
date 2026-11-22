@@ -11,7 +11,7 @@
     <AssemblyTitle>Feeder MCP Server</AssemblyTitle>
     <Description>Local Model Context Protocol matrix for Matrix Bridge and Unity.</Description>
     <Copyright>Copyright © 2026 Feeder</Copyright>
-    <RepositoryUrl>https://github.com/BingoBoiz/TheMatrix</RepositoryUrl>
+    <RepositoryUrl>https://github.com/DigitalGhost2362/TheMatrix</RepositoryUrl>
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <!-- invariant globalization never loads localized resources; keeps the compiler's locales out of the exe -->

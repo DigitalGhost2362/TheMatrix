@@ -2,7 +2,7 @@
 
 All notable changes to this package are documented here.
 
-## [Unreleased]
+## [2.0.0] - 2026-11-22
 
 ### Added
 
@@ -70,6 +70,9 @@ All notable changes to this package are documented here.
 
 ### Changed
 
+- The repository root is the package: install from `https://github.com/DigitalGhost2362/TheMatrix.git` without
+  `?path=`. Projects that use the old `?path=/Packages/com.feeder.mcp` URL replace it in `Packages/manifest.json`.
+  To develop the package, clone the repository into `Packages/com.feeder.mcp` of any Unity project.
 - Play mode nobody holds the editor lock for (usually a person who forgot it on) no longer holds the queue: the next
   agent gets the lock, `acquired` says "in play mode nobody claimed", and the `matrix-shared-editor` skill tells it to
   exit play mode and go on. A play mode test run still holds the queue, and an agent that left play mode on keeps its
@@ -114,6 +117,7 @@ All notable changes to this package are documented here.
 
 ### Removed
 
+- The development Unity project (`ProjectSettings`, `Packages/manifest.json`) from the repository.
 - Tools that `script-execute` or the agent's own file tools do as well, and tools that reported invented state:
   `script-read`, `script-update-or-create`, `script-delete`, `script-validate`, `script-execute-history`,
   `type-get-json-schema`, `batch-execute`, `console-clear-logs`, `console-get-logs-page`, `ping`,

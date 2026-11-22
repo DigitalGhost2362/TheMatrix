@@ -1,70 +1,345 @@
-# TheMatrix
+# Matrix Bridge
 
-The standalone development repository for **Matrix Bridge**,
-a Unity Editor package that bundles its local MCP server and can be installed independently
-from FeederBase.
+Matrix Bridge exposes Unity Editor tools to MCP-compatible AI
+clients. The package ships with the local Windows x64 MCP server payload.
 
-## Requirements
+A step-by-step guide with a searchable catalog of every tool ships with the package: open
+`Documentation~/index.html` in a browser (it works offline, straight from disk).
 
-- Unity 2022.3 or newer
-- Windows x64 for the currently bundled local server
+## Installation
 
-## Install in another Unity project
-
-Open **Window > Package Manager**, click **+**, choose **Add package from git URL**, paste this URL and
-click **Add**:
+In Unity 2022.3 or newer, open **Window > Package Manager**, click **+**, choose
+**Add package from git URL** and paste:
 
 ```text
-https://github.com/DigitalGhost2362/TheMatrix.git?path=/Packages/com.feeder.mcp
+https://github.com/DigitalGhost2362/TheMatrix.git
 ```
 
-Or add the same URL to the project's `Packages/manifest.json`:
+Or add it to the project's `Packages/manifest.json`, with `#vX.Y.Z` at the end to pin a release:
 
 ```json
-{
-  "dependencies": {
-    "com.feeder.mcp": "https://github.com/DigitalGhost2362/TheMatrix.git?path=/Packages/com.feeder.mcp"
-  }
-}
+"com.feeder.mcp": "https://github.com/DigitalGhost2362/TheMatrix.git#v2.0.0"
 ```
 
-No scoped registry, installer or FeederBase package is needed. Git must be installed on the machine.
+Git must be installed on the machine. To update, select **Matrix Bridge** in Package Manager and click
+**Update**: Unity fetches the newest version from `main`.
 
-### Update
+Projects installed before 2.0.0 use `https://github.com/DigitalGhost2362/TheMatrix.git?path=/Packages/com.feeder.mcp`.
+The repository root is now the package, so replace that URL with the one above in `Packages/manifest.json`.
 
-Open **Window > Package Manager**, select **Matrix Bridge** and click **Update**. Unity fetches the
-newest version from `main`.
+The package is plain source: it contains no precompiled `.dll`. It ships a
+compressed self-contained local server. On first use, the editor extracts the server into the
+consuming project's `Library/feeder-matrix` cache. It does not require Git LFS or a separate .NET
+runtime. Unity resolves the official Unity Test Framework dependency from its standard registry.
 
-### Projects that used the Matrix registry
+## Getting started
 
-Replace the `com.feeder.mcp` version number in `Packages/manifest.json` with the URL above, and remove
-the `Matrix` entry under `scopedRegistries`.
+Installing the package changes nothing on a machine: no window opens, no server starts and no file
+is written until the person using the project turns Matrix on. Teammates who do not use MCP are
+never affected, even when the project is shared through version control.
 
-## Use
+To turn it on, run **Tools > Feeder > Matrix Bridge > Getting Started** once (see [Matrix Setup](#matrix-setup)). Until
+then the other items of the **Tools > Feeder > Matrix Bridge** menu are greyed out. The choice is stored per
+machine and per project folder, outside the project, so it is never committed. A saved window
+layout that includes Matrix windows or the Scene view toolbar (for example one checked in with the
+project) does not open them for someone who has not turned Matrix on.
 
-Open the project once after installing: the package auto-starts the local MCP server, writes
-the project-root `.mcp.json` for Claude Code, and generates `.claude/skills`. No manual setup
-is needed for Claude Code.
+Once Matrix is on, the package does this each time the editor loads:
 
-For other AI clients or to opt out of auto-configure, open
-**Tools > Feeder > Matrix Bridge > Bridge**.
+1. Extracts and starts the bundled local MCP server.
+2. Writes the project-root `.mcp.json` with the correct server URL (Claude Code picks it up on
+   the next session in that folder).
+3. Generates skill files into `.claude/skills`: the Matrix workflow skills, plus a `matrix-<tool>` folder for each
+   enabled tool listed in `skillTools` of `UserSettings/Feeder-MCP-Config.json` (default `script-execute` and
+   `rql-query`). The other tools are described by the MCP tool list alone.
 
-## Repository layout
+For other AI clients, open **Tools > Feeder > Matrix Bridge > Bridge** and click the client name at the
+bottom of the window to wire or unwire it. To turn Matrix off again, click the state word while it
+reads ONLINE: the server stops, the other **Tools > Feeder > Matrix Bridge** items grey out again, and nothing
+starts, opens or is written on the next load.
 
-- `Packages/com.feeder.mcp`: the distributable UPM package
-- `Assets`, `ProjectSettings`, and the remaining `Packages` files: the local development project
+Note: the server port is derived from the project's directory path, so `.mcp.json` differs
+between machines that clone the project to different paths. The file is rewritten with the local
+port on editor load. Do not commit it: run **Tools > Feeder > Matrix Bridge > Getting Started** once per machine to
+gitignore it.
 
-Projects that install Matrix Bridge receive only `Packages/com.feeder.mcp`.
+## Matrix Bridge window
 
-## Release checklist
+Open **Tools > Feeder > Matrix Bridge > Bridge**. Every connection is local: the bridge listens on loopback
+only.
 
-1. Set the new version in `Packages/com.feeder.mcp/package.json` and in `MatrixPlugin.Version`
-   (`Packages/com.feeder.mcp/Runtime/MatrixPlugin.cs`).
-2. Add the release notes to `Packages/com.feeder.mcp/CHANGELOG.md`.
-3. Open this project in the minimum supported Unity version and verify there are no compile errors.
-4. Commit and push to `main`. Projects get the release the next time someone clicks **Update** in
-   Package Manager.
+- Click the large state word to link or unlink (OFFLINE, LINKING, ONLINE).
+- Click a client name to write or remove its MCP configuration. A dot under the name means it is
+  wired; an amber dot means the configuration is outdated and a click rewrites it. The `+N` entry
+  lists more clients.
+- The `...` menu copies the endpoint, changes the port while offline, sets the logging level,
+  opens the Skills window, turns the rain background on or off (the same setting as in Matrix
+  Space, for machines where it lags), opens the logs and the config file, and reinstalls the server.
+- The window's tab icon dims while the editor is not linked.
+
+## Skills window
+
+Open **Tools > Feeder > Matrix Bridge > Skills**. It lists every MCP tool with its own switch.
+
+- Pick a group on the left or type in the search box; the All, On and Off buttons filter by state.
+  **Unused 30d** lists tools nobody called in 30 days (candidates to turn off); **Off, called** lists tools that are off
+  but agents reached through `tool-call` (candidates to turn on).
+- Each row also shows calls in the last 7 and 30 days, the last use and the error rate, read from
+  `Library/MatrixUsage` when the window opens or you click **Refresh usage**. The agent never sees these numbers.
+- Each row shows what the tool does, the tokens it adds to every request while it is on, and a
+  `writes` or `destructive` tag when it changes the project. When a tool works with another one that
+  is off, the row says so; click the name to switch it on too.
+- The bar at the bottom adds up the tokens of everything that is on. **Core only** returns to the
+  default set. **Enable all** asks first, because it costs about 50k tokens per request.
+- A change rewrites the skill files after a second. Clients that follow `tools/list_changed` (Claude
+  Code does) list the new set at once; reconnect the others.
+
+## Matrix Setup
+
+Run **Tools > Feeder > Matrix Bridge > Getting Started** once on each machine. It:
+
+- turns Matrix on for the project on this machine: it starts the local server and links the editor;
+- adds `.mcp.json` and `.codex/config.toml` to the project's `.gitignore`; if a file is already committed, it prints
+  the git command for you to run;
+- keeps only the core MCP tools enabled and disables the rest, to cut the tokens sent with every
+  request. The core set is `script-execute`, `console-get-logs`, `assets-refresh`,
+  `editor-application-set-state`, `screenshot-game-view`, `scene-open`, `scene-save`, `menu-execute`,
+  `rql-query`, `unity-tool-list` and `tool-set-enabled-state`. Switch more on in
+  **Tools > Feeder > Matrix Bridge > Skills**, or a client enables them on demand with `tool-set-enabled-state`;
+- regenerates the agent skills;
+- changes these editor settings so agents can share the editor:
+  - Preferences > Asset Pipeline > Auto Refresh: Disabled. A file an agent writes on disk no longer compiles the
+    moment someone clicks the editor, in the middle of another session's play test; agents refresh through
+    `assets-refresh`, which waits for the editor lock. Press Ctrl+R after editing files outside Unity.
+  - Preferences > General > Script Changes While Playing: Recompile After Finished Playing.
+  - Player Settings > Run In Background: On, so play mode keeps running while the agent's terminal has focus.
+
+The two Preferences apply to every Unity project on this machine; Run In Background is saved in
+`ProjectSettings/ProjectSettings.asset`. The first Setup records the values from before, and
+**Revert** in **Tools > Feeder > Matrix Bridge > Getting Started** puts them back, removes the `.gitignore` lines Setup added,
+restores which tools were enabled, turns Matrix and Hyper Testing Mode off and closes the Matrix windows. Client
+configs and generated skill files stay.
+
+Steps that depend on the project or need admin rights (entering play mode without a domain reload, a Windows
+Defender exclusion) are in the `matrix-setup-checklist` skill: ask your agent to run it.
+
+## Editor health and tool-call
+
+The server answers two tools of its own, listed even while the editor is hung, reloading or closed:
+
+- `editor-health` says whether the editor is responsive, busy, reloading, stalled or not linked, and
+  what holds it: the editor's open windows and dialogs, the Matrix calls in flight, and the last lines
+  of the editor log. A tool that times out ends its error with the same summary.
+- `tool-call` calls a Unity tool by name when it was just switched on and the client has not listed it
+  yet. The server tells clients when the tool set changes (`tools/list_changed`), so this is only for
+  that gap. Turn it off with `enableToolCallProxy: false` in `UserSettings/Feeder-MCP-Config.json`,
+  then restart the server.
+
+`tool-call` refuses:
+
+- itself and `editor-health`;
+- a tool the calling session already has in its list (call it by its real name instead);
+- a tool covered by a Claude Code `deny` or `ask` rule, or by a `PreToolUse` hook whose matcher picks
+  the tool but not `tool-call` itself, in the managed settings, the project's `.claude/settings.json`
+  and `.claude/settings.local.json`, or the user's `settings.json`. Rules are matched under every name
+  the server is registered by in the project's `.mcp.json` and in Claude Code's `.claude.json`;
+- every call while one of those files cannot be read or parsed (it names the file).
+
+The server cannot see rules passed on the command line (`--disallowedTools`, `--settings`), rules
+added during a session, remote or MDM policy, or hooks from plugins, skills and agents. A hook that
+matches every tool also runs for `tool-call` itself, and sees the target only in its input. When those
+gaps matter, turn `tool-call` off.
+
+Deadlines, in the same config file and read when the server starts: `timeoutMs` (default 60 s) for a
+call; `reconnectGraceMs` (default 180 s) that a call waits for an editor that is reloading; and
+`deferredToolTimeoutMs` (default 15 minutes) for tools that finish after a compile or domain reload.
+`script-execute` takes `timeoutSeconds` for code that runs long on purpose.
+
+## Agent instructions
+
+At the start of every session the server sends MCP `instructions`: open the matching `matrix-*` skill, look for a
+disabled tool before writing a script, add a project tool when a job repeats. To give your team its own text, commit
+`ProjectSettings/Packages/com.feeder.mcp/AgentInstructions.md`. It is read for every new session, so no restart is needed;
+only the first 2 KB is sent.
+
+## Tool usage
+
+The server appends one line per tool call to `Library/MatrixUsage/usage-YYYY-MM.jsonl`: time, tool, client, duration,
+status and the size of the arguments and the result. It never stores the arguments or results, keeps three months and
+sends nothing to the agent. Set `FeederMatrix:UsageLog=false` to turn it off.
+
+## Editor lock
+
+When several agent sessions share one editor, they take turns with the editor lock, which the server
+keeps:
+
+- `editor-lock-acquire` (`task`, `owner`) claims the editor for one burst of work: a compile, one play
+  session, an edit-mode batch. When someone else holds it, the answer names the holder.
+- `editor-lock-release` gives it back. `editor-lock-status` says who holds it.
+
+While a session holds the lock, the server refuses the other sessions' tools that are not marked
+read-only, and says who holds the editor and for what. Read-only tools always run. A claim ends when
+its session releases it, when the session closes, or after 10 minutes without a call from it.
+
+With Claude Code, each subagent is an agent of its own: it claims and waits in line for itself, and its
+claim ends when it ends. This needs the hook the editor adds to `.claude/settings.local.json` once it is linked to a server
+that supports it, and a Claude Code session started after it was added. Without the hook, and with other clients, a session and all
+its subagents are one agent.
+
+An agent whose work must follow another's joins the queue with `after`, the owner label of the agent it
+waits for: `editor-lock-acquire` with `task`, `owner` and `after: ["coder"]`. It gets the editor only
+when that agent has finished (its subagent ended, its session closed, or it called
+`editor-lock-release` with `done: true`), and it holds nobody back meanwhile.
+
+The **Matrix Bridge** window shows the holder and everyone waiting as cars on one track. A car marked
+`>` is a subagent, and a waiting car that reads `after <name>` waits for that agent: click it to let it
+go now. Under the status it shows the holder: the agent's name, its task and how
+long it has held the editor. The tooltip adds the client, the session and when an idle claim will be
+freed. Click the line to free an agent's claim, for example one left behind by a stuck session. With
+no claim the line reads `editor free`: the editor is yours. To work in it, ask the agents to stop first;
+the lock only orders agents among themselves.
+
+While an agent holds the lock, every Scene view gets a green frame, tagged at the bottom with the holder.
+
+The lock is also written to `Temp/agent-editor-lock/lock.json`, the lock file used before the server
+kept the lock. A session that still claims with that file blocks the claim while its file is live; the
+server cannot tell which session wrote it, so it refuses no tools for it.
+
+## Query tools
+
+Three tools read and change many objects in one call with a pipeline query. Setup keeps `rql-query`
+enabled; turn `rql-schema` (a type's members) and `rql-mutate` on in the Skills window when clients need them.
+
+```text
+objects | where Light.intensity > 1 | select name, Light.intensity, $path
+find("Player") | set position = [0, 1, 0], name = "Hero"
+```
+
+- `rql-query` reads the open scenes (or the open prefab), assets, the console and the selection, and
+  answers with a compact text table or JSON. It refuses stages and methods that change the project.
+- `rql-mutate` ends a query with `set`, `call`, `add` or `destroy`, or starts it with `new(...)`. It
+  checks every target before changing anything, records the whole query as one undo step named
+  `Matrix query`, and marks scenes and assets dirty without saving them. `dryRun=true` lists every
+  change and reverts it; `maxTargets` (default 100) refuses wider changes; `save=true` saves what it
+  touched.
+- `rql-schema` prints the syntax, the functions and the component types in the open scenes; with
+  `typeName` it lists that type's members and which ones can be written.
+
+From C#, `Feeder.MCP.Editor.Query.MatrixQuery.Run` and `MatrixQuery.Mutate` take the same queries.
+
+They replace the per-object tools: find, read and change GameObjects, components, objects, scenes,
+assets and the selection with `rql-query` and `rql-mutate`. Tools for actions a query cannot express
+stay: opening, saving and unloading scenes, prefab mode, copying, moving and deleting assets,
+`assets-refresh`, play mode, selection changes, `gameobject-duplicate`, console, scripts, tests,
+packages, screenshots, profiler, UI inspection and VFX.
+
+## Hyper Testing Mode (Experimental)
+
+Several clone editors play test one project in parallel, each driven by its own `hyper-playtester-N`
+subagent. It is off by default, Windows only, and only a person can turn it on, from
+**Tools > Feeder > Matrix Bridge > Hyper Testing (Experimental)**. The switch is per machine and per project, and turns off
+again on every package update.
+
+- **Clones:** `up` creates the clones in `<project>.HyperClones/hc<N>`. `Assets` and the embedded packages
+  are junctions to the project, and each clone has its own `Library` (without the Search index) and server
+  port. The clones start one after another behind a commit gate and a VRAM gate, and open no scene on start.
+- **Memory:** Windows runs out of commit, not of free RAM, so `up` refuses when the commit limit cannot hold
+  one more editor plus `ramReserveMb`, and the 30 s sampler writes commit and import workers to
+  `HyperTesting/Journal/ram-samples.csv`. Clones import in their own process (`cloneImportWorkers` 0 in
+  `HyperTesting/config.json`) and a GPU with 4096 MB or less starts one clone.
+- **Writes into the project:** a clone that creates an asset creates it in the project. The clone reports
+  every asset it creates as CRITICAL, and `up` takes a git baseline so `down` and `status` can warn about new
+  untracked paths. Packages that write assets under `Assets/` when play starts do not work with clones.
+- **Driving a clone by hand:** `HyperTesting/tools/` holds `hc.py`, `hx.sh`, `hxf.sh` and `shot.py`, which
+  call a clone over HTTP when a play tester has no MCP tools for it.
+- **Refreshing:** after a code change, `refresh` recompiles the clones one at a time.
+- **Running cases:** the agent following the `matrix-hyper-testing-guide` skill splits test cases over the
+  clones and spawns the play testers in parallel.
+- **Results and journal:** results go to `HyperTesting/Runs/`, and the journal goes to
+  `HyperTesting/Journal/`.
+- **Removing clones:** use the window's **Delete clones** button. Never delete a clone folder
+  recursively by hand: its `Assets` is a junction to the project.
+
+Restart Claude Code once after the first enable so it picks up `.claude/agents/`.
+
+## Platform support
+
+The package ships the local server for Windows x64, macOS (Intel and Apple silicon) and Linux x64, as
+`Server~/<platform>-<architecture>/server-payload.zip`. The editor picks the one that matches the machine, installs
+it as `Library/feeder-matrix/<platform>-<architecture>/matrix-server[.exe]`, sets the exec bit on macOS and Linux, and
+reaches it only on `127.0.0.1`. The Git package stores each payload as a zip to remain below GitHub's per-file limit;
+installation and updates are handled automatically by the editor package. Updating from 0.87 or earlier stops the
+project's old Matrix server, removes the files it left in `Library` (only when they are Matrix's own), and rewrites
+the config of every wired agent; restart the agent session afterwards. Other platforms need a payload published
+with `Matrix~/tools/publish-payloads.ps1`.
+
+## Batch mode and CI
+
+Start Matrix from the command line, with no window and nobody to click:
+
+```
+Unity -batchmode -nographics -projectPath <project> -executeMethod Feeder.MCP.Editor.MatrixBatch.Run
+      [-matrixIdleSeconds 900] [-matrixMaxSeconds 0] [-matrixReadyTimeoutSeconds 180]
+      [-matrixQuitFile <path>] [-matrixReadyFile <path>]
+```
+
+Leave out `-quit`; Unity would exit as soon as the method returns. The entry installs and starts the project's
+server (even when `CI=true`), links the Editor and writes `Temp/matrix-batch.ready.json` with the `mcpUrl` to give
+the agent. The Editor exits when no tool was called for `-matrixIdleSeconds` (0 = never), after `-matrixMaxSeconds`
+in total (0 = no limit), when the quit file appears (default `Temp/matrix-batch.quit`), or with exit code 2 when
+the server is not ready within `-matrixReadyTimeoutSeconds`. Batch mode does not write agent config files.
+
+## Runtime tools
+
+A game build, or Play mode, can link to the project's server as a player beside the Editor. The Editor link stays
+up, and runtime tools run in the player. Mark a static method:
+
+```csharp
+[Preserve]
+[MatrixRuntimeTool("runtime-hello", ReadOnly = true, Description = "Greets from the running game.")]
+static string Hello([Description("Who to greet.")] string name = "world") => "hello " + name;
+```
+
+- **Play mode:** switch on `Tools > Feeder > Matrix Bridge > Server > Link Play Mode As Player`; each Play session then links.
+- **Builds:** start the game with `-matrixPort <port> -matrixToken <token> [-matrixHost <host>] [-matrixProject <id>]`,
+  or call `Feeder.MCP.Player.MatrixPlayer.Connect(host, port, token)`. The port is the one in the project's
+  `.mcp.json`. Desktop and mobile players only (no WebGL). `runtime-ping` and `runtime-scene-info` ship as samples.
+
+## Shared projects
+
+Matrix writes its workflow skills and one `matrix-<tool>` folder per enabled tool in `skillTools` into each
+agent's skills folder (for example `.claude/skills` or `.agents/skills`), and deletes a tool's folder when the tool
+is switched off or leaves `skillTools`, so switching tools changes files in those folders. In a project shared through version control, either ignore
+`<skills folder>/matrix-*/` or accept those changes. Matrix does not edit the project's `.gitignore` for
+this. Hyper Testing keeps its guide in `matrix-hyper-testing-guide`, apart from the `matrix-hyper-testing`
+folder of the `hyper-testing` tool.
+
+## Names Matrix uses
+
+Matrix only creates, edits and deletes things under names of its own:
+
+- the server lives in `Library/feeder-matrix` and the log in `Temp/feeder-matrix`;
+- tool usage stats go to `Library/MatrixUsage`;
+- the team's agent instructions, when you add them, are `ProjectSettings/Packages/com.feeder.mcp/AgentInstructions.md`;
+- its entry in `.mcp.json` and the other client configs is `Feeder-MCP`, and its environment
+  variables start with `FEEDER_MATRIX_`;
+- its skill folders are `matrix-<tool>`;
+- its data types are in the `Feeder.MCP.Data` namespace;
+- it never edits or deletes a server, skill or config entry that it did not write.
+
+## Developing the package
+
+The repository root is the package. Clone it into `Packages/com.feeder.mcp` of any Unity 2022.3+ project:
+Unity loads it as an embedded package, so edits compile in that editor and commit from that folder.
+Several packages can sit side by side under `Packages/` this way, each with its own repository.
+
+Release checklist:
+
+1. Set the new version in `package.json` and in `MatrixPlugin.Version` (`Runtime/MatrixPlugin.cs`).
+2. Add the release notes to `CHANGELOG.md`.
+3. Open the host project in the minimum supported Unity version and check there are no compile errors.
+4. Commit, tag `vX.Y.Z` and push `main` with the tag.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See `LICENSE.md`.

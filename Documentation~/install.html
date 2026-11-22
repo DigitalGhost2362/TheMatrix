@@ -41,13 +41,13 @@
 <ol class="steps">
   <li><strong>Open Package Manager</strong>In Unity, open <span class="menu" role="text" aria-label="Window &gt; Package Manager"><span class="sr">Window &gt; Package Manager</span><span aria-hidden="true" style="display:contents"><span class="m">Window</span><span class="sep" aria-hidden="true"></span><span class="m">Package Manager</span></span></span>.</li>
   <li><strong>Add from git URL</strong>Click <strong>+</strong> in the top left corner, choose <strong>Add package from git URL</strong>, paste this URL and click <strong>Add</strong>:
-<div class="code-wrap" data-label="git URL"><pre><code>https://github.com/DigitalGhost2362/TheMatrix.git?path=/Packages/com.feeder.mcp</code></pre></div></li>
+<div class="code-wrap" data-label="git URL"><pre><code>https://github.com/DigitalGhost2362/TheMatrix.git</code></pre></div></li>
   <li><strong>Wait for the import</strong>Unity downloads and compiles the package. A new menu appears: <span class="menu" role="text" aria-label="Tools &gt; Feeder &gt; Matrix Bridge"><span class="sr">Tools &gt; Feeder &gt; Matrix Bridge</span><span aria-hidden="true" style="display:contents"><span class="m">Tools</span><span class="sep" aria-hidden="true"></span><span class="m">Feeder</span><span class="sep" aria-hidden="true"></span><span class="m">Matrix Bridge</span></span></span>. Most of its items stay greyed out until you run Setup.</li>
 </ol>
 <p>Prefer editing files? Add the same URL to <code>Packages/manifest.json</code> and Unity installs it on the next focus:</p>
 <div class="code-wrap" data-label="Packages/manifest.json"><pre><code>{
   "dependencies": {
-    "com.feeder.mcp": "https://github.com/DigitalGhost2362/TheMatrix.git?path=/Packages/com.feeder.mcp"
+    "com.feeder.mcp": "https://github.com/DigitalGhost2362/TheMatrix.git"
   }
 }</code></pre></div>
 

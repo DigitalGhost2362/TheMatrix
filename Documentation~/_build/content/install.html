@@ -15,13 +15,13 @@ lead: Matrix Bridge is a normal Unity package installed from a git URL. Installi
 <ol class="steps">
   <li><strong>Open Package Manager</strong>In Unity, open [[menu:Window > Package Manager]].</li>
   <li><strong>Add from git URL</strong>Click <strong>+</strong> in the top left corner, choose <strong>Add package from git URL</strong>, paste this URL and click <strong>Add</strong>:
-<pre data-label="git URL"><code>https://github.com/DigitalGhost2362/TheMatrix.git?path=/Packages/com.feeder.mcp</code></pre></li>
+<pre data-label="git URL"><code>https://github.com/DigitalGhost2362/TheMatrix.git</code></pre></li>
   <li><strong>Wait for the import</strong>Unity downloads and compiles the package. A new menu appears: [[menu:Tools > Feeder > Matrix Bridge]]. Most of its items stay greyed out until you run Setup.</li>
 </ol>
 <p>Prefer editing files? Add the same URL to <code>Packages/manifest.json</code> and Unity installs it on the next focus:</p>
 <pre data-label="Packages/manifest.json"><code>{
   "dependencies": {
-    "com.feeder.mcp": "https://github.com/DigitalGhost2362/TheMatrix.git?path=/Packages/com.feeder.mcp"
+    "com.feeder.mcp": "https://github.com/DigitalGhost2362/TheMatrix.git"
   }
 }</code></pre>
 
