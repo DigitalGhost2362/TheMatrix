@@ -6,6 +6,18 @@ clients. The package ships with the local Windows x64 MCP server payload.
 A step-by-step guide with a searchable catalog of every tool ships with the package: open
 `Documentation~/index.html` in a browser (it works offline, straight from disk).
 
+## New in 2.0: Playtest
+
+Write the steps of a playtest once in your project's `Docs/Playtest.md`; one `playtest` call plays a flow in play
+mode. A visible cursor clicks your uGUI buttons as soon as each one is shown, interactable and on top, every shot
+waits for the UI to settle, PlayerPrefs and save files are put back afterwards, and the answer is a step table with
+a contact sheet. See [Playtest](#playtest).
+
+![The playtest cursor playing a flow in the Game view](Documentation~/assets/img/playtest-demo.gif)
+
+Full-quality clip: [`Documentation~/assets/img/playtest-demo.mp4`](Documentation~/assets/img/playtest-demo.mp4).
+Everything else in 2.0 is in [CHANGELOG.md](CHANGELOG.md).
+
 ## Installation
 
 In Unity 2022.3 or newer, open **Window > Package Manager**, click **+**, choose
@@ -204,6 +216,40 @@ While an agent holds the lock, every Scene view gets a green frame, tagged at th
 The lock is also written to `Temp/agent-editor-lock/lock.json`, the lock file used before the server
 kept the lock. A session that still claims with that file blocks the claim while its file is live; the
 server cannot tell which session wrote it, so it refuses no tools for it.
+
+## Playtest
+
+`playtest` is off by default; your client switches it on with `tool-set-enabled-state` when you ask for a playtest
+(the `matrix-playmode` skill tells it how), or switch it on in the Skills window.
+
+A playtest is data in `Docs/Playtest.md` (also read from `docs/`, `ProjectDocs/` or `Documentation/`):
+
+```md
+## Setup
+start-scene: Assets/Scenes/Boot.unity
+speed: 1
+autoshot: clicks
+
+## Clear screen
+- hide /Canvas/DebugBanner
+
+## Flow: open-settings
+- click /Canvas/Home/BtnSettings
+- expect-visible /Canvas/SettingsPanel/Window
+- shot settings
+- click /Canvas/SettingsPanel/Window/BtnClose
+- expect-hidden /Canvas/SettingsPanel/Window
+```
+
+- Steps: `click`, `expect-visible` / `expect-hidden`, `expect-active` / `expect-inactive`, `wait-until <Type.Member>
+  <value>`, `wait`, `shot`, `call <Type.Method>`, `hide` / `hide-type`, `timescale` and `run <flow>`.
+- `playtest` with `action=run` and `flow=<name>` enters play mode in `start-scene`, plays the flow and leaves play mode.
+  `action=list` checks the file, `status` shows the live step and `stop` ends a run.
+- A click that is covered fails with the path of what lies over it. Console errors fail the run
+  (`fail-on-console-errors`), and PlayerPrefs and `persistentDataPath` are restored after it (`protect-prefs`).
+- Shots, `report.md` and `contact_sheet.png` go to `Docs/Playtest_Runs/<stamp>-<flow>/`: keep that folder out of git.
+- Keep buttons that show an ad, buy or spend out of flows: in the Editor an ad usually counts as watched and pays out.
+- `Create > Matrix > Playtest Cursor Theme` changes the cursor sprites, timing and colors (`cursor-theme:` in the file).
 
 ## Query tools
 
