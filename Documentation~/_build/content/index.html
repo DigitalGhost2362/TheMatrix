@@ -37,6 +37,16 @@ lead: Matrix Bridge connects Claude Code, Codex, Cursor and other MCP clients to
   </div>
 </section>
 
+<section class="band" id="new" aria-labelledby="new-h">
+  <div class="band-head rv">
+    <h2 id="new-h">New in 2.0: playtests your client plays</h2>
+    <p>Write the steps once in <code>Docs/Playtest.md</code>. One <code>playtest</code> call enters play mode, clicks your buttons through a cursor you can watch, waits for each screen to settle, puts your saves back and answers with a step table and a contact sheet.</p>
+  </div>
+  <figure class="shot rv"><div class="shot-frame">
+    <video style="display:block;width:100%;height:auto" src="assets/img/playtest-demo.mp4" poster="assets/img/playtest-cursor.png" width="1184" height="680" autoplay muted loop playsinline></video>
+  </div><figcaption><a href="playtest.html">Playtest your game</a>: how to write a flow and read the result.</figcaption></figure>
+</section>
+
 <section class="band" id="what" aria-labelledby="what-h">
   <div class="band-head rv">
     <h2 id="what-h">Three pieces, all on your machine</h2>
@@ -75,7 +85,7 @@ lead: Matrix Bridge connects Claude Code, Codex, Cursor and other MCP clients to
     <div class="demo-tabs" role="tablist" aria-label="Example requests">
       <button role="tab" type="button" aria-selected="true" data-t="0"><b>Count the scene</b><span>How many objects of each tag are in the scene?</span></button>
       <button role="tab" type="button" aria-selected="false" data-t="1"><b>Change many objects</b><span>Make every enemy twice as heavy. Show me the list first.</span></button>
-      <button role="tab" type="button" aria-selected="false" data-t="2"><b>Play test</b><span>Play for ten seconds and tell me what the console says.</span></button>
+      <button role="tab" type="button" aria-selected="false" data-t="2"><b>Play test</b><span>Playtest the shop flow and tell me what breaks.</span></button>
       <button role="tab" type="button" aria-selected="false" data-t="3"><b>Look at it</b><span>Show me the scene and tell me what looks off.</span></button>
       <button role="tab" type="button" aria-selected="false" data-t="4"><b>Run the tests</b><span>Run the EditMode tests and fix whatever fails.</span></button>
     </div>
@@ -106,17 +116,16 @@ Enemy_Brute     Rigidbody.mass  4 -&gt; 8
           <p class="a">Done. Ctrl+Z in Unity reverts all 12. The scene is marked unsaved; save it when you like the result.</p>
         </div>
         <div class="tr" data-t="2" hidden>
-          <p class="u">Play for ten seconds and tell me what the console says.</p>
-          <div class="tc"><p class="tc-h"><b>Feeder-MCP - editor-lock-acquire</b> (MCP)(task: "play test")</p>
+          <p class="u">Playtest the shop flow and tell me what breaks.</p>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - editor-lock-acquire</b> (MCP)(task: "playtest shop")</p>
 <pre class="tc-r">acquired</pre></div>
-          <div class="tc"><p class="tc-h"><b>Feeder-MCP - editor-application-set-state</b> (MCP)(isPlaying: true)</p>
-<pre class="tc-r">playmode: playing</pre></div>
-          <div class="tc"><p class="tc-h"><b>Feeder-MCP - console-get-logs</b> (MCP)(logTypeFilter: "Error")</p>
-<pre class="tc-r">Error x3  NullReferenceException: Object reference not set to an instance of an object
-          ShopPanel.Refresh () (at Assets/Scripts/UI/ShopPanel.cs:48)</pre></div>
-          <div class="tc"><p class="tc-h"><b>Feeder-MCP - editor-application-set-state</b> (MCP)(isPlaying: false)</p></div>
+          <div class="tc"><p class="tc-h"><b>Feeder-MCP - playtest</b> (MCP)(action: "run", flow: "buy-key")</p>
+<pre class="tc-r">Playtest 'buy-key' FAIL: 3/5 steps in 4.1 s, 1 console error
+#3  click /Canvas/PanelF/List/Item[3]/BtnBuy   FAIL  covered by /Canvas/PanelF/SaleBanner
+Console: NullReferenceException  ShopPanel.Refresh () (at Assets/Scripts/UI/ShopPanel.cs:48)
+Contact sheet: Docs/Playtest_Runs/20261125-1150-buy-key/contact_sheet.png</pre></div>
           <div class="tc"><p class="tc-h"><b>Feeder-MCP - editor-lock-release</b> (MCP)</p></div>
-          <p class="a">One error, three times: ShopPanel.Refresh reads its item list before Initialize fills it. Want me to fix it?</p>
+          <p class="a">Two problems: the sale banner lies over the fourth Buy button, so a player cannot tap it, and ShopPanel.Refresh reads its item list before Initialize fills it. Want me to fix both and run the flow again?</p>
         </div>
         <div class="tr" data-t="3" hidden>
           <p class="u">Show me the scene and tell me what looks off.</p>
@@ -181,7 +190,7 @@ SaveDataTests.Load_OldVersion_Migrates
       <div class="walk-body">
         <p data-w="1" class="c"># Window &gt; Package Manager &gt; + &gt; Add package from git URL</p>
         <p data-w="1">https://github.com/DigitalGhost2362/TheMatrix.git</p>
-        <p data-w="1" class="ok">Matrix Bridge 1.1.0 added</p>
+        <p data-w="1" class="ok">Matrix Bridge {VERSION} added</p>
         <p data-w="1" class="c">  Tools &gt; Feeder &gt; Matrix Bridge &gt; Getting Started   (the rest stays grey)</p>
         <p data-w="2" class="c"># Tools &gt; Feeder &gt; Matrix Bridge &gt; Getting Started   Run</p>
         <p data-w="2">Editor settings: Auto Refresh off, Run In Background on</p>
@@ -215,6 +224,7 @@ SaveDataTests.Load_OldVersion_Migrates
     <div><h3>Everyday use</h3><ul>
       <li><a href="bridge-window.html"><b>The Bridge window</b><small>Link state, clients, port, logs.</small></a></li>
       <li><a href="skills-window.html"><b>Choose tools</b><small>Switch tools on and off, token cost.</small></a></li>
+      <li><a href="playtest.html"><b>Playtest your game</b><small>New in 2.0: flows your client plays with a cursor.</small></a></li>
       <li><a href="queries.html"><b>Queries</b><small>Read and change many objects at once.</small></a></li>
       <li><a href="editor-lock.html"><b>Several agents, one Editor</b><small>The editor lock and the green frame.</small></a></li>
       <li><a href="team.html"><b>Team projects</b><small>Version control, what to ignore.</small></a></li>

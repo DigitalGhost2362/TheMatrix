@@ -74,7 +74,7 @@ namespace Feeder.MCP.Editor.API
             "A method that returns a `Task` is not awaited: start the work, keep progress in the domain and read it in a later call.\n\n" +
             "## Cookbook: `Mx` helpers (body mode imports them; guards and Undo built in)\n\n" +
             "Know the member names before writing: read the code, or turn on `rql-schema` (off by default) and call it with `typeName`. A wrong guess costs a compile round trip. " +
-            "Body mode imports both `System` and `UnityEngine`: write `UnityEngine.Object`, a bare `Object` does not compile.\n\n" +
+            "In body mode a bare `Object` and `Random` mean the `UnityEngine` ones; write `System.Random` for the other.\n\n" +
             "- `Mx.OpenScene(path, additive, ifDirty)` / `Mx.SaveScene(scene)` / `Mx.NewScene(path, ifDirty)` - `ifDirty`: `refuse` (default), `save`, `discard`.\n" +
             "- `Mx.CreateAsset(obj, path)` (never overwrites, makes folders) / `Mx.EnsureFolder(path)` / `Mx.TrashAsset(path)`.\n" +
             "- `Mx.Instantiate(prefabPath, parent)` (keeps the prefab link, one Undo step) / `Mx.EditPrefab(path, root => ...)`.\n" +
@@ -98,7 +98,7 @@ namespace Feeder.MCP.Editor.API
             [Description("Method arguments as {name, typeName, value}. 'UnityEngine.GameObject' resolves from {\"instanceID\": N}, {\"name\": \"...\"} or {\"path\": \"...\"}; " +
                 "a Component type from {\"instanceID\": N}; 'Feeder.MCP.Data.GameObjectRef' / 'ComponentRef' / 'ObjectRef' pass the reference itself.")]
             SerializedMemberList? parameters = null,
-            [Description("true: csharpCode is a method body. Usings (System, UnityEngine, UnityEditor, Feeder.MCP.Editor), the class and the signature are generated; " +
+            [Description("true: csharpCode is a method body. Usings (System, UnityEngine, UnityEditor, Feeder.MCP.Editor; Object and Random are UnityEngine's), the class and the signature are generated; " +
                 "parameters become method arguments.")]
             bool isMethodBody = false,
             [Description("Seconds this call may run; 0 (default) keeps the tool timeout. The server caps it (30 minutes by default).")]
@@ -319,6 +319,9 @@ namespace Feeder.MCP.Editor.API
             sb.AppendLine("using Feeder.MCP.Runtime.Extensions;");
             sb.AppendLine("using UnityEditor;");
             sb.AppendLine("using Feeder.MCP.Editor;");
+            // System and UnityEngine both define these, so a bare name was CS0104
+            sb.AppendLine("using Object = UnityEngine.Object;");
+            sb.AppendLine("using Random = UnityEngine.Random;");
             sb.AppendLine();
 
             // Build method parameter list from the parameters SerializedMemberList

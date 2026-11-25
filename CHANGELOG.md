@@ -2,10 +2,41 @@
 
 All notable changes to this package are documented here.
 
-## [2.0.0] - 2026-11-22
+## [2.0.0] - 2026-11-25
 
 ### Added
 
+- `playtest` tool (off by default) and `matrix-playmode` skill (opened for any play-mode work): a playtest is data in the project's
+  `Docs/Playtest.md` (setup, a `Clear screen` list and named flows of `click`, `expect-active`, `shot`, `call`, `run`
+  and other steps), and one call plays a flow in play mode. A click waits until its uGUI target is active, interactable
+  and not covered, then clicks at once; a covered target fails with the path of what lies over it. The answer is a
+  step table with times and console errors; shots and `report.md` go to `Docs/Playtest_Runs/`. The run enters play
+  mode in the file's `start-scene` when needed and survives the domain reload of entering play mode.
+- Playtest cursor: drawn with UI Toolkit over the Game view window, so nothing enters the scene and captures stay
+  clean. It flies to each target and plays a click animation, then stays on screen at rest until play mode ends.
+  `PlaytestCursorTheme` assets (`Create > Matrix > Playtest Cursor Theme`) change the sprites, grid, timing and colors;
+  `IPlaytestCursorLayer` classes add layers, and `cursor-layers:` or `disabledLayers` turn them off.
+- Playtest contact sheet: every run writes `contact_sheet.png` next to `report.md` (more sheets for long runs), with a
+  `#step name` label per tile and the cursor and target outline painted in. `autoshot: clicks` adds a row per click:
+  before, cursor over the target, press and result.
+- Playtest shots wait until the UI has settled (no finite DOTween tween playing, no CanvasGroup alpha, Canvas toggle
+  or panel move for three frames; `shot-settle:` seconds, `shot <name> <seconds>`), and are saved as
+  `<step>_<name>.png` so a flow that runs twice keeps both.
+- Playtest `expect-visible` / `expect-hidden`: visible means active, every Canvas above it enabled and an alpha above 0.
+  A click waits while its target is hidden that way, and a label prefers the button a player can see.
+- Playtest save guard (`protect-prefs: on`, default): PlayerPrefs and `persistentDataPath` are snapshotted before the
+  run, the changes are listed under `Side effects` in the report and put back once play mode has ended.
+- Playtest `fail-on-console-errors: true` (default): a run with console errors reports `FAIL (console errors: n)`.
+- Playtest `call` steps: a called check that throws, or an argument that does not convert, fails the step with the
+  method name and the inner message; nothing goes to the console. A real runner crash logs one tagged line that the
+  run does not count as a game error.
+- Playtest `wait-until <Type.Member> <value> [timeout]`: waits until a static field, property or parameterless method
+  reads the value and moves on at once; on timeout the step fails with the last value read.
+- `wait-for` tool (off by default): waits inside the Editor until a console log newer than a cursor matches a pattern,
+  or a static member reads a value. It answers within 45 s with `met=false` and a cursor to call again with, and
+  returns early when a compile starts.
+- `game-view-size` tool (off by default): sets the Game view to a fixed resolution as a `Matrix <width>x<height>` entry
+  that stays in the Game view size list, and answers with the size the view renders at before and after.
 - `matrix-tool-create` skill: how to add a tool of your own for one project (an Editor `.cs` file with
   `[AiToolType]` / `[AiTool]`), for a `script-execute` job that keeps coming back. It replaces the
   `unity-skill-create` tool.
@@ -73,6 +104,14 @@ All notable changes to this package are documented here.
 - The repository root is the package: install from `https://github.com/DigitalGhost2362/TheMatrix.git` without
   `?path=`. Projects that use the old `?path=/Packages/com.feeder.mcp` URL replace it in `Packages/manifest.json`.
   To develop the package, clone the repository into `Packages/com.feeder.mcp` of any Unity project.
+- The manual has a Playtest page with a demo video, and its tool catalog lists every tool of the package.
+- `screenshot-game-view` with `savePath` saves the file at full size (capped at 3840) whatever
+  `maxResolution` is; `maxResolution` only scales the returned image, and the answer names both sizes.
+- Calling a tool that exists but is off answers with the `tool-set-enabled-state` call that turns it on.
+- `assets-refresh` that compiled nothing answers `[Success] AssetDatabase refreshed, nothing to compile.`
+- `script-execute` body mode: `Object` and `Random` mean `UnityEngine.Object` and `UnityEngine.Random`, so
+  `Object.FindObjectsByType` and `Random.Range` compile; write `System.Random` in full.
+- The play-mode guide skill is `matrix-playmode` (it was `matrix-playtest`); the next skill refresh removes the old folder.
 - Play mode nobody holds the editor lock for (usually a person who forgot it on) no longer holds the queue: the next
   agent gets the lock, `acquired` says "in play mode nobody claimed", and the `matrix-shared-editor` skill tells it to
   exit play mode and go on. A play mode test run still holds the queue, and an agent that left play mode on keeps its
@@ -150,6 +189,8 @@ All notable changes to this package are documented here.
 - `screenshot-game-view` with `savePath="."` wrote `<project folder>.png` next to the project; the `.png` is now added
   before the path is checked.
 - `serialized-get` with `path` pointing at a string returned no property.
+- `screenshot-game-view` returned the last frame at the old size after a Game view size change while Unity was not
+  focused. It redraws the view first, and says to click the Unity window or pass `cameraRef` when it still cannot.
 - Undoing a `serialized-set` that created its asset left a broken file on disk. Creating the file is no longer recorded
   in Undo; only the values are.
 - `animation-clip-set-curve` and `animation-controller-edit` created the `.anim` or `.controller` even when the keys,

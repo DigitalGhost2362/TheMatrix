@@ -657,7 +657,7 @@ namespace Feeder.MCP.Editor.Matrix
                     string.Equals(candidate.Name, invoke.ToolName, StringComparison.Ordinal));
                 if (tool == null || !manager.IsToolEnabled(invoke.ToolName))
                 {
-                    await SendErrorAsync(invoke.OperationId, "FMP_TOOL_NOT_FOUND", $"Tool '{invoke.ToolName}' was not found or is disabled.");
+                    await SendErrorAsync(invoke.OperationId, "FMP_TOOL_NOT_FOUND", UnavailableToolMessage(invoke.ToolName, tool != null));
                     return;
                 }
 
@@ -868,6 +868,11 @@ namespace Feeder.MCP.Editor.Matrix
             var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(value));
             return string.Concat(bytes.Select(b => b.ToString("x2")));
         }
+
+        // agents that only read "not found or disabled" often give up on a tool that one call would turn on
+        internal static string UnavailableToolMessage(string name, bool registered) => registered
+            ? $"Tool '{name}' is disabled. Enable it with tool-set-enabled-state [{{\"Name\":\"{name}\",\"Enabled\":true}}], then call it again (or through tool-call)."
+            : $"Tool '{name}' was not found or is disabled.";
 
         static bool IsStatus(ResponseCallTool response, string status)
             => string.Equals(response.Status.ToString(), status, StringComparison.OrdinalIgnoreCase);

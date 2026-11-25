@@ -28,7 +28,9 @@ Editor is busy you write a handoff instead of colliding.
 - Read-only tools (`rql-query`, `console-get-logs`, `editor-health`, screenshots, `editor-lock-status`) never
   wait. A `script-execute` counts as editor-changing even if it only reads: read with `rql-query` instead.
 - Do not poll `editor-lock-status` in a loop; do not acquire ""just in case"".
-- Edit `.cs` files with your own file tools (free), **batch the edits, then one `assets-refresh`**, then read the console.
+- Edit `.cs` files with your own file tools (free), **batch the edits, then one `assets-refresh`**. Its final answer lists
+  compile errors by file and line: after `[Success]` do not read the console for them.
+- A screenshot you want as a file: pass `savePath` to the screenshot tool; do not copy it out of the tool result.
 - A tool missing from your list may be disabled: `unity-tool-list`, then `tool-set-enabled-state`.
 
 ## Explicit lock: only for a burst that must not be interleaved

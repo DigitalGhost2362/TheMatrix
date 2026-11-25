@@ -22,7 +22,7 @@ IMG = SITE / "assets" / "img"
 
 NAV = [
     ("Get started", ["index", "install", "setup", "connect", "first-session"]),
-    ("Everyday use", ["bridge-window", "skills-window", "queries", "editor-lock", "team"]),
+    ("Everyday use", ["bridge-window", "skills-window", "playtest", "queries", "editor-lock", "team"]),
     ("Going further", ["runtime-tools", "batch-ci", "hyper-testing", "health"]),
     ("Reference", ["tools", "reference", "troubleshooting", "changelog"]),
 ]

@@ -1,0 +1,67 @@
+<!--
+title: Playtest your game
+nav: Playtest
+lead: New in 2.0. Write the steps of a playtest once in your project's Docs/Playtest.md, and your client plays them in play mode with one call: a visible cursor clicks your uGUI buttons, every shot waits for the UI to settle, and the answer is a step table with a contact sheet.
+-->
+<figure class="shot rv"><div class="shot-frame">
+<video style="display:block;width:100%;height:auto" src="assets/img/playtest-demo.mp4" poster="assets/img/playtest-cursor.png" width="1184" height="680" autoplay muted loop playsinline controls></video>
+</div><figcaption><b>playtest</b> running the <code>full</code> flow of the demo scene: 14 clicks, 16 steps, 9.6 s, 0 console errors. The caption at the bottom left names the step being played.</figcaption></figure>
+
+<h2>What you get</h2>
+<ul>
+  <li><strong>One call per flow.</strong> [[tool:playtest]] enters play mode in the file's <code>start-scene</code>, hides what covers the screen, plays the steps and leaves play mode. It survives the domain reload of entering play mode.</li>
+  <li><strong>Clicks a player could make.</strong> A click waits until its target is active, interactable and on top, then clicks at once. A covered button fails with the path of what lies over it, so a real popup bug is not clicked through.</li>
+  <li><strong>A cursor you can watch.</strong> It flies to each target and plays a click animation over the Game view. It is drawn with UI Toolkit over the window: nothing enters your scene, raycasts or builds.</li>
+  <li><strong>Shots of finished screens.</strong> A <code>shot</code> waits until tweens, fades, Canvas toggles and panel moves have stopped.</li>
+  <li><strong>Your saves come back.</strong> PlayerPrefs and <code>persistentDataPath</code> are snapshotted before the run and put back after it; the report lists what the flow changed.</li>
+  <li><strong>Console errors fail the run.</strong> A flow whose steps all pass still reports <code>FAIL (console errors: n)</code> when the game logged errors.</li>
+</ul>
+
+<h2>Turn it on</h2>
+<p>[[tool:playtest]] is off by default. Ask your client to run a playtest: the <code>matrix-playmode</code> skill tells it to switch the tool on with [[tool:tool-set-enabled-state]]. You can also switch it on in <a href="skills-window.html">the Skills window</a>.</p>
+
+<h2>Write Docs/Playtest.md</h2>
+<p>A playtest is data, not code. The file lives in <code>Docs/</code> (or <code>docs/</code>, <code>ProjectDocs/</code>, <code>Documentation/</code>) at the project root. Your client can write it for you: it lists every button on screen with its path and label, then writes one flow per thing a player does.</p>
+<div class="code-wrap" data-label="Docs/Playtest.md"><pre>## Setup
+start-scene: Assets/Scenes/Boot.unity
+speed: 1                 # cursor speed; 1 = calm demo, 4 = fast
+cursor: on
+autoshot: clicks         # before, over, press and result of every click
+
+## Clear screen
+- hide /Canvas/DebugBanner
+- hide-type FpsCounter
+
+## Flow: open-settings
+- click /Canvas/Home/BtnSettings
+- expect-visible /Canvas/SettingsPanel/Window
+- shot settings
+- click /Canvas/SettingsPanel/Window/BtnClose
+- expect-hidden /Canvas/SettingsPanel/Window
+
+## Flow: full
+- run open-settings</pre></div>
+
+<div class="table-wrap"><table>
+  <thead><tr><th>Step</th><th>Does</th></tr></thead>
+  <tbody>
+    <tr><td><code>click &lt;path or "label"&gt; [timeout]</code></td><td>Waits until the target is shown, interactable and not covered, moves the cursor and clicks.</td></tr>
+    <tr><td><code>expect-visible</code> / <code>expect-hidden &lt;path&gt;</code></td><td>Visible means active, every Canvas above it on and an alpha above 0.</td></tr>
+    <tr><td><code>expect-active</code> / <code>expect-inactive &lt;path&gt;</code></td><td>GameObject active state only.</td></tr>
+    <tr><td><code>wait-until &lt;Type.Member&gt; &lt;value&gt; [timeout]</code></td><td>Waits until a static field, property or parameterless method reads the value; a round or a timer no longer needs a guessed <code>wait</code>.</td></tr>
+    <tr><td><code>wait &lt;seconds&gt;</code></td><td>Real time, for games with nothing to read.</td></tr>
+    <tr><td><code>shot &lt;name&gt; [settle seconds]</code></td><td>Game view PNG with the cursor, once the UI has settled.</td></tr>
+    <tr><td><code>call &lt;Type.Method&gt; [args]</code></td><td>A static method for setup and cheats that are not under test. A check that throws fails the step cleanly.</td></tr>
+    <tr><td><code>hide &lt;path&gt;</code> / <code>hide-type &lt;Component&gt;</code></td><td>Turns off debug strips and overlays for this run.</td></tr>
+    <tr><td><code>timescale &lt;n&gt;</code> / <code>run &lt;flow&gt;</code></td><td>Speeds the game up (restored after the run) / inlines another flow.</td></tr>
+  </tbody>
+</table></div>
+<p>Keep buttons that show an ad, buy, spend or create save data at random out of flows: in the Editor an ad usually counts as watched at once and pays out for real.</p>
+
+<h2>Read the result</h2>
+<p>The answer is a verdict line, one row per step with its time, the console errors and the side effects on your saves. Shots, <code>report.md</code> and <code>contact_sheet.png</code> go to <code>Docs/Playtest_Runs/&lt;stamp&gt;-&lt;flow&gt;/</code>; keep that folder out of git.</p>
+[[shot:playtest-contact-sheet.png|Contact sheet of a playtest run: before, over, press and result of each click|With <code>autoshot: clicks</code> every click adds a row to the contact sheet: before, cursor over the target, press and result.]]
+
+<h2>Change the cursor</h2>
+<p>Create a theme with [[menu:Create > Matrix > Playtest Cursor Theme]] under an Editor folder, fill in your idle sprite and click sheet, and point the file at it with <code>cursor-theme: Assets/Editor/MyCursor.asset</code>. <code>cursor-layers:</code> turns the outline, the caption or the blocked note off; a class that implements <code>IPlaytestCursorLayer</code> adds a layer of your own.</p>
+[[shot:playtest-cursor.png|The playtest cursor over a button, with the step caption at the bottom left|The default cursor, the target outline and the step caption during a run.]]

@@ -14,6 +14,7 @@ namespace Feeder.MCP.Editor.API
         public const string AssetsRefreshToolId = "assets-refresh";
         const int CompileStartChecks = 10;
         const int CompileStartCheckMs = 50;
+        internal const string NothingToCompileAnswer = "[Success] AssetDatabase refreshed, nothing to compile.";
         [AiTool
         (
             AssetsRefreshToolId,
@@ -35,10 +36,12 @@ namespace Feeder.MCP.Editor.API
             "Runs `AssetDatabase.Refresh(options)`. In play mode it returns at once: Unity holds script changes until play mode ends. Otherwise it watches for up to half a second for a compile to start. If one starts, " +
             "schedules a post-compilation notification and returns a `Processing` response. If compilation already " +
             "failed (`EditorUtility.scriptCompilationFailed`), returns `Success` with the compilation error details. " +
-            "Otherwise returns a plain `Success`.")]
+            "Otherwise returns a plain `Success`.\n\n" +
+            "The final answer already lists every compile error with its file and line: after `[Success]` there is no need to read the console.")]
         [Description("Refreshes the AssetDatabase. " +
             "Use it if any file was added or updated in the project outside of Unity API. " +
-            "Use it if need to force scripts recompilation when '.cs' file changed.")]
+            "Use it if need to force scripts recompilation when '.cs' file changed. " +
+            "The final answer lists compile errors by file and line; after [Success] skip console-get-logs.")]
         public async Task<ResponseCallTool> Refresh
         (
             [Description("Asset import options.")]
@@ -75,7 +78,8 @@ namespace Feeder.MCP.Editor.API
                     return ResponseCallTool.Success($"[Warning] AssetDatabase refreshed, but compilation errors exist:\n\n{errorDetails}").SetRequestID(requestId);
                 }
 
-                return ResponseCallTool.Success("AssetDatabase refreshed successfully.").SetRequestID(requestId);
+                // same marker as the post-compile answer: the description tells agents to stop at [Success]
+                return ResponseCallTool.Success(NothingToCompileAnswer).SetRequestID(requestId);
             });
             return await refresh;
         }

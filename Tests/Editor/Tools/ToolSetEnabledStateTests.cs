@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using Feeder.MCP.Data;
 using Feeder.MCP.Editor.API;
+using Feeder.MCP.Editor.Matrix;
 using Feeder.ToolHost;
 using NUnit.Framework;
 
@@ -93,6 +94,22 @@ namespace Feeder.MCP.Editor.Tests.Tools
             Assert.IsFalse(result.Success[unknown]);
             Assert.IsTrue(result.Success[Target]);
             Assert.IsTrue(result.Logs!.Any(l => l.Message.Contains(unknown) && l.Message.Contains("not found")));
+        }
+
+        [Test]
+        public void CallingADisabledTool_SaysHowToEnableIt_AnUnknownOneDoesNot()
+        {
+            var disabled = _tools!.GetAllTools().Select(t => t.Name).FirstOrDefault(name => !_tools.IsToolEnabled(name));
+            Assume.That(disabled, Is.Not.Null, "Every tool is enabled.");
+            var unknown = "mx-no-such-tool-" + Guid.NewGuid().ToString("N");
+
+            var off = FeederMatrixAdapter.UnavailableToolMessage(disabled!, _tools.HasTool(disabled!));
+            var missing = FeederMatrixAdapter.UnavailableToolMessage(unknown, _tools.HasTool(unknown));
+
+            StringAssert.Contains("tool-set-enabled-state", off);
+            StringAssert.Contains($"\"Name\":\"{disabled}\",\"Enabled\":true", off);
+            StringAssert.DoesNotContain("tool-set-enabled-state", missing);
+            StringAssert.Contains("was not found", missing);
         }
 
         [Test]

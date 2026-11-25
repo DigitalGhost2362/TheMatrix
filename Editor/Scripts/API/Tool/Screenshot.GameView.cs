@@ -26,24 +26,24 @@ namespace Feeder.MCP.Editor.API
         )]
         [AiSkillDescription("Capture a screenshot of the Unity Editor's Game View, or of any Camera when `cameraRef` is given, " +
             "and return it as a PNG for direct inspection. Optionally also saves the PNG inside the project. " +
-            "Scaled to `maxResolution` (default 1024; 0 = full size). For the Scene View as the user sees it use 'screenshot-editor-window' with window=SceneView.")]
+            "The returned image is scaled to `maxResolution` (default 1024; 0 = full size); a `savePath` file is always full size. For the Scene View as the user sees it use 'screenshot-editor-window' with window=SceneView.")]
         [AiSkillBody("Captures the Game View, or one camera, and returns it as an image.\n\n" +
             "## Inputs\n\n" +
             "- `cameraRef` (optional) - GameObject hosting a `Camera`. When set, that camera is rendered into a temporary texture at its pixel size (1920x1080 when unknown) instead of reading the Game View. " +
             "Use it for cameras that do not draw to the Game View.\n" +
-            "- `maxResolution` (default 1024) - longest side of the returned image; `0` returns the full size (capped at 3840).\n" +
-            "- `savePath` (optional) - also writes the returned PNG there and names the path in the reply text. Relative paths start at the project root; paths outside the project root are rejected; missing folders are created; `.png` is appended when there is no extension, any other extension is rejected, and an existing file under `Assets/` or `Packages/` is never overwritten.\n\n" +
+            "- `maxResolution` (default 1024) - longest side of the returned image; `0` returns the full size (capped at 3840). It does not shrink the `savePath` file.\n" +
+            "- `savePath` (optional) - also writes the PNG there at full size (capped at 3840) and names the path in the reply text. Relative paths start at the project root; paths outside the project root are rejected; missing folders are created; `.png` is appended when there is no extension, any other extension is rejected, and an existing file under `Assets/` or `Packages/` is never overwritten.\n\n" +
             "## Behavior\n\n" +
-            "Without `cameraRef`: locates `UnityEditor.GameView`, repaints it, reads its `m_RenderTexture` and flips the pixels on graphics APIs whose UV origin is top-left. Requires an open Game View. " +
+            "Without `cameraRef`: locates `UnityEditor.GameView`, repaints it, reads its `m_RenderTexture` and flips the pixels on graphics APIs whose UV origin is top-left. When that texture is not yet at the view's render size (Unity unfocused after a size change) the view is redrawn at once; if it still differs the tool answers an error instead of an old frame. Requires an open Game View. " +
             "With `cameraRef`: swaps a temporary `RenderTexture` onto the camera, calls `Camera.Render`, reads back and restores the camera's `targetTexture`.")]
         [Description("Captures the Game View (or the camera given by cameraRef) and returns it as an image; savePath also saves it inside the project.")]
         public ResponseCallTool ScreenshotGameView
         (
             [Description("Optional camera GameObject to render instead of the Game View.")]
             GameObjectRef? cameraRef = null,
-            [Description("Longest side of the returned image in pixels; larger captures are scaled down to save tokens. Default: 1024. 0 = full size (still capped at 3840).")]
+            [Description("Longest side of the returned image in pixels; larger captures are scaled down to save tokens. Default: 1024. 0 = full size (still capped at 3840). The savePath file is always full size.")]
             int maxResolution = 1024,
-            [Description("Optional file to also save the PNG to, inside the project root. Relative paths start at the project root.")]
+            [Description("Optional file to also save the PNG to, at full size whatever maxResolution is (capped at 3840), inside the project root. Relative paths start at the project root.")]
             string? savePath = null
         )
         {
@@ -51,32 +51,37 @@ namespace Feeder.MCP.Editor.API
             {
                 var path = string.IsNullOrWhiteSpace(savePath) ? null : MxGuard.PngFile(savePath);
 
-                byte[]? pngBytes;
-                string label;
-                int width, height;
-                string error;
-                if (cameraRef == null)
+                Camera? camera = null;
+                if (cameraRef != null)
                 {
-                    label = "Game View";
-                    pngBytes = CaptureGameView(maxResolution, out width, out height, out error);
-                }
-                else
-                {
-                    var camera = cameraRef.FindGameObject()?.GetComponent<Camera>();
+                    camera = cameraRef.FindGameObject()?.GetComponent<Camera>();
                     if (camera == null)
                         return ResponseCallTool.Error("The referenced GameObject was not found or has no Camera.");
-                    label = $"camera '{camera.name}'";
-                    pngBytes = CaptureCamera(camera, maxResolution, out width, out height, out error);
                 }
+                var label = camera == null ? "Game View" : $"camera '{camera.name}'";
+                byte[]? Capture(int max, out int w, out int h, out string e) => camera == null
+                    ? CaptureGameView(max, out w, out h, out e)
+                    : CaptureCamera(camera, max, out w, out h, out e);
+
+                // the file keeps the full size: maxResolution only saves tokens on the returned image
+                byte[]? file = null;
+                int fileWidth = 0, fileHeight = 0;
+                var error = string.Empty;
+                if (path != null && (file = Capture(0, out fileWidth, out fileHeight, out error)) == null)
+                    return ResponseCallTool.Error(error);
+                int width = fileWidth, height = fileHeight;
+                var pngBytes = file != null && ApplyMaxResolution(fileWidth, fileHeight, maxResolution) == (fileWidth, fileHeight)
+                    ? file
+                    : Capture(maxResolution, out width, out height, out error);
                 if (pngBytes == null)
                     return ResponseCallTool.Error(error);
 
                 var caption = $"Screenshot from {label} ({width}x{height})";
-                if (path != null)
+                if (file != null)
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                    File.WriteAllBytes(path, pngBytes);
-                    caption += $", saved to {path}";
+                    File.WriteAllBytes(path!, file);
+                    caption += $", saved to {path} ({fileWidth}x{fileHeight})";
                 }
 
                 return ResponseCallTool.Image(pngBytes, Feeder.ToolHost.Common.Consts.MimeType.ImagePng, caption);
@@ -118,6 +123,28 @@ namespace Feeder.MCP.Editor.API
 
         internal static byte[]? CaptureGameView(int maxResolution, out int width, out int height, out string error)
         {
+            var pixels = ReadGameView(maxResolution, out width, out height, out error);
+            return pixels == null ? null : EncodePng(pixels, width, height);
+        }
+
+        internal static byte[] EncodePng(Color32[] pixels, int width, int height)
+        {
+            var tex = new Texture2D(width, height, TextureFormat.RGB24, false);
+            try
+            {
+                tex.SetPixels32(pixels);
+                tex.Apply();
+                return tex.EncodeToPNG();
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(tex);
+            }
+        }
+
+        // the Game view image as pixels, bottom row first
+        internal static Color32[]? ReadGameView(int maxResolution, out int width, out int height, out string error)
+        {
             error = string.Empty;
             width = height = 0;
 
@@ -139,6 +166,19 @@ namespace Feeder.MCP.Editor.API
 
             var rtField = gameViewType.GetField("m_RenderTexture", BindingFlags.NonPublic | BindingFlags.Instance);
             var sourceRt = rtField?.GetValue(gameView) as RenderTexture;
+            var target = Tool_GameView.TargetSize(gameView);
+            if (sourceRt != null && (sourceRt.width != target.x || sourceRt.height != target.y))
+            {
+                // an unfocused Unity may not repaint the Game view for a while, so its texture still holds a frame of the old size
+                var host = ParentField?.GetValue(gameView);
+                host?.GetType().GetMethod("RepaintImmediately", InstanceFlags, null, Type.EmptyTypes, null)?.Invoke(host, null);
+                sourceRt = rtField?.GetValue(gameView) as RenderTexture;
+                if (sourceRt != null && (sourceRt.width != target.x || sourceRt.height != target.y))
+                {
+                    error = $"Game view has not redrawn at the new size (it holds {sourceRt.width}x{sourceRt.height}, renders at {target.x}x{target.y}); click the Unity window or pass cameraRef.";
+                    return null;
+                }
+            }
             if (sourceRt == null || !sourceRt.IsCreated())
             {
                 error = "Game View render texture is not available. Ensure the Game View window is open and visible.";
@@ -169,17 +209,13 @@ namespace Feeder.MCP.Editor.API
                 tex = new Texture2D(width, height, TextureFormat.RGB24, false);
                 tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
 
-                if (SystemInfo.graphicsUVStartsAtTop)
-                {
-                    var pixels = tex.GetPixels32();
-                    var flipped = new Color32[pixels.Length];
-                    for (var y = 0; y < height; y++)
-                        Array.Copy(pixels, y * width, flipped, (height - 1 - y) * width, width);
-                    tex.SetPixels32(flipped);
-                }
-
-                tex.Apply();
-                return tex.EncodeToPNG();
+                var pixels = tex.GetPixels32();
+                if (!SystemInfo.graphicsUVStartsAtTop)
+                    return pixels;
+                var flipped = new Color32[pixels.Length];
+                for (var y = 0; y < height; y++)
+                    Array.Copy(pixels, y * width, flipped, (height - 1 - y) * width, width);
+                return flipped;
             }
             finally
             {
