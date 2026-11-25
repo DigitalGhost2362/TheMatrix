@@ -177,7 +177,8 @@ namespace Feeder.MCP.Editor.UI
 
         static string SkillsStampKey => $"Feeder_Matrix_SkillsStamp_{UnityEngine.Application.dataPath}";
 
-        // the skills only change with the package version, the set of enabled tools or an agent's skills folder
+        // the skills change with the package version, the skill texts (a git package update keeps the version), the set
+        // of enabled tools or an agent's skills folder
         static string? SkillsStamp()
         {
             var tools = MatrixPluginEditor.Instance.Tools;
@@ -192,7 +193,22 @@ namespace Feeder.MCP.Editor.UI
             var folders = MatrixPluginEditor.AutoConfigureAgentIds
                 .Select(id => $"{id}={AiAgentCatalog.GetByAgentId(id)?.SkillsPath}")
                 .OrderBy(entry => entry, StringComparer.Ordinal);
-            return $"{MatrixPlugin.Version}|{string.Join(",", folders)}|{string.Join(",", enabled)}";
+            return $"{MatrixPlugin.Version}|{SkillTextsHash()}|{string.Join(",", folders)}|{string.Join(",", enabled)}";
+        }
+
+        static string SkillTextsHash()
+        {
+            const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+            var text = new System.Text.StringBuilder();
+            foreach (var type in UnityEditor.TypeCache.GetTypesWithAttribute<Feeder.ToolHost.AiSkillTypeAttribute>().OrderBy(t => t.FullName, StringComparer.Ordinal))
+            {
+                foreach (var property in type.GetProperties(flags).Where(p => p.IsDefined(typeof(Feeder.ToolHost.AiSkillAttribute), true)))
+                    text.Append(type.FullName).Append(property.GetValue(null));
+                foreach (var field in type.GetFields(flags).Where(f => f.IsDefined(typeof(Feeder.ToolHost.AiSkillAttribute), true)))
+                    text.Append(type.FullName).Append(field.GetValue(null));
+            }
+            using var sha = System.Security.Cryptography.SHA1.Create();
+            return Convert.ToBase64String(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(text.ToString())));
         }
 
         public static void RegenerateSkillsIfChanged()

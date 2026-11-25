@@ -6,6 +6,30 @@ All notable changes to this package are documented here.
 
 ### Added
 
+- `playtest` tool (off by default) and `matrix-playmode` skill (opened for any play-mode work): a playtest is data in the project's
+  `Docs/Playtest.md` (setup, a `Clear screen` list and named flows of `click`, `expect-active`, `shot`, `call`, `run`
+  and other steps), and one call plays a flow in play mode. A click waits until its uGUI target is active, interactable
+  and not covered, then clicks at once; a covered target fails with the path of what lies over it. The answer is a
+  step table with times and console errors; shots and `report.md` go to `Docs/Playtest_Runs/`. The run enters play
+  mode in the file's `start-scene` when needed and survives the domain reload of entering play mode.
+- Playtest cursor: drawn with UI Toolkit over the Game view window, so nothing enters the scene and captures stay
+  clean. It flies to each target and plays a click animation, then stays on screen at rest until play mode ends.
+  `PlaytestCursorTheme` assets (`Create > Matrix > Playtest Cursor Theme`) change the sprites, grid, timing and colors;
+  `IPlaytestCursorLayer` classes add layers, and `cursor-layers:` or `disabledLayers` turn them off.
+- Playtest contact sheet: every run writes `contact_sheet.png` next to `report.md` (more sheets for long runs), with a
+  `#step name` label per tile and the cursor and target outline painted in. `autoshot: clicks` adds a row per click:
+  before, cursor over the target, press and result.
+- Playtest shots wait until the UI has settled (no finite DOTween tween playing, no CanvasGroup alpha, Canvas toggle
+  or panel move for three frames; `shot-settle:` seconds, `shot <name> <seconds>`), and are saved as
+  `<step>_<name>.png` so a flow that runs twice keeps both.
+- Playtest `expect-visible` / `expect-hidden`: visible means active, every Canvas above it enabled and an alpha above 0.
+  A click waits while its target is hidden that way, and a label prefers the button a player can see.
+- Playtest save guard (`protect-prefs: on`, default): PlayerPrefs and `persistentDataPath` are snapshotted before the
+  run, the changes are listed under `Side effects` in the report and put back once play mode has ended.
+- Playtest `fail-on-console-errors: true` (default): a run with console errors reports `FAIL (console errors: n)`.
+- Playtest `call` steps: a called check that throws, or an argument that does not convert, fails the step with the
+  method name and the inner message; nothing goes to the console. A real runner crash logs one tagged line that the
+  run does not count as a game error.
 - `matrix-tool-create` skill: how to add a tool of your own for one project (an Editor `.cs` file with
   `[AiToolType]` / `[AiTool]`), for a `script-execute` job that keeps coming back. It replaces the
   `unity-skill-create` tool.

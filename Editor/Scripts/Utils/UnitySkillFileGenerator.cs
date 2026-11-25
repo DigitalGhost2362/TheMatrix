@@ -1,5 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using Feeder.ToolHost;
@@ -54,12 +55,42 @@ namespace Feeder.MCP.Editor.Utils
         /// </summary>
         public override bool Generate(IEnumerable<ISkillContent> skills, string skillsPath)
         {
+            RemoveRetiredGuides(skillsPath);
             if (vfxToolsEnabled || skills == null)
                 return base.Generate(skills!, skillsPath);
             var vfx = skills.Where(s => s.Name == Skill_Vfx.SkillId).ToList();
             if (vfx.Count > 0)
                 base.Delete(vfx, skillsPath);
             return base.Generate(skills.Except(vfx), skillsPath);
+        }
+
+        // guide skills carry no own-skill mark, so nothing else removes one that was renamed. Only our old text is
+        // removed: the playtest tool's own skill now lives in matrix-playtest and carries the mark.
+        static readonly (string Folder, string DescriptionStart)[] RetiredGuides =
+        {
+            ("matrix-playtest", "Play-test the game with the 'playtest' tool"),
+            ("matrix-playtesting", "Play-test the game with the 'playtest' tool"),
+        };
+
+        internal static void RemoveRetiredGuides(string skillsPath)
+        {
+            foreach (var (folder, start) in RetiredGuides)
+            {
+                var dir = Path.Combine(skillsPath, folder);
+                var file = Path.Combine(dir, "SKILL.md");
+                try
+                {
+                    if (!File.Exists(file) || IsOwnSkillFile(file) || !File.ReadAllText(file).Contains($"description: \"{start}"))
+                        continue;
+                    File.Delete(file);
+                    if (Directory.GetFileSystemEntries(dir).Length == 0)
+                        Directory.Delete(dir);
+                }
+                catch (System.Exception e) when (e is IOException or System.UnauthorizedAccessException)
+                {
+                    UnityEngine.Debug.LogWarning($"[Matrix] Could not remove the retired skill {dir}: {e.Message}");
+                }
+            }
         }
 
         /// <inheritdoc/>

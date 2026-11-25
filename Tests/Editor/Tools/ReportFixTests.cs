@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections;
 using System.IO;
 using System.Linq;
 using Feeder.MCP.Editor.API;
@@ -9,6 +10,7 @@ using Feeder.ToolHost.Common.Model;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Feeder.MCP.Editor.Tests.Tools
 {
@@ -126,6 +128,26 @@ namespace Feeder.MCP.Editor.Tests.Tools
             {
                 MxGuard.IsPlaying = original;
             }
+        }
+
+        // the description says "after [Success] skip console-get-logs", so a refresh that compiled nothing must carry it too
+        [UnityTest]
+        public IEnumerator Refresh_WithNothingToCompile_AnswersWithTheSuccessMarker()
+        {
+            var call = new Tool_Assets().Refresh(ImportAssetOptions.Default, "mx-test-idle");
+            var until = EditorApplication.timeSinceStartup + 5;
+            while (!call.IsCompleted && EditorApplication.timeSinceStartup < until)
+                yield return null;
+
+            Assert.IsTrue(call.IsCompleted, "the refresh did not answer within 5 s");
+            var response = call.Result;
+            if (response.Status == ResponseStatus.Processing || EditorUtility.scriptCompilationFailed)
+                Assert.Ignore("A compile started or failed, so this refresh had something to compile.");
+            Assert.AreEqual(Tool_Assets.NothingToCompileAnswer, response.GetMessage());
+            StringAssert.StartsWith("[Success]", response.GetMessage());
+            StringAssert.Contains("after [Success]", typeof(Tool_Assets).GetMethod(nameof(Tool_Assets.Refresh))!
+                .GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false)
+                .Cast<System.ComponentModel.DescriptionAttribute>().Single().Description);
         }
 
         [Test]

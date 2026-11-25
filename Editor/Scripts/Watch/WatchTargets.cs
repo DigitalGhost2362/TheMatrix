@@ -143,7 +143,7 @@ namespace Feeder.MCP.Editor.Watch
         }
 
         // first visible text under the object, read through any component with a string 'text' property
-        static string Label(GameObject go)
+        internal static string Label(GameObject go)
         {
             foreach (var component in go.GetComponentsInChildren<Component>())
             {
