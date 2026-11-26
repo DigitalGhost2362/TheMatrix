@@ -47,15 +47,28 @@ namespace Feeder.MCP.Device
             status.AddComponent<MatrixDeviceStatus>();
         }
 
-        // a line in the corner while the PC cannot be reached, so the tester knows to check the network
+        // turns the warning on only while the PC cannot be reached: an enabled OnGUI costs the game an IMGUI pass and
+        // garbage every frame
         sealed class MatrixDeviceStatus : MonoBehaviour
+        {
+            MatrixDeviceWarning? _warning;
+
+            void Awake()
+            {
+                _warning = gameObject.AddComponent<MatrixDeviceWarning>();
+                _warning.enabled = false;
+            }
+
+            void Update() => _warning!.enabled = !MatrixPlayer.IsConnected && Time.realtimeSinceStartup >= WarnAfterSeconds;
+        }
+
+        // a line in the corner while the PC cannot be reached, so the tester knows to check the network
+        sealed class MatrixDeviceWarning : MonoBehaviour
         {
             GUIStyle? _style;
 
             void OnGUI()
             {
-                if (MatrixPlayer.IsConnected || Time.realtimeSinceStartup < WarnAfterSeconds)
-                    return;
                 _style ??= new GUIStyle(GUI.skin.label)
                 {
                     fontSize = Mathf.Max(14, Screen.height / 60),

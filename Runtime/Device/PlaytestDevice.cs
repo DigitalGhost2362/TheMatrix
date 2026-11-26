@@ -171,6 +171,9 @@ namespace Feeder.MCP.Device
                     }
                 }
                 Finished(flow);
+                // an OnGUI left alive costs the game an IMGUI pass and garbage every frame
+                _runner = null;
+                Destroy(gameObject);
             }
 
             void OnGUI()
