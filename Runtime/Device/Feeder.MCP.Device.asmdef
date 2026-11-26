@@ -1,0 +1,19 @@
+{
+    "name": "Feeder.MCP.Device",
+    "rootNamespace": "Feeder.MCP.Device",
+    "references": [
+        "Feeder.MCP.Playtest",
+        "Feeder.MCP.Player"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_EDITOR || MATRIX_DEVICE"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

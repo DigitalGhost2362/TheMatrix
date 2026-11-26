@@ -4,7 +4,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Feeder.MCP.Editor.Watch;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 #if MATRIX_UGUI
@@ -24,7 +23,58 @@ namespace Feeder.MCP.Editor.Playtest
         static readonly List<RaycastResult> _hits = new List<RaycastResult>();
 #endif
 
+        const int MaxLabel = 40;
+        static readonly Dictionary<Type, PropertyInfo?> _textProperty = new Dictionary<Type, PropertyInfo?>();
+
         public static void Reset() => _dontDestroyScene = null;
+
+        // "/Canvas/List/Item[2]": the third sibling named Item gets an index
+        public static string PathOf(GameObject go)
+        {
+            var parts = new List<string>();
+            for (var t = go.transform; t != null; t = t.parent)
+            {
+                var parent = t.parent;
+                int same = 0, index = 0;
+                if (parent != null)
+                {
+                    for (var i = 0; i < parent.childCount; i++)
+                    {
+                        var child = parent.GetChild(i);
+                        if (child.name != t.name)
+                            continue;
+                        if (child == t)
+                            index = same;
+                        same++;
+                    }
+                }
+                parts.Add(same > 1 ? $"{t.name}[{index}]" : t.name);
+            }
+            parts.Reverse();
+            return "/" + string.Join("/", parts);
+        }
+
+        // first visible text under the object, read through any component with a string 'text' property
+        public static string Label(GameObject go)
+        {
+            foreach (var component in go.GetComponentsInChildren<Component>())
+            {
+                if (component == null)
+                    continue;
+                var type = component.GetType();
+                if (!_textProperty.TryGetValue(type, out var property))
+                {
+                    property = type.Name.Contains("Text") ? type.GetProperty("text", typeof(string)) : null;
+                    _textProperty[type] = property;
+                }
+                if (property?.GetValue(component) is string text && text.Trim().Length > 0)
+                {
+                    text = text.Trim().Replace('\n', ' ').Replace('|', '/');
+                    return text.Length > MaxLabel ? text.Substring(0, MaxLabel) + "..." : text;
+                }
+            }
+            return string.Empty;
+        }
 
         public static bool IsLabel(string target) => target.Length >= 2 && target[0] == '"' && target[target.Length - 1] == '"';
 
@@ -55,7 +105,7 @@ namespace Feeder.MCP.Editor.Playtest
             GameObject? active = null, inactive = null;
             foreach (var selectable in UnityEngine.Object.FindObjectsByType<Selectable>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (!string.Equals(WatchTargets.Label(selectable.gameObject), label, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(Label(selectable.gameObject), label, StringComparison.OrdinalIgnoreCase))
                     continue;
                 if (!selectable.gameObject.activeInHierarchy)
                     inactive ??= selectable.gameObject;
@@ -108,7 +158,7 @@ namespace Feeder.MCP.Editor.Playtest
             return null;
         }
 
-        // "Item[2]" is the third sibling named Item, as WatchTargets.PathOf writes it
+        // "Item[2]" is the third sibling named Item, as PathOf writes it
         static bool Matches(Transform t, Transform? parent, string part)
         {
             var open = part.LastIndexOf('[');
@@ -135,14 +185,19 @@ namespace Feeder.MCP.Editor.Playtest
 
         public static void HideType(string typeName, List<string> hidden)
         {
+#if UNITY_EDITOR
             var type = UnityEditor.TypeCache.GetTypesDerivedFrom<Component>()
                 .FirstOrDefault(t => t.FullName == typeName || t.Name == typeName);
+#else
+            var type = AppDomain.CurrentDomain.GetAssemblies().SelectMany(PlaytestFlow.SafeTypes)
+                .FirstOrDefault(t => typeof(Component).IsAssignableFrom(t) && (t.FullName == typeName || t.Name == typeName));
+#endif
             if (type == null)
                 throw new ArgumentException($"no component type '{typeName}'");
             foreach (var component in UnityEngine.Object.FindObjectsByType(type, FindObjectsInactive.Exclude, FindObjectsSortMode.None).OfType<Component>())
             {
                 component.gameObject.SetActive(false);
-                hidden.Add(WatchTargets.PathOf(component.gameObject));
+                hidden.Add(PathOf(component.gameObject));
             }
         }
 
@@ -158,7 +213,7 @@ namespace Feeder.MCP.Editor.Playtest
             {
                 var canvas = t.GetComponent<Canvas>();
                 if (canvas != null && !canvas.enabled)
-                    return "hidden: Canvas off on " + WatchTargets.PathOf(t.gameObject);
+                    return "hidden: Canvas off on " + PathOf(t.gameObject);
                 if (groupsDone)
                     continue;
                 var group = t.GetComponent<CanvasGroup>();
@@ -166,7 +221,7 @@ namespace Feeder.MCP.Editor.Playtest
                     continue;
                 alpha *= group.alpha;
                 if (alpha <= 0.001f)
-                    return "hidden: alpha 0 on " + WatchTargets.PathOf(t.gameObject);
+                    return "hidden: alpha 0 on " + PathOf(t.gameObject);
                 groupsDone = group.ignoreParentGroups;
             }
             return null;
@@ -267,7 +322,7 @@ namespace Feeder.MCP.Editor.Playtest
                 return "no raycast target at its center";
             var top = _hits[0].gameObject;
             if (Handler(top) != Handler(go))
-                return "covered by " + WatchTargets.PathOf(top);
+                return "covered by " + PathOf(top);
             return null;
 #else
             return "uGUI is not installed";

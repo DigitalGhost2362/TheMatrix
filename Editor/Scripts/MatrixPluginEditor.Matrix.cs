@@ -51,6 +51,10 @@ namespace Feeder.MCP
 
         internal void AnnounceReload() => _matrixAdapter?.AnnounceReload();
 
+        internal Task<string> CallPlayerToolAsync(string toolName, string argumentsJson, System.Threading.CancellationToken cancellationToken)
+            => _matrixAdapter?.CallPlayerToolAsync(toolName, argumentsJson, cancellationToken)
+               ?? throw new System.InvalidOperationException("Feeder Local Matrix is not connected.");
+
         internal Task<string> ReleaseEditorLockAsync()
             => _matrixAdapter?.ReleaseEditorLockAsync()
                ?? throw new System.InvalidOperationException("Feeder Local Matrix is not connected.");

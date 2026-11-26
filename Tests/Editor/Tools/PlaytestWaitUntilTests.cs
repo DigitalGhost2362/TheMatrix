@@ -53,18 +53,18 @@ namespace Feeder.MCP.Editor.Tests.Tools
         [Test]
         public void ReadMember_ReadsFieldPropertyAndMethod()
         {
-            Assert.AreEqual("True", PlaytestRunner.MemberText(PlaytestRunner.ReadMember(Owner + ".Flag", "wait-until")));
-            Assert.AreEqual("3", PlaytestRunner.MemberText(PlaytestRunner.ReadMember(Owner + ".Count", "wait-until")));
-            Assert.AreEqual("ready", PlaytestRunner.MemberText(PlaytestRunner.ReadMember(Owner + ".Name", "wait-until")));
-            Assert.AreEqual("null", PlaytestRunner.MemberText(null));
+            Assert.AreEqual("True", PlaytestFlow.MemberText(PlaytestFlow.ReadMember(Owner + ".Flag", "wait-until")));
+            Assert.AreEqual("3", PlaytestFlow.MemberText(PlaytestFlow.ReadMember(Owner + ".Count", "wait-until")));
+            Assert.AreEqual("ready", PlaytestFlow.MemberText(PlaytestFlow.ReadMember(Owner + ".Name", "wait-until")));
+            Assert.AreEqual("null", PlaytestFlow.MemberText(null));
         }
 
         [Test]
         public void ReadMember_MissingMember_IsArgumentException_ThrowingMember_IsInvocationException()
         {
-            Assert.Throws<ArgumentException>(() => PlaytestRunner.ReadMember(Owner + ".Missing", "wait-until"));
-            Assert.Throws<ArgumentException>(() => PlaytestRunner.ReadMember("NoSuchType_Mx.Value", "wait-until"));
-            Assert.Throws<TargetInvocationException>(() => PlaytestRunner.ReadMember(Owner + ".Throws", "wait-until"));
+            Assert.Throws<ArgumentException>(() => PlaytestFlow.ReadMember(Owner + ".Missing", "wait-until"));
+            Assert.Throws<ArgumentException>(() => PlaytestFlow.ReadMember("NoSuchType_Mx.Value", "wait-until"));
+            Assert.Throws<TargetInvocationException>(() => PlaytestFlow.ReadMember(Owner + ".Throws", "wait-until"));
         }
     }
 }

@@ -1,3 +1,4 @@
+using Feeder.Matrix.Backends;
 using Feeder.Matrix.Compile;
 using Feeder.Matrix.Protocol;
 using Feeder.Matrix.Tools;
@@ -24,9 +25,33 @@ public sealed class FmpHub(
     ScriptCompiler compiler,
     EditorLock editorLock,
     IOptions<MatrixOptions> options,
+    UnityLinkBackend backend,
     ILogger<FmpHub> logger) : Hub<IFmpUnityClient>
 {
-    private UnityRegisterResponse? Reject(UnityRegisterRequest request)
+    // a device on the LAN listener may only link as a player and answer the tools it is sent
+    private bool FromLan => MatrixAuthentication.IsLanConnection(Context.GetHttpContext(), options.Value);
+
+    private static UnityRegisterResponse Refused(string message) => new()
+    {
+        SessionId = string.Empty,
+        ChosenProtocolVersion = FmpConstants.ProtocolVersion,
+        Error = new FmpError { Code = FmpErrorCodes.AuthFailed, Message = message },
+    };
+
+    /// <summary>Runs a Runtime tool of the linked player for the editor (a device playtest). Returns the CallToolResult JSON.</summary>
+    public async Task<string> CallPlayerTool(string toolName, string argumentsJson)
+    {
+        if (FromLan || !registry.IsRegistered(Context.ConnectionId))
+            return System.Text.Json.JsonSerializer.Serialize(ToolErrors.Create(ToolErrors.UnityUnavailable, "Only a registered Unity editor can call player tools.", null));
+        var request = new ModelContextProtocol.Protocol.CallToolRequestParams
+        {
+            Name = toolName,
+            Arguments = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(argumentsJson),
+        };
+        return System.Text.Json.JsonSerializer.Serialize(await backend.CallPlayerToolAsync(request, Context.ConnectionAborted));
+    }
+
+    private UnityRegisterResponse? Reject(UnityRegisterRequest request, bool checkToken = true)
     {
         if (request.ProtocolVersion != FmpConstants.ProtocolVersion &&
             !request.SupportedProtocolVersions.Contains(FmpConstants.ProtocolVersion))
@@ -43,7 +68,7 @@ public sealed class FmpHub(
             };
         }
 
-        if (options.Value.RequireAuth &&
+        if (checkToken && options.Value.RequireAuth &&
             !MatrixAuthentication.FixedTimeEquals(request.AuthToken, options.Value.Token))
         {
             return new UnityRegisterResponse
@@ -63,6 +88,8 @@ public sealed class FmpHub(
 
     public UnityRegisterResponse Register(UnityRegisterRequest request)
     {
+        if (FromLan)
+            return Refused("A device on the LAN listener can only link as a player.");
         if (Reject(request) is { } rejected)
             return rejected;
 
@@ -96,7 +123,9 @@ public sealed class FmpHub(
     /// <summary>Links a built player beside the editor. An older matrix has no such method, so a player never replaces its editor there.</summary>
     public UnityRegisterResponse RegisterPlayer(UnityRegisterRequest request)
     {
-        if (Reject(request) is { } rejected)
+        if (FromLan && !MatrixAuthentication.FixedTimeEquals(request.AuthToken, options.Value.LanToken))
+            return Refused("Device token mismatch: rebuild the app or scan the Matrix Device QR again.");
+        if ((FromLan ? Reject(request, checkToken: false) : Reject(request)) is { } rejected)
             return rejected;
 
         var link = registry.RegisterPlayer(request, Context.ConnectionId);
@@ -139,6 +168,8 @@ public sealed class FmpHub(
 
     public void Unregister(string projectId, string unityInstanceId)
     {
+        if (FromLan)
+            return;
         registry.Unregister(projectId, unityInstanceId);
         _ = mcpClients.NotifyToolListChangedAsync();
         logger.LogInformation("Unity unregistered: project {ProjectId}, instance {InstanceId}", projectId, unityInstanceId);
@@ -146,7 +177,7 @@ public sealed class FmpHub(
 
     public void PublishRegistry(RegistrySnapshot snapshot)
     {
-        var link = registry.GetPlayerByConnection(Context.ConnectionId) ?? registry.GetLink(snapshot.ProjectId);
+        var link = registry.GetPlayerByConnection(Context.ConnectionId) ?? (FromLan ? null : registry.GetLink(snapshot.ProjectId));
         if (link is null)
         {
             logger.LogWarning("Registry snapshot for unknown project {ProjectId} dropped", snapshot.ProjectId);
@@ -162,12 +193,16 @@ public sealed class FmpHub(
 
     public void CompleteTool(ToolResult result)
     {
+        if (FromLan && registry.GetOperation(result.OperationId)?.SentOnConnectionId != Context.ConnectionId)
+            return;
         if (!registry.CompleteOperation(result))
             logger.LogWarning("Tool result for unknown/expired operation {OperationId} dropped", result.OperationId);
     }
 
     public void ReportProgress(ToolProgress progress)
     {
+        if (FromLan)
+            return;
         logger.LogDebug("Progress {OperationId}: {Progress} {Message} deferred={Deferred} extend={ExtendMs}",
             progress.OperationId, progress.Progress, progress.Message, progress.Deferred, progress.ExtendDeadlineMs);
         var operation = registry.GetOperation(progress.OperationId);
@@ -186,6 +221,8 @@ public sealed class FmpHub(
 
     public void Heartbeat(HeartbeatMessage heartbeat)
     {
+        if (FromLan)
+            return;
         foreach (var link in registry.Links)
         {
             if (link.UnityInstanceId == heartbeat.UnityInstanceId)

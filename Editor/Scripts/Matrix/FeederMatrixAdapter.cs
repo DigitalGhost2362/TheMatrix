@@ -363,6 +363,15 @@ namespace Feeder.MCP.Editor.Matrix
 
         const string EditorLockFeature = "editor-lock";
 
+        /// <summary>Runs a Runtime tool of the linked player (a device build) through the server. Returns the CallToolResult JSON.</summary>
+        public async Task<string> CallPlayerToolAsync(string toolName, string argumentsJson, CancellationToken cancellationToken)
+        {
+            var connection = _connection;
+            if (connection?.State != FmpState.Connected)
+                throw new InvalidOperationException("Feeder Local Matrix is not connected.");
+            return FmpJson.Parse<string?>(await connection.InvokeAsync("CallPlayerTool", FmpJson.Arguments(toolName, argumentsJson), cancellationToken).ConfigureAwait(false)) ?? string.Empty;
+        }
+
         /// <summary>Frees the editor lock, whoever holds it. Returns what was freed.</summary>
         public async Task<string> ReleaseEditorLockAsync()
         {

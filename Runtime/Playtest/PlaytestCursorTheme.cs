@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using UnityEditor;
 using UnityEngine;
 
 namespace Feeder.MCP.Editor.Playtest
@@ -34,20 +33,22 @@ namespace Feeder.MCP.Editor.Playtest
         [Tooltip("Layer ids to leave out, e.g. caption, outline, blocked, sprite.")]
         public string[] disabledLayers = Array.Empty<string>();
 
+#if UNITY_EDITOR
         public static PlaytestCursorTheme Load(string? assetPath)
         {
             if (!string.IsNullOrWhiteSpace(assetPath))
             {
-                var custom = AssetDatabase.LoadAssetAtPath<PlaytestCursorTheme>(assetPath);
+                var custom = UnityEditor.AssetDatabase.LoadAssetAtPath<PlaytestCursorTheme>(assetPath);
                 if (custom != null)
                     return custom;
                 Debug.LogWarning($"[Matrix Playtest] cursor-theme '{assetPath}' is not a PlaytestCursorTheme asset; using the default cursor.");
             }
             var theme = CreateInstance<PlaytestCursorTheme>();
             theme.hideFlags = HideFlags.HideAndDontSave;
-            theme.idle = AssetDatabase.LoadAssetAtPath<Texture2D>(DefaultFolder + "Glitch_Idle.png");
-            theme.clickSheet = AssetDatabase.LoadAssetAtPath<Texture2D>(DefaultFolder + "Glitch_Click_sheet.png");
+            theme.idle = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(DefaultFolder + "Glitch_Idle.png");
+            theme.clickSheet = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(DefaultFolder + "Glitch_Click_sheet.png");
             return theme;
         }
+#endif
     }
 }

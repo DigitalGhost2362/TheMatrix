@@ -11,7 +11,8 @@
         "Feeder.Logging",
         "Feeder.Rx",
         "Feeder.Fmp",
-        "Feeder.MCP.Player"
+        "Feeder.MCP.Player",
+        "Feeder.MCP.Playtest"
     ],
     "includePlatforms": [
         "Editor"

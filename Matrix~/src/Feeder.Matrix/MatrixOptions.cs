@@ -79,6 +79,18 @@ public sealed class MatrixOptions
     /// <summary>A session granted the lock from the queue loses it when it makes no tool call for this long.</summary>
     public TimeSpan EditorLockFirstCallDeadline { get; set; } = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// Port of the LAN listener a device build links to; 0 (the default) opens none. It serves only the player link
+    /// (FMP RegisterPlayer) and the device install page, never MCP, and needs <see cref="LanToken"/>.
+    /// </summary>
+    public int LanPort { get; set; }
+
+    /// <summary>Token a device presents on the LAN listener: the player link's auth token and the install page's <c>t</c> query.</summary>
+    public string? LanToken { get; set; }
+
+    /// <summary>Folder whose newest .apk the install page at <c>/device</c> offers.</summary>
+    public string? DeviceFolder { get; set; }
+
     public long MaxRequestBodyBytes { get; set; } = 16 * 1024 * 1024;
 
     /// <summary>Require a bearer token on MCP requests and the same token in the Unity FMP handshake.</summary>

@@ -230,6 +230,25 @@ Never change a flow so a real bug passes, and never change game code to make a f
 One line PASS/FAIL with steps, seconds and console errors; the failed step and why; the side effects; what
 changed in Playtest.md; the contact sheet shown inline; the report path. Release the editor lock.
 
+## On a phone (Matrix Device)
+
+The same flow runs on an Android phone with `device=true`; the Editor does not enter play mode.
+
+1. `device action=status`: LAN on, an APK, and `Phone: linked`. LAN off or no APK: ask the user to tick **LAN on**
+   in Tools > Feeder > Matrix Bridge > Device, then `build-start device=true` (add `development=true` when you will
+   profile). Installing is the user's step: they scan the QR in that window, tap **Download APK**, then **Install**,
+   and open the app.
+2. `playtest action=run flow=<name> device=true`: same step table and contact sheet, shots taken on the phone,
+   console errors of the phone fail the run, saves are not restored (`## Side effects` says so).
+3. While it is linked the phone serves its own tools (call them directly, or through `tool-call` when your list
+   does not show them yet): `device-logs` (its console; pass `nextCursor` back as `afterCursor`, `types=Error,Exception`
+   for errors only), `device-profiler action=stats` (FPS, frame percentiles, hitches, draw calls, memory),
+   `runtime-scene-info`.
+4. `device action=profile seconds=5` (Development Build): a Unity Profiler capture from the phone, opened in the
+   Profiler window, answered with frame times and the heaviest main thread markers.
+
+`No player is linked`: the app is closed or in the background, or the phone left the Wi-Fi; ask the user to open it.
+
 ## Faster play mode
 
 Entering play mode reloads every script unless `Enter Play Mode Options > Disable Domain Reload` is on; the

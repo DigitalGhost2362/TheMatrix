@@ -184,7 +184,7 @@ namespace Feeder.MCP.Editor
         /// the two to decide whether the cached binary in <c>Library/feeder-matrix</c> is current. Bumping
         /// the server means replacing the whole <c>Server~/&lt;rid&gt;</c> payload AND this constant together.
         /// </summary>
-        public const string ServerVersion = "0.9.1";
+        public const string ServerVersion = "0.10.0";
 
         public const string ExecutableName = ServerOwnership.ExeName;
         public const string BundledServerArchiveName = "server-payload.zip";
@@ -1489,6 +1489,9 @@ namespace Feeder.MCP.Editor
 
             if (authOption == AuthOption.required && !string.IsNullOrEmpty(token))
                 args += $" --FeederMatrix:Token={token}";
+
+            // a device build links over the LAN listener while Matrix Device has LAN on
+            args += Device.MatrixDeviceSettings.ServerArguments();
 
             return args;
         }

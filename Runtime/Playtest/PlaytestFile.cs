@@ -75,10 +75,11 @@ namespace Feeder.MCP.Editor.Playtest
             return null;
         }
 
-        public static PlaytestFile Load(string path)
+        public static PlaytestFile Load(string path) => Parse(File.ReadAllLines(path), path);
+
+        public static PlaytestFile Parse(string[] lines, string path)
         {
             var file = new PlaytestFile { Path = path };
-            var lines = File.ReadAllLines(path);
             List<PlaytestStep>? steps = null;
             var inSetup = false;
             var inFence = false;
