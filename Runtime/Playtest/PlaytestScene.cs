@@ -183,7 +183,7 @@ namespace Feeder.MCP.Editor.Playtest
             return false;
         }
 
-        public static void HideType(string typeName, List<string> hidden)
+        public static void HideType(string typeName, List<GameObject> hidden)
         {
 #if UNITY_EDITOR
             var type = UnityEditor.TypeCache.GetTypesDerivedFrom<Component>()
@@ -197,7 +197,7 @@ namespace Feeder.MCP.Editor.Playtest
             foreach (var component in UnityEngine.Object.FindObjectsByType(type, FindObjectsInactive.Exclude, FindObjectsSortMode.None).OfType<Component>())
             {
                 component.gameObject.SetActive(false);
-                hidden.Add(PathOf(component.gameObject));
+                hidden.Add(component.gameObject);
             }
         }
 

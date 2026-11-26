@@ -83,7 +83,7 @@ namespace Feeder.MCP.Editor.Playtest
         readonly float _settleMax;
         readonly float _timeout;
         readonly float _timeScale = Time.timeScale;
-        readonly List<string> _hidden = new List<string>();
+        readonly List<GameObject> _hidden = new List<GameObject>();
         readonly List<string> _consoleErrors = new List<string>();
         readonly List<PlaytestTile> _tiles = new List<PlaytestTile>();
         readonly HashSet<string> _stepFrames = new HashSet<string>();
@@ -228,7 +228,7 @@ namespace Feeder.MCP.Editor.Playtest
                         return true;
                     }
                     go.SetActive(false);
-                    _hidden.Add(step.Args[0]);
+                    _hidden.Add(go);
                     return true;
                 }
                 case "hide-type":
@@ -506,6 +506,11 @@ namespace Feeder.MCP.Editor.Playtest
             if (_useCursor)
                 _host.RefreshCursor();
             Time.timeScale = _timeScale;
+            // a device build keeps running after the flow: what the run hid comes back
+            var hiddenPaths = _hidden.Where(go => go != null).Select(PlaytestScene.PathOf).ToList();
+            foreach (var go in _hidden)
+                if (go != null)
+                    go.SetActive(true);
             _host.End();
             var seconds = Now - _started;
             var okCount = _rows.Count(r => r.Result is "ok" or "absent");
@@ -523,8 +528,8 @@ namespace Feeder.MCP.Editor.Playtest
             text.Append($"\nConsole errors during the run: {_consoleErrorCount}{(_failOnConsoleErrors && _consoleErrorCount > 0 ? " (the run fails on them; fail-on-console-errors: off to allow)" : string.Empty)}\n");
             foreach (var error in _consoleErrors)
                 text.Append("- ").Append(error).Append('\n');
-            if (_hidden.Count > 0)
-                text.Append($"Hidden for the run: {string.Join(", ", _hidden)}\n");
+            if (hiddenPaths.Count > 0)
+                text.Append($"Hidden for the run: {string.Join(", ", hiddenPaths)}\n");
             _host.WriteReport(text.ToString(), _tiles);
         }
 
