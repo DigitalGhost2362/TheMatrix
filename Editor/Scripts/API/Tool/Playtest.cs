@@ -37,6 +37,8 @@ namespace Feeder.MCP.Editor.API
             bool? cursor = null,
             [Description("run: true keeps play mode on after the flow when the run entered it.")]
             bool stay = false,
+            [Description("run: true plays the flow on the linked device build (Matrix Device) instead of the Editor's play mode.")]
+            bool device = false,
             [RequestID]
             string? requestId = null
         )
@@ -50,7 +52,7 @@ namespace Feeder.MCP.Editor.API
                             return ResponseCallTool.Error("run needs 'flow'. Call action=list to see the flows.");
                         try
                         {
-                            return PlaytestRunner.Start(file, flow!.Trim(), speed, cursor, stay, requestId, out var message)
+                            return PlaytestRunner.Start(file, flow!.Trim(), speed, cursor, stay, device, requestId, out var message)
                                 ? ResponseCallTool.Processing(message).SetRequestID(requestId!)
                                 : ResponseCallTool.Success(message + " Call action=status for the result.");
                         }
@@ -76,6 +78,7 @@ namespace Feeder.MCP.Editor.API
 - `list`: flows of the file, or its parse errors.
 - `run` + `flow`: plays it; `speed`, `cursor=false`, `stay=true`, `file` are optional. The answer comes after play mode ends and saves are restored; any console error fails the run; show the contact sheet line it gives.
 - `status`: the live step, or the last report. `stop`: ends a run.
+- `device=true`: plays the flow on a phone running a device build (Tools > Feeder > Matrix Bridge > Device, or `build-start device=true`); same report and contact sheet, shots taken on the phone, no save restore.
 
 File format, verbs, reading failures and changing the cursor: skill `" + Skill_Playtest.SkillId + "`.";
     }

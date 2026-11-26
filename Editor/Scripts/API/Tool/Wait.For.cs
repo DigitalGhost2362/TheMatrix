@@ -117,7 +117,7 @@ namespace Feeder.MCP.Editor.API
         {
             try
             {
-                return PlaytestRunner.MemberText(PlaytestRunner.ReadMember(member, WaitForToolId));
+                return PlaytestFlow.MemberText(PlaytestFlow.ReadMember(member, WaitForToolId));
             }
             catch (TargetInvocationException e) when (e.InnerException != null)
             {

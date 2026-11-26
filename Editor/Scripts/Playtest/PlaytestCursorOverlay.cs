@@ -152,18 +152,6 @@ namespace Feeder.MCP.Editor.Playtest
         static float Parse(string value) =>
             float.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : 0.5f;
 
-        // screen point (pixels, bottom-left origin) -> 0..1 of the game screen, top-left origin
-        public static Vector2 Normalize(Vector2 screen) => new Vector2(
-            Screen.width > 0 ? screen.x / Screen.width : 0.5f,
-            Screen.height > 0 ? 1f - screen.y / Screen.height : 0.5f);
-
-        public static Rect Normalize(Rect screen)
-        {
-            var min = Normalize(new Vector2(screen.xMin, screen.yMax));
-            var max = Normalize(new Vector2(screen.xMax, screen.yMin));
-            return Rect.MinMaxRect(min.x, min.y, max.x, max.y);
-        }
-
         // the drawn game image inside the window, in points; letterbox and zoom included
         public static Rect GameRect(EditorWindow view)
         {

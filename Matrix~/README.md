@@ -41,14 +41,14 @@ Each zip holds the published `feeder-mcp-server[.exe]` renamed to `matrix-server
 version. Change that version in `src/Feeder.Matrix/Feeder.Matrix.csproj`, in `src/Feeder.Matrix/Program.cs`
 and in `McpServerManager.ServerVersion` together, then run the script and put the printed hashes below.
 
-Shipped payload 0.9.1, `matrix-server` SHA-256:
+Shipped payload 0.10.0, `matrix-server` SHA-256:
 
 | rid | SHA-256 |
 | --- | --- |
-| win-x64 | `b14ecaa42628eeaf6055e63137971e5137104f4ad3252e7c25452ec2e789554a` |
-| osx-x64 | `843627c4d110ffb4ba70e47faa9ef64887d1b5a56e379ef9b71fffb1cf7647cb` |
-| osx-arm64 | `497baf4671596870a0479b0ed7ca82d4140cc3ba1fe4bac038a9ea3de01279a5` |
-| linux-x64 | `862caf18c47c4aa0c54abe87d278a14e970c619f77491dc2a9c9bb9490837c4c` |
+| win-x64 | `76254cda5520f6a302e7dc0644ac010ca8b9a7e5903ccccff65bce1ebfac5590` |
+| osx-x64 | `a893c183a30fa4edebfbdfce0c3501811c3e3d32f633dfd54bcf218918afc601` |
+| osx-arm64 | `4f67eed2ff04337c0aee397ee5f10d03c2f04a20ac2de8e1fff88c2e064dcf87` |
+| linux-x64 | `91fa8b11424993e602b0af5e6ee5427c1206ab196c1dd9a28f83cb279324532a` |
 
 ## Run (matrix-only, mock backend)
 

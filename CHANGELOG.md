@@ -2,6 +2,32 @@
 
 All notable changes to this package are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Device playtest: `playtest action=run flow=<name> device=true` plays the same `Docs/Playtest.md` flow on an Android
+  phone running a device build, with the same steps, cursor, report and contact sheet; shots are taken on the phone.
+  The phone links to the Matrix server over the local network, so it needs no developer options or USB debugging.
+  The step runner is shared code (`Feeder.MCP.Playtest`), so a flow behaves the same in the Editor and on the phone.
+  The save guard (`protect-prefs`) still runs in the Editor only.
+- Matrix Device window (`Tools > Feeder > Matrix Bridge > Device`): turns the LAN listener on or off, builds the
+  Android device build and shows a QR code for the install page, and says whether a phone is linked.
+- `build-start device=true`: builds with the `MATRIX_DEVICE` define (default target Android, output
+  `Builds/MatrixDevice/`). The build carries the PC address and a LAN token and keeps the Matrix and game assemblies
+  from IL2CPP stripping. Without `MATRIX_DEVICE` no playtest or device code goes into a build.
+- Server 0.10.0: an optional LAN listener (`FeederMatrix:LanPort`, off by default). It accepts only the player link of
+  a device build with the LAN token, and the install page `/device` with the newest APK; MCP stays on loopback. A
+  new token is made each time LAN is turned on. A device on the LAN listener cannot replace the Editor's tool list.
+- Device diagnostics, served by the phone itself while it is linked: `device-logs` reads its console (last 2000
+  messages, filter by type or pattern, a cursor for only newer ones) and `device-profiler action=stats` reports the
+  device, FPS, frame time percentiles, hitches, main thread time, GC allocation, draw calls, batches, triangles and
+  memory over the last frames (`n/a` for a counter the device's graphics driver does not report).
+- `device` Editor tool: `status` (LAN, install page, newest APK, last device build, the linked phone with its model
+  and FPS) and `profile seconds=N`, which records a Unity Profiler capture on the phone (Development Build), copies it
+  to `Docs/Playtest_Runs/<stamp>-profile-device/profile.raw`, opens it in the Profiler window and answers with frame
+  times, the heaviest main thread markers and the top GC allocators.
+
 ## [2.0.0] - 2026-11-25
 
 ### Added

@@ -1,0 +1,24 @@
+{
+    "name": "Feeder.MCP.Playtest",
+    "rootNamespace": "Feeder.MCP.Editor.Playtest",
+    "references": [
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_EDITOR || MATRIX_DEVICE"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.ugui",
+            "expression": "1.0.0",
+            "define": "MATRIX_UGUI"
+        }
+    ],
+    "noEngineReferences": false
+}

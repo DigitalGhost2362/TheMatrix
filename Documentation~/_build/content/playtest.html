@@ -62,6 +62,17 @@ autoshot: clicks         # before, over, press and result of every click
 <p>The answer is a verdict line, one row per step with its time, the console errors and the side effects on your saves. Shots, <code>report.md</code> and <code>contact_sheet.png</code> go to <code>Docs/Playtest_Runs/&lt;stamp&gt;-&lt;flow&gt;/</code>; keep that folder out of git.</p>
 [[shot:playtest-contact-sheet.png|Contact sheet of a playtest run: before, over, press and result of each click|With <code>autoshot: clicks</code> every click adds a row to the contact sheet: before, cursor over the target, press and result.]]
 
+<h2>On an Android phone</h2>
+<p>The same flow runs on a phone with <code>playtest action=run flow=&lt;name&gt; device=true</code>. The phone joins the PC's Wi-Fi and links back to the Matrix server, so it needs no developer options or USB cable.</p>
+<ol>
+  <li>Open [[menu:Tools > Feeder > Matrix Bridge > Device]]. Tick <strong>LAN on</strong> and check that <strong>PC address</strong> is the address on the phone's network. The first time, Windows asks to let <code>matrix-server</code> through the firewall: allow <strong>Private networks</strong>.</li>
+  <li>Click <strong>Build Android</strong>. Tick <strong>Development Build</strong> first if you want Profiler captures.</li>
+  <li>On the phone, scan the QR code with the camera, open the link and tap <strong>Download APK</strong>. Chrome warns that the file might be harmful: tap <strong>Download anyway</strong>.</li>
+  <li>Open the file and tap <strong>Install</strong>. The first time, Android asks to let the browser install apps: <strong>Settings</strong>, turn on <strong>Allow from this source</strong>, go back. If Play Protect offers a scan, <strong>More details &gt; Install without scanning</strong> keeps the build on your network.</li>
+  <li>Open the app. A few seconds later the window shows <strong>Player link: linked</strong>.</li>
+</ol>
+<p>While the phone is linked, <code>device-logs</code> reads its console, <code>device-profiler action=stats</code> reports FPS, frame times and memory, and <code>device action=profile seconds=5</code> records a Profiler capture on the phone and opens it in the Profiler window. The save guard (<code>protect-prefs</code>) runs in the Editor only, so a phone report says "Side effects: not checked".</p>
+
 <h2>Change the cursor</h2>
 <p>Create a theme with [[menu:Create > Matrix > Playtest Cursor Theme]] under an Editor folder, fill in your idle sprite and click sheet, and point the file at it with <code>cursor-theme: Assets/Editor/MyCursor.asset</code>. <code>cursor-layers:</code> turns the outline, the caption or the blocked note off; a class that implements <code>IPlaytestCursorLayer</code> adds a layer of your own.</p>
 [[shot:playtest-cursor.png|The playtest cursor over a button, with the step caption at the bottom left|The default cursor, the target outline and the step caption during a run.]]

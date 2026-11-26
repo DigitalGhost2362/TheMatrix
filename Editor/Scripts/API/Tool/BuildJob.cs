@@ -18,6 +18,8 @@ namespace Feeder.MCP.Editor.API.BuildRunner
         public string outputPath = string.Empty;
         public List<string> scenes = new();
         public bool development;
+        // a Matrix device build: MATRIX_DEVICE defined, linked back to this Editor's server over the LAN
+        public bool device;
         public bool cancelRequested;
         public long startedTicks;
         public long finishedTicks;
@@ -95,6 +97,7 @@ namespace Feeder.MCP.Editor.API.BuildRunner
                 outputPath = plan.OutputPath,
                 scenes = plan.Scenes.ToList(),
                 development = plan.Development,
+                device = plan.Device,
                 startedTicks = DateTime.UtcNow.Ticks,
             };
             Write(record);
@@ -138,6 +141,7 @@ namespace Feeder.MCP.Editor.API.BuildRunner
         public string OutputPath = string.Empty;
         public BuildTarget Target;
         public bool Development;
+        public bool Device;
     }
 
     public static class BuildRequest

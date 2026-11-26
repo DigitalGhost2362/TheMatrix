@@ -9,31 +9,12 @@ using UnityEngine;
 
 namespace Feeder.MCP.Editor.Playtest
 {
-    internal sealed class PlaytestTile
-    {
-        public int Step;
-        public string Label = string.Empty;
-        public string Path = string.Empty;
-        // a click's frames start a row of their own, so before / over / press / result line up
-        public bool NewRow;
-
-        public string Serialize() => string.Join("\t", Step.ToString(CultureInfo.InvariantCulture), NewRow ? "1" : "0", Label.Replace('\t', ' '), Path);
-
-        public static PlaytestTile? Parse(string line)
-        {
-            var parts = line.Split('\t');
-            return parts.Length == 4 && int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var step)
-                ? new PlaytestTile { Step = step, NewRow = parts[1] == "1", Label = parts[2], Path = parts[3] }
-                : null;
-        }
-    }
-
     // Game view frames with the playtest cursor painted in, and the contact sheet of a run. The cursor is UI Toolkit
     // drawn over the window, outside the game image, so it is painted from the runner's own cursor state; reading the
     // desktop instead would also capture whatever window lies over Unity.
     internal static class PlaytestCapture
     {
-        public const int TileWidth = 480;
+        public const int TileWidth = PlaytestPixels.TileWidth;
         public const string ManifestName = "frames.txt";
         const int Columns = 4;
         const int RowsPerSheet = 8;
@@ -62,7 +43,7 @@ namespace Feeder.MCP.Editor.Playtest
 
         public static void SaveTile(string path, Color32[] pixels, int width, int height)
         {
-            var tile = Shrink(pixels, width, height, TileWidth, out var tileHeight);
+            var tile = PlaytestPixels.Shrink(pixels, width, height, TileWidth, out var tileHeight);
             SavePng(path, tile, TileWidth, tileHeight);
         }
 
@@ -161,43 +142,6 @@ namespace Feeder.MCP.Editor.Playtest
             }
         }
 
-        // box filter down to a width, aspect kept
-        static Color32[] Shrink(Color32[] pixels, int width, int height, int toWidth, out int toHeight)
-        {
-            toHeight = Mathf.Max(1, Mathf.RoundToInt((float)height * toWidth / width));
-            if (toWidth >= width)
-            {
-                toHeight = height;
-                return width == toWidth ? pixels : Widen(pixels, width, height, toWidth);
-            }
-            var result = new Color32[toWidth * toHeight];
-            for (var y = 0; y < toHeight; y++)
-            {
-                int y0 = y * height / toHeight, y1 = Math.Max(y0 + 1, (y + 1) * height / toHeight);
-                for (var x = 0; x < toWidth; x++)
-                {
-                    int x0 = x * width / toWidth, x1 = Math.Max(x0 + 1, (x + 1) * width / toWidth);
-                    int r = 0, g = 0, b = 0, n = 0;
-                    for (var sy = y0; sy < y1; sy++)
-                        for (var sx = x0; sx < x1; sx++)
-                        {
-                            var p = pixels[sy * width + sx];
-                            r += p.r; g += p.g; b += p.b; n++;
-                        }
-                    result[y * toWidth + x] = new Color32((byte)(r / n), (byte)(g / n), (byte)(b / n), 255);
-                }
-            }
-            return result;
-        }
-
-        static Color32[] Widen(Color32[] pixels, int width, int height, int toWidth)
-        {
-            var result = new Color32[toWidth * height];
-            for (var y = 0; y < height; y++)
-                Array.Copy(pixels, y * width, result, y * toWidth, width);
-            return result;
-        }
-
         public static void WriteManifest(string folder, IEnumerable<PlaytestTile> tiles)
         {
             Directory.CreateDirectory(folder);
@@ -211,7 +155,10 @@ namespace Feeder.MCP.Editor.Playtest
             var manifest = System.IO.Path.Combine(folder, ManifestName);
             if (!File.Exists(manifest))
                 return sheets;
-            var tiles = File.ReadAllLines(manifest).Select(PlaytestTile.Parse).Where(t => t != null && File.Exists(t.Path)).Select(t => t!).ToList();
+            var tiles = File.ReadAllLines(manifest).Select(PlaytestTile.Parse).Where(t => t != null).Select(t => t!).ToList();
+            foreach (var tile in tiles)
+                tile.Path = System.IO.Path.Combine(folder, tile.Path);
+            tiles.RemoveAll(t => !File.Exists(t.Path));
             if (tiles.Count == 0)
                 return sheets;
 
@@ -223,7 +170,7 @@ namespace Feeder.MCP.Editor.Playtest
                 {
                     if (!loader.LoadImage(File.ReadAllBytes(tile.Path)))
                         continue;
-                    var pixels = Shrink(loader.GetPixels32(), loader.width, loader.height, TileWidth, out var h);
+                    var pixels = PlaytestPixels.Shrink(loader.GetPixels32(), loader.width, loader.height, TileWidth, out var h);
                     images.Add((tile, pixels, h));
                 }
             }

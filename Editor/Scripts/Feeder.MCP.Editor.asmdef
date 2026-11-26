@@ -11,6 +11,8 @@
         "Feeder.Rx",
         "Feeder.Fmp",
         "Feeder.MCP.Player",
+        "Feeder.MCP.Playtest",
+        "Feeder.MCP.Device",
         "UnityEngine.UI",
         "Unity.InputSystem"
     ],

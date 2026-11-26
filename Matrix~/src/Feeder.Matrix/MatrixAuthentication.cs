@@ -22,6 +22,10 @@ public static class MatrixAuthentication
            uri.Scheme is "http" or "https" &&
            uri.Host is "localhost" or "127.0.0.1" or "[::1]" && uri.PathAndQuery == "/" && uri.UserInfo.Length == 0;
 
+    // a request that came in on the LAN listener of a device build, not on the loopback port
+    public static bool IsLanConnection(Microsoft.AspNetCore.Http.HttpContext? context, MatrixOptions options)
+        => options.LanPort > 0 && context?.Connection.LocalPort == options.LanPort;
+
     public static bool FixedTimeEquals(string? actual, string? expected)
     {
         if (actual is null || expected is null)

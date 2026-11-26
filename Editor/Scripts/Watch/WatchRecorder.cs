@@ -299,7 +299,7 @@ namespace Feeder.MCP.Editor.Watch
             {
                 t = Now,
                 k = WatchEvent.Player,
-                s = WatchTargets.PathOf(found),
+                s = Playtest.PlaytestScene.PathOf(found),
                 d = string.Join(",", new[] { WatchTargets.GameComponents(found), _controller != null ? "CharacterController" : string.Empty }
                     .Where(part => part.Length > 0)),
                 p = _player.position

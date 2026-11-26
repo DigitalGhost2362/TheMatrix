@@ -133,7 +133,7 @@ public sealed class UnityLinkBackend(
            registry.GetLatestLink()?.Registry?.Tools.Any(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase)) != true;
 
     // A player has no domain reload to wait out: the call ends when the player answers, its link drops, or the deadline passes.
-    private async ValueTask<CallToolResult> CallPlayerToolAsync(CallToolRequestParams request, CancellationToken ct)
+    public async ValueTask<CallToolResult> CallPlayerToolAsync(CallToolRequestParams request, CancellationToken ct)
     {
         var settings = options.Value;
         var player = registry.GetPlayerLink(registry.GetLatestLink()?.ProjectId);

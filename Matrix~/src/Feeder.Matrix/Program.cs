@@ -46,6 +46,9 @@ try
     {
         // Loopback only — never 0.0.0.0 (ADR-0005).
         kestrel.Listen(IPAddress.Loopback, matrixOptions.Port);
+        // opt-in, for a device build on the same network: player link and install page only, see the middleware
+        if (matrixOptions.LanPort > 0 && matrixOptions.LanPort != matrixOptions.Port && !string.IsNullOrEmpty(matrixOptions.LanToken))
+            kestrel.Listen(IPAddress.Any, matrixOptions.LanPort);
         kestrel.Limits.MaxRequestBodySize = matrixOptions.MaxRequestBodyBytes;
     });
 
@@ -155,6 +158,21 @@ try
     // DNS-rebinding defense: loopback callers must present a loopback Host header (ADR-0005).
     app.Use(async (context, next) =>
     {
+        if (MatrixAuthentication.IsLanConnection(context, matrixOptions))
+        {
+            var path = context.Request.Path;
+            var allowed = path.StartsWithSegments(FmpConstants.HubPath) ||
+                          path.StartsWithSegments(DevicePage.Path) && MatrixAuthentication.FixedTimeEquals(context.Request.Query["t"].ToString(), matrixOptions.LanToken);
+            if (!allowed)
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsync("Forbidden on the LAN listener.");
+                return;
+            }
+            await next();
+            return;
+        }
+
         var host = context.Request.Host.Host;
         if (host is not ("127.0.0.1" or "localhost" or "[::1]"))
         {
@@ -200,6 +218,9 @@ try
         return Results.Ok();
     });
 
+    app.MapGet(DevicePage.Path, (HttpContext context) => DevicePage.Page(matrixOptions, context.Request.Query["t"].ToString()));
+    app.MapGet(DevicePage.Path + "/app.apk", (HttpContext context) => DevicePage.Apk(matrixOptions, context.Request.Query["t"].ToString()));
+
     // Local health endpoint — intentionally outside the MCP surface.
     app.MapGet("/healthz", (UnityLinkRegistry registry, McpClientTracker mcpClients) => Results.Json(new
     {
@@ -234,6 +255,8 @@ try
 
     Log.Information("Feeder Local Matrix {Version} listening on 127.0.0.1:{Port} (MCP {McpPath}, FMP {HubPath})",
         MatrixVersion.Value, matrixOptions.Port, FmpConstants.McpPath, FmpConstants.HubPath);
+    if (matrixOptions.LanPort > 0)
+        Log.Information("LAN listener on 0.0.0.0:{LanPort} for device builds (FMP player link and {DevicePath})", matrixOptions.LanPort, DevicePage.Path);
 
     app.Run();
     return 0;
@@ -253,7 +276,7 @@ static GetPromptResult throwPromptNotFound(string? name)
 
 public static class MatrixVersion
 {
-    public const string Value = "0.9.1";
+    public const string Value = "0.10.0";
 }
 
 // Exposes the entry point to WebApplicationFactory-based integration tests.

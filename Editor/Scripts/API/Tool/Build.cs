@@ -41,7 +41,10 @@ namespace Feeder.MCP.Editor.API
             [Description("A BuildTarget name (StandaloneWindows64, StandaloneOSX, StandaloneLinux64, Android, iOS, WebGL...). Default: the active build target.")]
             string? target = null,
             [Description("Development build. Default: false")]
-            bool development = false
+            bool development = false,
+            [Description("Matrix device build for 'playtest device=true': defines MATRIX_DEVICE and links back to this Editor over the LAN. " +
+                "Default target Android, default output Builds/MatrixDevice/; needs LAN on in Matrix Device.")]
+            bool device = false
         )
         {
             return MainThread.Instance.Run(() =>
@@ -60,7 +63,14 @@ namespace Feeder.MCP.Editor.API
                     BuildJobStore.Complete(current, BuildJobStore.Interrupted, "Replaced by a new build; this one never reported back.");
                 }
 
+                if (device && !Device.MatrixDeviceSettings.LanEnabled)
+                    return "[lan_off] A device build links over the LAN: turn LAN on in Tools > Feeder > Matrix Bridge > Device first (the server restarts).";
                 var root = BuildJobStore.ProjectRoot;
+                if (device)
+                {
+                    target ??= nameof(BuildTarget.Android);
+                    outputPath ??= Path.Combine(Device.MatrixDeviceSettings.Folder, BuildRequest.Sanitize(PlayerSettings.productName));
+                }
                 var plan = BuildRequest.Validate(
                     scenes,
                     outputPath,
@@ -75,6 +85,7 @@ namespace Feeder.MCP.Editor.API
                 if (!BuildPipeline.IsBuildTargetSupported(BuildPipeline.GetBuildTargetGroup(plan.Target), plan.Target))
                     throw new InvalidOperationException($"Build target {plan.Target} is not installed in this Unity (add its build support module).");
 
+                plan.Device = device;
                 var record = BuildJobStore.Begin(plan);
                 var jobId = record.jobId;
                 BuildJobRunner.Schedule(jobId, plan);
@@ -155,6 +166,7 @@ namespace Feeder.MCP.Editor.API
             OutputPath = record.outputPath,
             Target = Enum.TryParse<BuildTarget>(record.target, out var target) ? target : EditorUserBuildSettings.activeBuildTarget,
             Development = record.development,
+            Device = record.device,
         };
 
         public static void Execute(string jobId, BuildPlan plan)
@@ -175,14 +187,20 @@ namespace Feeder.MCP.Editor.API
                 var parent = Path.GetDirectoryName(plan.OutputPath);
                 if (!string.IsNullOrEmpty(parent))
                     Directory.CreateDirectory(parent);
-                var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+                var options = new BuildPlayerOptions
                 {
                     scenes = plan.Scenes,
                     locationPathName = plan.OutputPath,
                     target = plan.Target,
                     targetGroup = BuildPipeline.GetBuildTargetGroup(plan.Target),
                     options = plan.Development ? BuildOptions.Development : BuildOptions.None,
-                });
+                };
+                BuildReport report;
+                if (plan.Device)
+                    using (Device.MatrixDeviceBuild.Prepare(ref options))
+                        report = BuildPipeline.BuildPlayer(options);
+                else
+                    report = BuildPipeline.BuildPlayer(options);
                 Finish(jobId, report);
             }
             catch (Exception e)
