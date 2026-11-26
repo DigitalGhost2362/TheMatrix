@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -147,7 +148,7 @@ namespace Feeder.MCP.Device
 
         static string Format(Entry e, bool stackTrace)
         {
-            var line = $"[{e.Time:0.0}s] {e.Type}: {e.Message}";
+            var line = FormattableString.Invariant($"[{e.Time:0.0}s] {e.Type}: {e.Message}");
             var severe = e.Type is "Error" or "Exception" or "Assert";
             if (e.StackTrace.Length == 0 || !(stackTrace || severe))
                 return line;
@@ -225,24 +226,24 @@ namespace Feeder.MCP.Device
                 }
                 counters.Add(unit switch
                 {
-                    "ms" => $"{label}: avg {sum / n * 1e-6:0.00} ms, max {max * 1e-6:0.00} ms",
-                    "KB" => $"{label}: avg {sum / n / 1024:0.0} KB, max {max / 1024:0.0} KB",
-                    "MB" => $"{label}: {recorder.LastValue / 1048576.0:0.0} MB",
-                    _ => $"{label}: avg {sum / n:0}, max {max:0}",
+                    "ms" => FormattableString.Invariant($"{label}: avg {sum / n * 1e-6:0.00} ms, max {max * 1e-6:0.00} ms"),
+                    "KB" => FormattableString.Invariant($"{label}: avg {sum / n / 1024:0.0} KB, max {max / 1024:0.0} KB"),
+                    "MB" => FormattableString.Invariant($"{label}: {recorder.LastValue / 1048576.0:0.0} MB"),
+                    _ => FormattableString.Invariant($"{label}: avg {sum / n:0}, max {max:0}"),
                 });
             }
             return new DeviceStats
             {
                 Device = $"{SystemInfo.deviceModel}, {SystemInfo.operatingSystem}, {SystemInfo.processorType} x{SystemInfo.processorCount}, " +
                          $"{SystemInfo.systemMemorySize} MB RAM, {SystemInfo.graphicsDeviceName} ({SystemInfo.graphicsDeviceType}), " +
-                         $"screen {Screen.width}x{Screen.height} @{Screen.currentResolution.refreshRateRatio.value:0} Hz",
+                         FormattableString.Invariant($"screen {Screen.width}x{Screen.height} @{Screen.currentResolution.refreshRateRatio.value:0} Hz"),
                 App = $"{Application.productName} {Application.version}, Unity {Application.unityVersion}, targetFrameRate {Application.targetFrameRate}",
                 DevelopmentBuild = Debug.isDebugBuild,
                 ProfilerSupported = UnityProfiler.supported,
                 Address = LocalAddress(),
                 Frames = count,
-                Fps = average > 0 ? (1000f / average).ToString("0.0") : "n/a",
-                FrameMs = count == 0 ? "n/a" : $"avg {average:0.0}, p50 {Percentile(sorted, 0.5f):0.0}, p95 {Percentile(sorted, 0.95f):0.0}, p99 {Percentile(sorted, 0.99f):0.0}, max {sorted[count - 1]:0.0}",
+                Fps = average > 0 ? (1000f / average).ToString("0.0", CultureInfo.InvariantCulture) : "n/a",
+                FrameMs = count == 0 ? "n/a" : FormattableString.Invariant($"avg {average:0.0}, p50 {Percentile(sorted, 0.5f):0.0}, p95 {Percentile(sorted, 0.95f):0.0}, p99 {Percentile(sorted, 0.99f):0.0}, max {sorted[count - 1]:0.0}"),
                 // a frame over twice the median shows as a stutter
                 Hitches = count == 0 ? 0 : samples.Count(v => v > 2f * Percentile(sorted, 0.5f) && v > 20f),
                 Counters = counters.ToArray(),

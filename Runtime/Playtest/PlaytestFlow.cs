@@ -136,7 +136,7 @@ namespace Feeder.MCP.Editor.Playtest
         }
 
         public string Progress() => _index < _steps.Count
-            ? $"Playtest '{_options.Flow}' running: step {_index + 1}/{_steps.Count} `{_steps[_index].Raw}` ({_phase}), {Now - _started:0.0} s."
+            ? FormattableString.Invariant($"Playtest '{_options.Flow}' running: step {_index + 1}/{_steps.Count} `{_steps[_index].Raw}` ({_phase}), {Now - _started:0.0} s.")
             : $"Playtest '{_options.Flow}' finishing.";
 
         public void Fail(string reason)
@@ -384,12 +384,12 @@ namespace Feeder.MCP.Editor.Playtest
             var waited = now - _settleStart;
             if (_stable >= StableFrames && waited >= 0.1)
             {
-                note = $"settled {waited:0.00} s";
+                note = FormattableString.Invariant($"settled {waited:0.00} s");
                 return true;
             }
             if (waited < max)
                 return false;
-            note = $"still moving after {max:0.#} s";
+            note = FormattableString.Invariant($"still moving after {max:0.#} s");
             return true;
         }
 
@@ -511,14 +511,14 @@ namespace Feeder.MCP.Editor.Playtest
             var okCount = _rows.Count(r => r.Result is "ok" or "absent");
             var verdict = Passed ? "PASS" : _failure.Length == 0 ? $"FAIL (console errors: {_consoleErrorCount})" : "FAIL";
             var text = new StringBuilder();
-            text.Append($"Playtest '{_options.Flow}' {verdict}: {okCount}/{_rows.Count} steps in {seconds:0.00} s, {_consoleErrorCount} console errors (speed {_options.Speed:0.##}, cursor {(_useCursor ? "on" : "off")}).\n");
+            text.Append(FormattableString.Invariant($"Playtest '{_options.Flow}' {verdict}: {okCount}/{_rows.Count} steps in {seconds:0.00} s, {_consoleErrorCount} console errors (speed {_options.Speed:0.##}, cursor {(_useCursor ? "on" : "off")}).\n"));
             if (_failure.Length > 0)
                 text.Append("Failed at ").Append(_failure).Append('\n');
             text.Append("\n| # | step | result | ms | note |\n|---|---|---|---|---|\n");
             for (var i = 0; i < _rows.Count; i++)
             {
                 var row = _rows[i];
-                text.Append($"| {i + 1} | `{row.Step.Replace("|", "/")}` | {row.Result} | {(row.Result == "skip" ? "" : row.Ms.ToString("0"))} | {row.Note.Replace("|", "/")} |\n");
+                text.Append($"| {i + 1} | `{row.Step.Replace("|", "/")}` | {row.Result} | {(row.Result == "skip" ? "" : row.Ms.ToString("0", CultureInfo.InvariantCulture))} | {row.Note.Replace("|", "/")} |\n");
             }
             text.Append($"\nConsole errors during the run: {_consoleErrorCount}{(_failOnConsoleErrors && _consoleErrorCount > 0 ? " (the run fails on them; fail-on-console-errors: off to allow)" : string.Empty)}\n");
             foreach (var error in _consoleErrors)
